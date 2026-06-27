@@ -245,25 +245,6 @@ interface RouteProgress {
 ]
 ```
 
----
-
-## Publier sur npm
-
-```bash
-# 1. Compiler le module TypeScript
-npm run build
-
-# 2. Se connecter à npm
-npm login
-
-# 3. Publier
-npm publish --access public
-```
-
-> Remplacer `@jacques_gordon` par votre scope npm (ex: `@monentreprise`).
-
----
-
 ## Notes importantes
 
 - Nécessite **Expo Dev Client** (Expo Go non supporté)
