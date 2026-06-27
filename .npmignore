@@ -1,0 +1,16 @@
+# Sources TypeScript (on publie seulement le build/)
+src/
+
+# Plugin source (on publie seulement plugin/build/)
+plugin/index.ts
+
+# Dev files
+node_modules/
+example/
+*.log
+.eslintrc.js
+babel.config.js
+tsconfig.json
+yarn.lock
+package-lock.json
+.gitignore

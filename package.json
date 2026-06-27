@@ -1,0 +1,56 @@
+{
+  "name": "@jacques_gordon/expo-mapbox-navigation",
+  "version": "1.0.0",
+  "description": "Expo module for Mapbox turn-by-turn navigation — iOS & Android, compatible with Expo SDK 53 Dev Client",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "ios",
+    "android",
+    "plugin/build",
+    "app.plugin.js",
+    "expo-module.config.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "typecheck": "tsc --noEmit",
+    "prepare": "expo-module build"
+  },
+  "keywords": [
+    "expo",
+    "mapbox",
+    "navigation",
+    "turn-by-turn",
+    "react-native",
+    "expo-module",
+    "gps",
+    "waypoints"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jacquesngomeheffa/expo-mapbox-navigation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jacquesngomeheffa/expo-mapbox-navigation/issues"
+  },
+  "homepage": "https://github.com/jacquesngomeheffa/expo-mapbox-navigation#readme",
+  "peerDependencies": {
+    "expo": ">=53.0.0",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": "^9.0.0",
+    "expo-modules-core": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "expo": {
+    "fyi": "https://expo.fyi/",
+    "config": "./plugin/build/index.js"
+  }
+}
