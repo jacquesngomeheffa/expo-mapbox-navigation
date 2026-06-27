@@ -182,5 +182,5 @@ ${colorResources}
 export default createRunOncePlugin(
   withExpoMapboxNavigation,
   'expo-mapbox-navigation',
-  '1.0.1'
+  '1.0.3'
 );

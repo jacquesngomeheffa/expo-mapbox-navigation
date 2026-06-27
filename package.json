@@ -1,6 +1,6 @@
 {
   "name": "@jacques_gordon/expo-mapbox-navigation",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Expo module for Mapbox turn-by-turn navigation — iOS & Android, compatible with Expo SDK 53 Dev Client",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -8,12 +8,12 @@
     "build",
     "ios",
     "android",
-    "plugin/build",
+    "plugin",
     "app.plugin.js",
     "expo-module.config.json",
     "README.md"
   ],
- "scripts": {
+  "scripts": {
     "build": "expo-module build",
     "clean": "expo-module clean",
     "lint": "expo-module lint",
@@ -50,6 +50,7 @@
     "@types/react": "^19.2.17",
     "expo-module-scripts": "^56.0.3",
     "expo-modules-core": "^2.0.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.3.0"
   },
   "expo": {

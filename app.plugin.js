@@ -1,1 +1,1 @@
-module.exports = require('./plugin/build/index').default;
+module.exports = require('./plugin/index').default;
