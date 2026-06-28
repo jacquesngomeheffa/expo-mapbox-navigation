@@ -38,6 +38,12 @@ La version recommandée est `11.11.0`. **Important : définir explicitement `RNM
 npm install @jacques_gordon/expo-mapbox-navigation
 ```
 
+Et additionnellement le package (parfois optionnelle)
+
+```bash
+npm install metro-cache-key 
+```
+
 ### 3. Configurer le plugin dans `app.json`
 
 ```json

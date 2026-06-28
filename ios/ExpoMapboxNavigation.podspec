@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name           = 'ExpoMapboxNavigation'
-  s.version        = '1.0.3'
+  s.version        = '1.0.7'
   s.summary        = 'Expo module for Mapbox turn-by-turn navigation — iOS & Android'
   s.homepage       = 'https://github.com/YOUR_GITHUB/expo-mapbox-navigation'
   s.license        = { :type => 'MIT' }
