@@ -3,53 +3,16 @@ const {
   withAppBuildGradle,
   withProjectBuildGradle,
   withAndroidManifest,
+  withDangerousMod,
   createRunOncePlugin,
-} = require("@expo/config-plugins");
+} = require('@expo/config-plugins');
 
-const withExpoMapboxNavigation = (config, options) => {
-  const {
-    accessToken,
-    mapboxMapsVersion = "11.11.0",
-    androidColorOverrides = {},
-  } = options || {};
+const fs = require('fs');
+const path = require('path');
 
-  if (!accessToken) {
-    throw new Error(
-      "[expo-mapbox-navigation] accessToken est requis dans la configuration du plugin."
-    );
-  }
+// ─── Mapbox Maven block ────────────────────────────────────────────────
 
-  // ── iOS ──
-  config = withInfoPlist(config, (cfg) => {
-    cfg.modResults["MBXAccessToken"] = accessToken;
-
-    cfg.modResults["NSLocationWhenInUseUsageDescription"] =
-      cfg.modResults["NSLocationWhenInUseUsageDescription"] ??
-      "Cette application utilise votre position pour la navigation GPS.";
-
-    cfg.modResults["NSLocationAlwaysAndWhenInUseUsageDescription"] =
-      cfg.modResults["NSLocationAlwaysAndWhenInUseUsageDescription"] ??
-      "Cette application utilise votre position en arrière-plan pour la navigation GPS.";
-
-    cfg.modResults["NSMotionUsageDescription"] =
-      cfg.modResults["NSMotionUsageDescription"] ??
-      "Cette application utilise le capteur de mouvement pour améliorer la navigation.";
-
-    const uiBackgroundModes = cfg.modResults["UIBackgroundModes"] ?? [];
-    if (!uiBackgroundModes.includes("audio")) uiBackgroundModes.push("audio");
-    if (!uiBackgroundModes.includes("location"))
-      uiBackgroundModes.push("location");
-    cfg.modResults["UIBackgroundModes"] = uiBackgroundModes;
-
-    return cfg;
-  });
-
-  // ── Android project build.gradle ──
-  config = withProjectBuildGradle(config, (cfg) => {
-    if (!cfg.modResults.contents.includes("api.mapbox.com/downloads")) {
-      cfg.modResults.contents = cfg.modResults.contents.replace(
-        /allprojects\s*\{([\s\S]*?)repositories\s*\{/,
-        `allprojects {$1repositories {
+const MAPBOX_MAVEN_BLOCK = `
     maven {
       url 'https://api.mapbox.com/downloads/v2/releases/maven'
       authentication { basic(BasicAuthentication) }
@@ -57,98 +20,135 @@ const withExpoMapboxNavigation = (config, options) => {
         username = "mapbox"
         password = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: System.getenv("MAPBOX_DOWNLOADS_TOKEN") ?: ""
       }
-    }`
-      );
     }
+`;
+
+// ─── Inject into settings.gradle (SDK 53 FIX) ───────────────────────────
+
+const withMapboxMavenInSettings = (config) => {
+  return withDangerousMod(config, [
+    'android',
+    async (cfg) => {
+      const settingsPath = path.join(
+        cfg.modRequest.platformProjectRoot,
+        'settings.gradle'
+      );
+
+      if (!fs.existsSync(settingsPath)) return cfg;
+
+      let contents = fs.readFileSync(settingsPath, 'utf8');
+
+      if (contents.includes('api.mapbox.com/downloads')) return cfg;
+
+      if (contents.includes('dependencyResolutionManagement')) {
+        contents = contents.replace(
+          /dependencyResolutionManagement\s*\{([\s\S]*?)repositories\s*\{/,
+          `dependencyResolutionManagement {$1repositories {${MAPBOX_MAVEN_BLOCK}`
+        );
+      } else if (contents.includes('allprojects')) {
+        contents = contents.replace(
+          /allprojects\s*\{([\s\S]*?)repositories\s*\{/,
+          `allprojects {$1repositories {${MAPBOX_MAVEN_BLOCK}`
+        );
+      } else {
+        contents += `
+allprojects {
+  repositories {${MAPBOX_MAVEN_BLOCK}
+  }
+}`;
+      }
+
+      fs.writeFileSync(settingsPath, contents);
+      return cfg;
+    },
+  ]);
+};
+
+// ─── Plugin ─────────────────────────────────────────────────────────────
+
+const withExpoMapboxNavigation = (config, options) => {
+  const {
+    accessToken,
+    mapboxMapsVersion = '11.11.0',
+    androidColorOverrides = {},
+  } = options;
+
+  if (!accessToken) {
+    throw new Error('[expo-mapbox-navigation] accessToken is required');
+  }
+
+  // ── iOS ───────────────────────────────────────────────────────────────
+  config = withInfoPlist(config, (cfg) => {
+    cfg.modResults.MBXAccessToken = accessToken;
+
+    cfg.modResults.NSLocationWhenInUseUsageDescription =
+      cfg.modResults.NSLocationWhenInUseUsageDescription ??
+      'Navigation GPS requires location access.';
+
+    cfg.modResults.NSLocationAlwaysAndWhenInUseUsageDescription =
+      cfg.modResults.NSLocationAlwaysAndWhenInUseUsageDescription ??
+      'Background navigation requires location access.';
+
+    cfg.modResults.NSMotionUsageDescription =
+      cfg.modResults.NSMotionUsageDescription ??
+      'Motion is used to improve navigation experience.';
+
+    const modes = cfg.modResults.UIBackgroundModes || [];
+    if (!modes.includes('audio')) modes.push('audio');
+    if (!modes.includes('location')) modes.push('location');
+    cfg.modResults.UIBackgroundModes = modes;
+
     return cfg;
   });
 
-  // ── Android app build.gradle ──
-  config = withAppBuildGradle(config, (cfg) => {
-    if (!cfg.modResults.contents.includes("mapbox_access_token")) {
-      cfg.modResults.contents = cfg.modResults.contents.replace(
-        /defaultConfig\s*\{/,
-        `defaultConfig {
-    resValue "string", "mapbox_access_token", "${accessToken}"`
-      );
-    }
+  // ── Android settings.gradle FIX (IMPORTANT SDK 53) ────────────────────
+  config = withMapboxMavenInSettings(config);
 
-    if (
-      mapboxMapsVersion &&
-      !cfg.modResults.contents.includes("RNMapboxMapsVersion")
-    ) {
-      cfg.modResults.contents = cfg.modResults.contents.replace(
-        /ext\s*\{/,
-        `ext {
-    RNMapboxMapsVersion = "${mapboxMapsVersion}"`
-      );
-
-      if (!cfg.modResults.contents.includes("RNMapboxMapsVersion")) {
-        cfg.modResults.contents = cfg.modResults.contents.replace(
-          /^(buildscript\s*\{)/m,
-          `ext {
-  RNMapboxMapsVersion = "${mapboxMapsVersion}"
-}
-
-$1`
-        );
-      }
-    }
-
-    if (Object.keys(androidColorOverrides).length > 0) {
-      const colorResources = Object.entries(androidColorOverrides)
-        .map(([name, value]) => `    resValue "color", "${name}", "${value}"`)
-        .join("\n");
-
-      if (!cfg.modResults.contents.includes("androidColorOverrides_injected")) {
-        cfg.modResults.contents = cfg.modResults.contents.replace(
-          /defaultConfig\s*\{/,
-          `defaultConfig {
-${colorResources}
-    // androidColorOverrides_injected`
-        );
-      }
-    }
-
-    return cfg;
-  });
-
-  // ── Android Manifest ──
+  // ── Android Manifest ──────────────────────────────────────────────────
   config = withAndroidManifest(config, (cfg) => {
     const manifest = cfg.modResults.manifest;
-    const permissions = manifest["uses-permission"] ?? [];
+    const permissions = manifest['uses-permission'] || [];
 
-    const addPermission = (name) => {
-      if (!permissions.some((p) => p.$?.["android:name"] === name)) {
-        permissions.push({ $: { "android:name": name } });
+    const add = (name) => {
+      if (!permissions.find((p) => p.$?.['android:name'] === name)) {
+        permissions.push({ $: { 'android:name': name } });
       }
     };
 
-    addPermission("android.permission.ACCESS_FINE_LOCATION");
-    addPermission("android.permission.ACCESS_COARSE_LOCATION");
-    addPermission("android.permission.FOREGROUND_SERVICE");
-    addPermission("android.permission.FOREGROUND_SERVICE_LOCATION");
+    add('android.permission.ACCESS_FINE_LOCATION');
+    add('android.permission.ACCESS_COARSE_LOCATION');
+    add('android.permission.FOREGROUND_SERVICE');
+    add('android.permission.FOREGROUND_SERVICE_LOCATION');
 
-    manifest["uses-permission"] = permissions;
+    manifest['uses-permission'] = permissions;
 
-    const application = manifest.application?.[0];
-    if (application) {
-      const metaData = application["meta-data"] ?? [];
+    const app = manifest.application?.[0];
+    if (app) {
+      const meta = app['meta-data'] || [];
 
-      const existingToken = metaData.find(
-        (m) => m.$?.["android:name"] === "com.mapbox.token"
-      );
-
-      if (!existingToken) {
-        metaData.push({
+      if (!meta.find((m) => m.$?.['android:name'] === 'com.mapbox.token')) {
+        meta.push({
           $: {
-            "android:name": "com.mapbox.token",
-            "android:value": accessToken,
+            'android:name': 'com.mapbox.token',
+            'android:value': accessToken,
           },
         });
       }
 
-      application["meta-data"] = metaData;
+      app['meta-data'] = meta;
+    }
+
+    return cfg;
+  });
+
+  // ── App build.gradle ──────────────────────────────────────────────────
+  config = withAppBuildGradle(config, (cfg) => {
+    if (!cfg.modResults.contents.includes('mapbox_access_token')) {
+      cfg.modResults.contents = cfg.modResults.contents.replace(
+        /defaultConfig\s*\{/,
+        `defaultConfig {
+        resValue "string", "mapbox_access_token", "${accessToken}"`
+      );
     }
 
     return cfg;
@@ -160,7 +160,7 @@ ${colorResources}
 const plugin = createRunOncePlugin(
   withExpoMapboxNavigation,
   "expo-mapbox-navigation",
-  "1.0.7"
+  "1.0.8"
 );
 
 module.exports = plugin;
