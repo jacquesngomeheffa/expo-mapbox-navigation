@@ -74,6 +74,9 @@ dependencies {
     // UI Maps (NavigationStyles, NavigationLocationProvider, NavigationCamera)
     implementation "com.mapbox.navigationcore:ui-maps:${MAPBOX_NAV_VERSION}"
 
+    // Voice instructions (MapboxSpeechApi, MapboxVoiceInstructionsPlayer, SpeechVolume)
+    implementation "com.mapbox.navigationcore:voice:${MAPBOX_NAV_VERSION}"
+
     // ConstraintLayout — required because MapboxManeuverView extends ConstraintLayout
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 

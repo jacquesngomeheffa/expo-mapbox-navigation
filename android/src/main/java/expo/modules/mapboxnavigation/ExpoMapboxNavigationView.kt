@@ -3,7 +3,15 @@ package expo.modules.mapboxnavigation
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
@@ -19,10 +27,9 @@ import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ImageHolder
 import com.mapbox.maps.MapView
 import com.mapbox.maps.plugin.LocationPuck2D
+import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.maps.plugin.locationcomponent.OnIndicatorBearingChangedListener
-import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListener
 import com.mapbox.navigation.base.TimeFormat
 import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
 import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
@@ -39,6 +46,7 @@ import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.core.trip.session.LocationObserver
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
+import com.mapbox.navigation.core.trip.session.VoiceInstructionsObserver
 import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
 import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
 import com.mapbox.navigation.tripdata.progress.model.DistanceRemainingFormatter
@@ -61,6 +69,12 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
+import com.mapbox.navigation.voice.api.MapboxSpeechApi
+import com.mapbox.navigation.voice.api.MapboxVoiceInstructionsPlayer
+import com.mapbox.navigation.voice.model.SpeechAnnouncement
+import com.mapbox.navigation.voice.model.SpeechError
+import com.mapbox.navigation.voice.model.SpeechValue
+import com.mapbox.navigation.voice.model.SpeechVolume
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -89,11 +103,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var tvDuration: TextView? = null
     private var tvDistance: TextView? = null
     private var etaBar: LinearLayout? = null
-
-    // ── Side action buttons (mute, overview, recenter) ────────────────────────
-    private var btnMute: TextView? = null
-    private var btnOverview: TextView? = null
-    private var btnRecenter: TextView? = null
+    private var btnMuteView: ImageView? = null
+    private var btnOverviewView: ImageView? = null
+    private var btnRecenterView: ImageView? = null
     private var sideButtons: LinearLayout? = null
 
     // ── Navigation APIs ───────────────────────────────────────────────────────
@@ -109,6 +121,10 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private val navigationLocationProvider = NavigationLocationProvider()
     private var mapboxNavigation: MapboxNavigation? = null
 
+    // ── Voice APIs ────────────────────────────────────────────────────────────
+    private lateinit var speechApi: MapboxSpeechApi
+    private lateinit var voiceInstructionsPlayer: MapboxVoiceInstructionsPlayer
+
     // ── State ─────────────────────────────────────────────────────────────────
     private var isNightMode = false
     private var isMuted = false
@@ -118,25 +134,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // ── Pixel density ─────────────────────────────────────────────────────────
     private val dp = context.resources.displayMetrics.density
 
-    // ── Viewport padding (Waze-style: vehicle at ~30% from bottom) ────────────
-    // top=180dp → room for maneuver banner
-    // bottom=300dp → pushes vehicle UP toward 30% from bottom (Waze style)
-    // Without large bottom padding, vehicle sits at screen center
+    // ── Viewport padding ──────────────────────────────────────────────────────
     private val followingPadding by lazy {
-        EdgeInsets(
-            180.0 * dp,   // top (maneuver banner height)
-            40.0 * dp,    // left
-            300.0 * dp,   // bottom — large value pushes vehicle up like Waze
-            40.0 * dp     // right
-        )
+        EdgeInsets(180.0 * dp, 40.0 * dp, 300.0 * dp, 40.0 * dp)
     }
     private val overviewPadding by lazy {
-        EdgeInsets(
-            120.0 * dp,
-            40.0 * dp,
-            120.0 * dp,
-            40.0 * dp
-        )
+        EdgeInsets(120.0 * dp, 40.0 * dp, 120.0 * dp, 40.0 * dp)
     }
 
     // ── Props ─────────────────────────────────────────────────────────────────
@@ -161,7 +164,124 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Build Waze-style UI
+    // Draw icons programmatically (matching screenshot: speaker, route, arrow)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun drawSpeakerIcon(muted: Boolean): Bitmap {
+        val size = (44 * dp).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.FILL
+        }
+        val s = size.toFloat()
+        // Speaker body (trapezoid)
+        val body = Path().apply {
+            moveTo(s * 0.18f, s * 0.38f)
+            lineTo(s * 0.38f, s * 0.38f)
+            lineTo(s * 0.58f, s * 0.22f)
+            lineTo(s * 0.58f, s * 0.78f)
+            lineTo(s * 0.38f, s * 0.62f)
+            lineTo(s * 0.18f, s * 0.62f)
+            close()
+        }
+        c.drawPath(body, paint)
+        if (!muted) {
+            // Sound waves arcs
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = s * 0.065f
+            paint.strokeCap = Paint.Cap.ROUND
+            // Inner arc
+            c.drawArc(RectF(s*0.60f, s*0.33f, s*0.80f, s*0.67f), -60f, 120f, false, paint)
+            // Outer arc
+            c.drawArc(RectF(s*0.64f, s*0.24f, s*0.92f, s*0.76f), -55f, 110f, false, paint)
+        } else {
+            // X mark for muted
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = s * 0.07f
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.color = Color.parseColor("#FF4444")
+            c.drawLine(s*0.65f, s*0.32f, s*0.88f, s*0.68f, paint)
+            c.drawLine(s*0.88f, s*0.32f, s*0.65f, s*0.68f, paint)
+        }
+        return bmp
+    }
+
+    private fun drawRouteOverviewIcon(): Bitmap {
+        val size = (44 * dp).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = size * 0.08f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val s = size.toFloat()
+        // Route line with S-curve (like the image: start dot → curve → end pin)
+        // Start dot
+        paint.style = Paint.Style.FILL
+        c.drawCircle(s * 0.28f, s * 0.75f, s * 0.07f, paint)
+        // Route path
+        paint.style = Paint.Style.STROKE
+        val routePath = Path().apply {
+            moveTo(s * 0.28f, s * 0.75f)
+            cubicTo(
+                s * 0.28f, s * 0.45f,
+                s * 0.72f, s * 0.55f,
+                s * 0.72f, s * 0.25f
+            )
+        }
+        c.drawPath(routePath, paint)
+        // End pin (circle with dot)
+        paint.style = Paint.Style.STROKE
+        c.drawCircle(s * 0.72f, s * 0.22f, s * 0.10f, paint)
+        paint.style = Paint.Style.FILL
+        c.drawCircle(s * 0.72f, s * 0.22f, s * 0.04f, paint)
+        return bmp
+    }
+
+    private fun drawNavigationArrowIcon(): Bitmap {
+        val size = (44 * dp).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.FILL
+        }
+        val s = size.toFloat()
+        // Navigation arrow pointing up (filled chevron/arrow like Waze)
+        val arrow = Path().apply {
+            moveTo(s * 0.50f, s * 0.14f)   // tip
+            lineTo(s * 0.78f, s * 0.76f)   // bottom-right
+            lineTo(s * 0.50f, s * 0.60f)   // bottom-center indent
+            lineTo(s * 0.22f, s * 0.76f)   // bottom-left
+            close()
+        }
+        c.drawPath(arrow, paint)
+        return bmp
+    }
+
+    private fun makeIconButton(bitmap: Bitmap, onClick: () -> Unit): ImageView {
+        val size = (56 * dp).toInt()
+        val iv = ImageView(context).apply {
+            setImageBitmap(bitmap)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+            }
+            elevation = 6 * dp
+            setOnClickListener { onClick() }
+        }
+        return iv
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Build UI
     // ─────────────────────────────────────────────────────────────────────────
     private fun buildUI() {
         val root = FrameLayout(context).apply {
@@ -174,7 +294,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // ── ManeuverView — top banner ──────────────────────────────────────────
+        // ── ManeuverView — top ─────────────────────────────────────────────────
         val mv = MapboxManeuverView(context)
         root.addView(mv as View, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -182,6 +302,45 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         ).also { it.gravity = Gravity.TOP })
         mv.visibility = View.INVISIBLE
         maneuverView = mv
+
+        // ── Side buttons — RIGHT side, just below maneuver banner ─────────────
+        // Position: top margin = maneuver banner height (~180dp) + 8dp gap
+        val sideCol = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            visibility = View.INVISIBLE
+        }
+        root.addView(sideCol, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also {
+            it.gravity = Gravity.TOP or Gravity.END
+            it.setMargins(0, (188 * dp).toInt(), (12 * dp).toInt(), 0)
+        })
+        sideButtons = sideCol
+
+        val btnSize = (56 * dp).toInt()
+        val btnParams = LinearLayout.LayoutParams(btnSize, btnSize).also {
+            it.bottomMargin = (10 * dp).toInt()
+        }
+
+        // Button 1: Mute/Unmute (speaker icon)
+        val muteBtn = makeIconButton(drawSpeakerIcon(false)) { toggleMute() }
+        sideCol.addView(muteBtn, btnParams)
+        btnMuteView = muteBtn
+
+        // Button 2: Overview / Route view
+        val overviewBtn = makeIconButton(drawRouteOverviewIcon()) { toggleOverview() }
+        sideCol.addView(overviewBtn, LinearLayout.LayoutParams(btnSize, btnSize).also {
+            it.bottomMargin = (10 * dp).toInt()
+        })
+        btnOverviewView = overviewBtn
+
+        // Button 3: Recenter / Navigation arrow (hidden until in overview mode)
+        val recenterBtn = makeIconButton(drawNavigationArrowIcon()) { recenterCamera() }
+        recenterBtn.visibility = View.GONE
+        sideCol.addView(recenterBtn, LinearLayout.LayoutParams(btnSize, btnSize))
+        btnRecenterView = recenterBtn
 
         // ── SpeedInfoView — bottom-left, above ETA bar ────────────────────────
         val siv = MapboxSpeedInfoView(context)
@@ -194,44 +353,6 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         })
         siv.visibility = View.GONE
         speedInfoView = siv
-
-        // ── Side action buttons (right side, Waze-style) ──────────────────────
-        val sideCol = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            visibility = View.INVISIBLE
-        }
-        root.addView(sideCol, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also {
-            it.gravity = Gravity.END or Gravity.BOTTOM
-            it.setMargins(0, 0, (12 * dp).toInt(), (96 * dp).toInt())
-        })
-        sideButtons = sideCol
-
-        // Mute button
-        val muteBtn = makeCircleButton("🔊")
-        muteBtn.setOnClickListener { toggleMute() }
-        sideCol.addView(muteBtn, circleButtonParams())
-        btnMute = muteBtn
-
-        sideCol.addView(View(context), LinearLayout.LayoutParams(1, (10 * dp).toInt()))
-
-        // Overview button
-        val overviewBtn = makeCircleButton("⊕")
-        overviewBtn.setOnClickListener { toggleOverview() }
-        sideCol.addView(overviewBtn, circleButtonParams())
-        btnOverview = overviewBtn
-
-        sideCol.addView(View(context), LinearLayout.LayoutParams(1, (10 * dp).toInt()))
-
-        // Recenter button (shown only in overview mode)
-        val recenterBtn = makeCircleButton("◎")
-        recenterBtn.setOnClickListener { recenterCamera() }
-        recenterBtn.visibility = View.GONE
-        sideCol.addView(recenterBtn, circleButtonParams())
-        btnRecenter = recenterBtn
 
         // ── ETA bottom bar ─────────────────────────────────────────────────────
         val bar = LinearLayout(context).apply {
@@ -250,42 +371,29 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).also { it.gravity = Gravity.BOTTOM })
 
-        // ETA arrival time
         val etaTime = TextView(context).apply {
-            textSize = 24f
-            setTextColor(Color.WHITE)
+            textSize = 24f; setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         bar.addView(etaTime, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         tvEtaTime = etaTime
 
-        // Duration + distance (center)
         val center = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
         val dur = TextView(context).apply {
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
+            textSize = 18f; setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
         }
         val dist = TextView(context).apply {
-            textSize = 13f
-            setTextColor(Color.parseColor("#AAAAAA"))
-            gravity = Gravity.CENTER
+            textSize = 13f; setTextColor(Color.parseColor("#AAAAAA")); gravity = Gravity.CENTER
         }
-        center.addView(dur)
-        center.addView(dist)
+        center.addView(dur); center.addView(dist)
         bar.addView(center, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f))
-        tvDuration = dur
-        tvDistance = dist
+        tvDuration = dur; tvDistance = dist
 
-        // Cancel button
         val cancelBtn = TextView(context).apply {
-            text = "✕"
-            textSize = 22f
-            setTextColor(Color.parseColor("#AAAAAA"))
+            text = "✕"; textSize = 22f; setTextColor(Color.parseColor("#AAAAAA"))
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
             setOnClickListener { cancelNavigation() }
         }
@@ -299,27 +407,6 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         tripProgressView = tpv
 
         addView(root)
-    }
-
-    // Helper: creates a white circle button (Waze style)
-    private fun makeCircleButton(text: String): TextView {
-        return TextView(context).apply {
-            this.text = text
-            textSize = 20f
-            gravity = Gravity.CENTER
-            setTextColor(Color.BLACK)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.WHITE)
-                // Drop shadow via elevation
-            }
-            elevation = 6 * dp
-        }
-    }
-
-    private fun circleButtonParams(): LinearLayout.LayoutParams {
-        val size = (52 * dp).toInt()
-        return LinearLayout.LayoutParams(size, size)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -350,6 +437,55 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         )
 
         routeArrowView = MapboxRouteArrowView(RouteArrowOptions.Builder(context).build())
+
+        // ── Voice APIs ─────────────────────────────────────────────────────────
+        // Use device locale for TTS, fall back to "en" if needed
+        val voiceLang = language ?: Locale.getDefault().language.let {
+            if (it.isEmpty()) "en" else it
+        }
+        speechApi = MapboxSpeechApi(context, voiceLang)
+        voiceInstructionsPlayer = MapboxVoiceInstructionsPlayer(context, voiceLang)
+    }
+
+    // ── Voice callbacks (exact pattern from official TurnByTurnExperienceActivity) ──
+    // SpeechError and SpeechValue are swapped vs v2: fold(error, value) in v3
+    // speechCallback: Consumer<Expected<SpeechError, SpeechValue>>
+    // Exact pattern from official TurnByTurnExperienceActivity
+    // NOTE: in v3 fold order is (error, value) — SpeechError is left, SpeechValue is right
+    private val speechCallback =
+        com.mapbox.navigation.base.route.MapboxNavigationConsumer<
+            com.mapbox.bindgen.Expected<SpeechError, SpeechValue>
+        > { expected ->
+            expected.fold(
+                { error ->
+                    // On-device TTS fallback when MP3 is not available
+                    if (!isMuted) {
+                        voiceInstructionsPlayer.play(
+                            error.fallback,
+                            voiceInstructionsPlayerCallback
+                        )
+                    }
+                },
+                { value ->
+                    // Play the synthesized MP3 from Mapbox Voice API
+                    if (!isMuted) {
+                        voiceInstructionsPlayer.play(
+                            value.announcement,
+                            voiceInstructionsPlayerCallback
+                        )
+                    }
+                }
+            )
+        }
+
+    private val voiceInstructionsPlayerCallback =
+        { announcement: SpeechAnnouncement ->
+            // Cleanup the file after playing
+            speechApi.clean(announcement)
+        }
+
+    private val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
+        speechApi.generate(voiceInstructions, speechCallback)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -363,7 +499,6 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         mapView.mapboxMap.loadStyle(mapStyle ?: getAutoStyle()) { style ->
             routeLineView.initializeLayers(style)
 
-            // Camera viewport
             viewportDataSource = MapboxNavigationViewportDataSource(mapView.mapboxMap)
             viewportDataSource.followingPadding = followingPadding
             viewportDataSource.overviewPadding = overviewPadding
@@ -374,24 +509,19 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 viewportDataSource
             )
 
-            // ── Location puck — Waze-style arrow ─────────────────────────────
-            // FIX: use mapbox_navigation_puck_icon (built-in arrow)
-            // + PuckBearing.COURSE to orient it in direction of travel
+            // Navigation arrow puck
             mapView.location.apply {
                 setLocationProvider(navigationLocationProvider)
                 updateSettings {
-                    // Built-in navigation arrow (chevron) from Nav SDK
                     locationPuck = LocationPuck2D(
                         bearingImage = ImageHolder.from(
                             com.mapbox.navigation.R.drawable.mapbox_navigation_puck_icon
                         )
                     )
-                    // COURSE = direction of movement (not compass heading)
                     puckBearingEnabled = true
                     enabled = true
                 }
-                // Must set puckBearing separately — confirmed from migration guide
-                puckBearing = com.mapbox.maps.plugin.PuckBearing.COURSE
+                puckBearing = PuckBearing.COURSE
             }
 
             registerObservers()
@@ -408,10 +538,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         nav.registerRoutesObserver(object : RoutesObserver {
             override fun onRoutesChanged(result: RoutesUpdatedResult) {
                 if (result.navigationRoutes.isNotEmpty()) {
+                    // Cancel any in-flight speech when route changes
+                    speechApi.cancel()
+                    voiceInstructionsPlayer.clear()
+
                     routeLineApi.setNavigationRoutes(result.navigationRoutes) { value ->
-                        mapView.mapboxMap.style?.apply {
-                            routeLineView.renderRouteDrawData(this, value)
-                        }
+                        mapView.mapboxMap.style?.apply { routeLineView.renderRouteDrawData(this, value) }
                     }
                     viewportDataSource.onRouteChanged(result.navigationRoutes.first())
                     viewportDataSource.evaluate()
@@ -442,13 +574,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             viewportDataSource.onRouteProgressChanged(routeProgress)
             viewportDataSource.evaluate()
 
-            // Maneuver arrow on map
             mapView.mapboxMap.style?.let { style ->
                 val arrowResult = routeArrowApi.addUpcomingManeuverArrow(routeProgress)
                 routeArrowView.renderManeuverUpdate(style, arrowResult)
             }
 
-            // Maneuver banner
             val maneuvers = maneuverApi.getManeuvers(routeProgress)
             maneuvers.fold(
                 { error -> Log.w(TAG, "Maneuver error: ${error.errorMessage}"); Unit },
@@ -459,7 +589,6 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 }
             )
 
-            // Trip progress
             val tripProgress = tripProgressApi.getTripProgress(routeProgress)
             tripProgressView?.render(tripProgress)
             updateEtaBar(
@@ -474,8 +603,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 "distanceTraveled" to routeProgress.distanceTraveled,
                 "fractionTraveled" to routeProgress.fractionTraveled,
                 "currentStepDistanceRemaining" to
-                    (routeProgress.currentLegProgress
-                        ?.currentStepProgress?.distanceRemaining ?: 0f)
+                    (routeProgress.currentLegProgress?.currentStepProgress?.distanceRemaining ?: 0f)
             ))
         })
 
@@ -484,22 +612,15 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             override fun onNewRawLocation(rawLocation: Location) {}
             override fun onNewLocationMatcherResult(result: LocationMatcherResult) {
                 val loc = result.enhancedLocation
-
-                navigationLocationProvider.changePosition(
-                    location = loc,
-                    keyPoints = result.keyPoints,
-                )
-
+                navigationLocationProvider.changePosition(location = loc, keyPoints = result.keyPoints)
                 viewportDataSource.onLocationChanged(loc)
                 viewportDataSource.evaluate()
 
-                // First GPS fix → enter following mode
                 if (!firstLocationReceived) {
                     firstLocationReceived = true
                     safeCameraFollowing()
                 }
 
-                // Speed limit display
                 val fmtOptions = DistanceFormatterOptions.Builder(context).build()
                 val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
                 if (speedInfo != null) {
@@ -512,30 +633,28 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 checkAndSwitchDayNight()
             }
         })
+
+        // Voice instructions observer — triggers TTS announcements
+        nav.registerVoiceInstructionsObserver(voiceInstructionsObserver)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Button actions
     // ─────────────────────────────────────────────────────────────────────────
-
-    // Toggle mute voice guidance
     private fun toggleMute() {
         isMuted = !isMuted
-        btnMute?.text = if (isMuted) "🔇" else "🔊"
-        btnMute?.setTextColor(if (isMuted) Color.parseColor("#FF4444") else Color.BLACK)
-        // Actual audio muting handled by the voice instruction observer in the app
-        // We expose the state via event so the RN layer can mute TTS
-        onNavigationCancelled(mapOf("type" to "mute", "muted" to isMuted))
+        // Update icon to show muted/unmuted state
+        btnMuteView?.setImageBitmap(drawSpeakerIcon(isMuted))
+        // Apply volume via SpeechVolume API
+        voiceInstructionsPlayer.volume(SpeechVolume(if (isMuted) 0f else 1f))
     }
 
-    // Toggle overview / following mode
     private fun toggleOverview() {
         if (isOverviewMode) {
             recenterCamera()
         } else {
             isOverviewMode = true
-            btnOverview?.text = "◉"
-            btnRecenter?.visibility = View.VISIBLE
+            btnRecenterView?.visibility = View.VISIBLE
             try {
                 navigationCamera.requestNavigationCameraToOverview()
             } catch (e: Exception) {
@@ -544,11 +663,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
-    // Recenter camera to vehicle (following mode)
     private fun recenterCamera() {
         isOverviewMode = false
-        btnOverview?.text = "⊕"
-        btnRecenter?.visibility = View.GONE
+        btnRecenterView?.visibility = View.GONE
         safeCameraFollowing()
     }
 
@@ -560,25 +677,15 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         totalTimeRemainingSec: Double,
         distanceRemainingMetres: Double
     ) {
-        val arrivalCal = Calendar.getInstance().apply {
-            timeInMillis = estimatedTimeToArrivalMs
-        }
+        val arrivalCal = Calendar.getInstance().apply { timeInMillis = estimatedTimeToArrivalMs }
         tvEtaTime?.text = String.format(
-            "%02d:%02d",
-            arrivalCal.get(Calendar.HOUR_OF_DAY),
-            arrivalCal.get(Calendar.MINUTE)
+            "%02d:%02d", arrivalCal.get(Calendar.HOUR_OF_DAY), arrivalCal.get(Calendar.MINUTE)
         )
-
         val totalMin = (totalTimeRemainingSec / 60).toInt()
-        tvDuration?.text = if (totalMin >= 60)
-            "${totalMin / 60}h ${totalMin % 60}min"
-        else
-            "${totalMin} min"
-
+        tvDuration?.text = if (totalMin >= 60) "${totalMin / 60}h ${totalMin % 60}min" else "$totalMin min"
         tvDistance?.text = if (distanceRemainingMetres >= 1000)
             String.format("%.1f km", distanceRemainingMetres / 1000.0)
-        else
-            "${distanceRemainingMetres.toInt()} m"
+        else "${distanceRemainingMetres.toInt()} m"
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -595,9 +702,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val shouldBeNight = hour !in 6..20
         if (shouldBeNight == isNightMode) return
         isNightMode = shouldBeNight
-        val newStyle = if (shouldBeNight) NavigationStyles.NAVIGATION_NIGHT_STYLE
-        else NavigationStyles.NAVIGATION_DAY_STYLE
-        mapView.mapboxMap.loadStyle(newStyle) { style ->
+        mapView.mapboxMap.loadStyle(
+            if (shouldBeNight) NavigationStyles.NAVIGATION_NIGHT_STYLE else NavigationStyles.NAVIGATION_DAY_STYLE
+        ) { style ->
             routeLineView.initializeLayers(style)
             mapboxNavigation?.getNavigationRoutes()?.takeIf { it.isNotEmpty() }?.let { routes ->
                 routeLineApi.setNavigationRoutes(routes) { value ->
@@ -607,25 +714,19 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Camera following — issue #43 safe wrapper
-    // ─────────────────────────────────────────────────────────────────────────
     private fun safeCameraFollowing() {
         try {
             navigationCamera.requestNavigationCameraToFollowing(
-                stateTransitionOptions = NavigationCameraTransitionOptions.Builder()
-                    .maxDuration(0)
-                    .build()
+                stateTransitionOptions = NavigationCameraTransitionOptions.Builder().maxDuration(0).build()
             )
         } catch (e: Exception) {
             Log.e(TAG, "Camera following error: ${e.message}")
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Cancel navigation
-    // ─────────────────────────────────────────────────────────────────────────
     private fun cancelNavigation() {
+        speechApi.cancel()
+        voiceInstructionsPlayer.clear()
         mapboxNavigation?.setNavigationRoutes(listOf())
         mapboxNavigation?.stopTripSession()
         firstLocationReceived = false
@@ -647,9 +748,6 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         sideButtons?.visibility = View.INVISIBLE
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Issue #31 — Voice units
-    // ─────────────────────────────────────────────────────────────────────────
     private fun resolveVoiceUnits(): String {
         return when (voiceUnits?.lowercase()) {
             "metric" -> "metric"
@@ -661,88 +759,58 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Route request
-    // ─────────────────────────────────────────────────────────────────────────
     @SuppressLint("MissingPermission")
     private fun fetchRoutes() {
         val nav = mapboxNavigation ?: return
         if (coordinates.size < 2) return
-
-        val points = coordinates.map {
-            Point.fromLngLat(it["longitude"] ?: 0.0, it["latitude"] ?: 0.0)
-        }
+        val points = coordinates.map { Point.fromLngLat(it["longitude"] ?: 0.0, it["latitude"] ?: 0.0) }
         val locale = language?.let { Locale.forLanguageTag(it) } ?: Locale.getDefault()
-
         val builder = RouteOptions.builder()
             .applyDefaultNavigationOptions()
             .language(locale.toLanguageTag())
             .voiceUnits(resolveVoiceUnits())
             .coordinatesList(points)
             .annotations("maxspeed,congestion,duration,speed")
-
         waypointIndices?.let { builder.waypointIndicesList(it) }
-        navigationProfile?.let {
-            builder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it")
-        }
-        excludeTypes?.takeIf { it.isNotEmpty() }?.let {
-            builder.exclude(it.joinToString(","))
-        }
+        navigationProfile?.let { builder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }
+        excludeTypes?.takeIf { it.isNotEmpty() }?.let { builder.exclude(it.joinToString(",")) }
         maxHeight?.let { builder.maxHeight(it) }
         maxWidth?.let { builder.maxWidth(it) }
-
         nav.requestRoutes(builder.build(), object : NavigationRouterCallback {
-            override fun onRoutesReady(
-                routes: List<NavigationRoute>,
-                @RouterOrigin routerOrigin: String
-            ) {
-                if (routes.isEmpty()) {
-                    onRoutesFailed(mapOf("message" to "No routes returned"))
-                    return
-                }
+            override fun onRoutesReady(routes: List<NavigationRoute>, @RouterOrigin routerOrigin: String) {
+                if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
                 nav.setNavigationRoutes(routes)
                 nav.startTripSession()
             }
-
             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
-                val msg = reasons.firstOrNull()?.message ?: "Unknown error"
-                Log.e(TAG, "Route failed: $msg")
-                onRoutesFailed(mapOf("message" to msg))
+                onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
             }
-
-            override fun onCanceled(
-                routeOptions: RouteOptions,
-                @RouterOrigin routerOrigin: String
-            ) {
-                Log.d(TAG, "Route cancelled")
-            }
+            override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {}
         })
     }
 
-    // ── Prop setters ──────────────────────────────────────────────────────────
-    fun setCoordinates(coords: List<Map<String, Double>>) {
-        coordinates = coords
-        if (coords.size >= 2) fetchRoutes()
-    }
+    fun setCoordinates(coords: List<Map<String, Double>>) { coordinates = coords; if (coords.size >= 2) fetchRoutes() }
     fun setWaypointIndices(i: List<Int>?) { waypointIndices = i }
     fun setLanguage(l: String?) { language = l }
     fun setVoiceUnits(u: String?) { voiceUnits = u }
     fun setNavigationProfile(p: String?) { navigationProfile = p }
     fun setExcludeTypes(t: List<String>?) { excludeTypes = t }
     fun setMapStyle(s: String?) { mapStyle = s }
-    fun setMute(m: Boolean) { mute = m; if (m != isMuted) toggleMute() }
+    fun setMute(m: Boolean) { if (m != isMuted) toggleMute() }
     fun setMaxHeight(h: Double?) { maxHeight = h }
     fun setMaxWidth(w: Double?) { maxWidth = w }
     fun setUseMapMatching(u: Boolean) { useMapMatching = u }
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        speechApi.cancel()
+        voiceInstructionsPlayer.shutdown()
         maneuverApi.cancel()
         routeLineApi.cancel()
         routeLineView.cancel()
+        mapboxNavigation?.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
         mapboxNavigation?.stopTripSession()
         MapboxNavigationProvider.destroy()
         mapView.onStop()
