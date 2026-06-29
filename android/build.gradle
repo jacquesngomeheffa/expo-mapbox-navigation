@@ -1,54 +1,88 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
-apply plugin: 'maven-publish'
 
-buildscript {
-  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
-  if (expoModulesCorePlugin.exists()) {
-    apply from: expoModulesCorePlugin
-    applyKotlinExpoModulesCorePlugin()
-  }
-}
+def MAPBOX_NAV_VERSION = "3.8.1"
+def MAPBOX_MAPS_MIN_VERSION = "11.11.0"
+def REQUIRED_NDK_VERSION = "27.0.12077973"
 
 android {
-  compileSdkVersion 34
-  namespace "expo.modules.mapboxnavigation"
+    compileSdkVersion safeExtGet("compileSdkVersion", 35)
+    namespace "expo.modules.mapboxnavigation"
+    ndkVersion REQUIRED_NDK_VERSION
 
-  defaultConfig {
-    minSdkVersion 24
-    targetSdkVersion 34
-  }
+    defaultConfig {
+        minSdkVersion safeExtGet("minSdkVersion", 24)
+        targetSdkVersion safeExtGet("targetSdkVersion", 35)
+        ndk {
+            abiFilters "arm64-v8a", "x86_64"
+        }
+    }
 
-  compileOptions {
-    sourceCompatibility JavaVersion.VERSION_17
-    targetCompatibility JavaVersion.VERSION_17
-  }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 
-  kotlinOptions {
-    jvmTarget = "17"
-  }
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.majorVersion
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
 }
 
 repositories {
-  maven {
-    url 'https://api.mapbox.com/downloads/v2/releases/maven'
-    authentication {
-      basic(BasicAuthentication)
+    mavenCentral()
+    google()
+    maven {
+        url 'https://api.mapbox.com/downloads/v2/releases/maven'
+        authentication { basic(BasicAuthentication) }
+        credentials {
+            username = 'mapbox'
+            password = project.hasProperty('MAPBOX_DOWNLOADS_TOKEN')
+                    ? project.property('MAPBOX_DOWNLOADS_TOKEN')
+                    : System.getenv('MAPBOX_DOWNLOADS_TOKEN') ?: ""
+        }
     }
-    credentials {
-      username = "mapbox"
-      password = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: System.getenv("MAPBOX_DOWNLOADS_TOKEN") ?: ""
-    }
-  }
-  google()
-  mavenCentral()
 }
 
 dependencies {
-  implementation project(':expo-modules-core')
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion()}"
+    implementation project(':expo-modules-core')
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${safeExtGet('kotlinVersion', '1.9.0')}"
 
-  // Mapbox Navigation SDK v3 + Drop-in UI
-  api "com.mapbox.navigation:android:3.3.0"
-  api "com.mapbox.navigation:ui-dropin:3.3.0"
+    // Mapbox Navigation SDK v3
+    implementation "com.mapbox.navigationcore:android:${MAPBOX_NAV_VERSION}"
+
+    // Mapbox Maps SDK
+    implementation("com.mapbox.maps:android:${MAPBOX_MAPS_MIN_VERSION}") {
+        transitive = true
+    }
+
+    // Navigation UI Components (ManeuverView, SpeedInfoView)
+    implementation "com.mapbox.navigationcore:ui-components:${MAPBOX_NAV_VERSION}"
+
+    // TripData (ManeuverApi, SpeedInfoApi, TripProgressApi)
+    implementation "com.mapbox.navigationcore:tripdata:${MAPBOX_NAV_VERSION}"
+
+    // UI Maps (NavigationStyles, NavigationLocationProvider, NavigationCamera)
+    implementation "com.mapbox.navigationcore:ui-maps:${MAPBOX_NAV_VERSION}"
+
+    // ConstraintLayout — required because MapboxManeuverView extends ConstraintLayout
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // AndroidX
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.core:core-ktx:1.13.1'
+}
+
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }

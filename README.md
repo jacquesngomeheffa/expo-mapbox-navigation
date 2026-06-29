@@ -1,169 +1,89 @@
 # @jacques_gordon/expo-mapbox-navigation
 
-Plugin Expo pour la navigation Mapbox **turn-by-turn**, compatible **Expo SDK 53** avec **Expo Dev Client**.
+[![npm version](https://badge.fury.io/js/@jacques_gordon%2Fexpo-mapbox-navigation.svg)](https://www.npmjs.com/package/@jacques_gordon/expo-mapbox-navigation)
 
-Supporte **iOS** et **Android**, avec waypoints multiples, instructions vocales, reroutage automatique, restrictions de gabarit de véhicule et personnalisation de la carte.
+Expo module for Mapbox Navigation SDK — forked from [`@badatgil/expo-mapbox-navigation`](https://github.com/uju777/expo-mapbox-navigation) with the following fixes and improvements:
 
-> ⚠️ Nécessite **Expo Dev Client** — incompatible avec Expo Go.
-
----
-
-## Fonctionnalités
-
-- ✅ Navigation turn-by-turn complète (iOS & Android)
-- ✅ Waypoints multiples
-- ✅ Instructions vocales
-- ✅ Reroutage automatique
-- ✅ Détection hors-route
-- ✅ Restrictions de gabarit de véhicule (hauteur / largeur)
-- ✅ Map Matching API (trajet explicite selon les coordonnées)
-- ✅ Routes alternatives
-- ✅ Style de carte personnalisable
-- ✅ Couche raster personnalisée
-- ✅ Multilangue
-- ✅ Compatible avec `@rnmapbox/maps`
+| Change | Details |
+|--------|---------|
+| 🐛 **Fix #43** | Android crash: `NoSuchMethodError` for `CameraAnimationsUtils.calculateCameraAnimationHint` — caused by Mapbox Maps/Navigation SDK version mismatch. Fixed by pinning `mapbox-maps-android ≥ 11.11.0` and Navigation SDK `3.7.0`. |
+| 🐛 **Fix #31** | Voice instructions always defaulted to imperial units. New `voiceUnits` prop (`"metric"` \| `"imperial"`) added. |
+| ✅ **NDK 27** | Forced NDK `27.0.12077973` for full 16 KB page size compatibility (Android 15+ requirement). |
+| ✅ **16 KB page size** | `jniLibs.useLegacyPackaging = false` + `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON` — required for Google Play compliance from 2025 onwards. |
+| ✅ **Expo SDK 53+** | Compatible with Expo SDK ≥ 53 and React Native 0.79+. |
+| ✅ **Maps v11.11.0** | Minimum Mapbox Maps Android SDK enforced to 11.11.0 (config plugin validates this). |
 
 ---
 
 ## Installation
 
-### 1. Installer `@rnmapbox/maps` (dépendance requise)
-
-Suivre les [instructions officielles de @rnmapbox/maps](https://rnmapbox.github.io/docs/install).  
-La version recommandée est `11.11.0`. **Important : définir explicitement `RNMapboxMapsVersion`.**
-
-### 2. Installer le package
-
 ```bash
-npm install @jacques_gordon/expo-mapbox-navigation
+npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ```
 
-Et additionnellement le package (parfois optionnelle)
+### Setup @rnmapbox/maps first
 
-```bash
-npm install metro-cache-key 
-```
-
-### 3. Configurer le plugin dans `app.json`
+Follow the [full @rnmapbox/maps installation guide](https://rnmapbox.github.io/docs/install). Set `RNMapboxMapsVersion` to `11.11.0` or higher.
 
 ```json
-{
-  "expo": {
-    "plugins": [
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useFrameworks": "static"
-          }
-        }
-      ],
-      [
-        "@jacques_gordon/expo-mapbox-navigation",
-        {
-          "accessToken": "pk.eyJ1IjoiVk9UUkVfVE9LRU4iLCJhIjoiY...",
-          "mapboxMapsVersion": "11.11.0",
-          "androidColorOverrides": {
-            "mapbox_main_maneuver_background_color": "#1E88E5"
-          }
-        }
-      ]
-    ]
-  }
-}
+"plugins": [
+  [
+    "@rnmapbox/maps",
+    {
+      "RNMapboxMapsImpl": "mapbox",
+      "RNMapboxMapsVersion": "11.11.0",
+      "RNMapboxMapsDownloadToken": "sk.your_secret_token"
+    }
+  ]
+]
 ```
 
-### 4. Configurer les tokens secrets
+### Add this plugin
 
-#### iOS — `~/.netrc`
-
-```
-machine api.mapbox.com
-  login mapbox
-  password sk.eyJ1IjoiVk9UUkVfVE9LRU5fU0VDUkVUIiwiYSI6Ii4uLiJ9...
-```
-
-#### Android — `~/.gradle/gradle.properties`
-
-```properties
-MAPBOX_DOWNLOADS_TOKEN=sk.eyJ1IjoiVk9UUkVfVE9LRU5fU0VDUkVUIiwiYSI6Ii4uLiJ9...
+```json
+"plugins": [
+  [
+    "@jacques_gordon/expo-mapbox-navigation",
+    {
+      "accessToken": "pk.your_public_token",
+      "mapboxMapsVersion": "11.11.0"
+    }
+  ]
+]
 ```
 
-### 5. Prebuild + Dev Client
+> ⚠️ `mapboxMapsVersion` must match the version set in `@rnmapbox/maps`. Minimum: `11.11.0`.
 
-```bash
-npx expo prebuild --clean
-npx expo run:ios     # ou run:android
+### iOS: enable static frameworks
+
+```json
+"plugins": [
+  ["expo-build-properties", { "ios": { "useFrameworks": "static" } }]
+]
 ```
 
 ---
 
-## Utilisation
-
-### Exemple de base
+## Usage
 
 ```tsx
 import { MapboxNavigationView } from '@jacques_gordon/expo-mapbox-navigation';
 
-export default function NavigationScreen() {
+export default function Navigation() {
   return (
     <MapboxNavigationView
       style={{ flex: 1 }}
       coordinates={[
-        { latitude: 48.8566, longitude: 2.3522 },  // Paris — départ
-        { latitude: 43.2965, longitude: 5.3698 },  // Marseille — destination
+        { latitude: 48.8566, longitude: 2.3522 },  // Paris
+        { latitude: 51.5074, longitude: -0.1278 },  // London
       ]}
-      locale="fr"
-      onFinalDestinationArrival={() => console.log('Arrivé !')}
-      onCancelNavigation={() => navigation.goBack()}
-    />
-  );
-}
-```
-
-### Exemple complet (compatible avec la page de navigation)
-
-```tsx
-import { MapboxNavigationView } from '@jacques_gordon/expo-mapbox-navigation';
-
-export default function NavigationScreen({ navigation, reservation, currentPosition }) {
-  const coordinates = [
-    currentPosition,                              // départ (position actuelle)
-    { latitude: 45.7640, longitude: 4.8357 },    // Lyon — waypoint intermédiaire
-    reservation.address_to_lat_long,              // destination finale
-  ];
-
-  return (
-    <MapboxNavigationView
-      style={{ flex: 1 }}
-      coordinates={coordinates}
-      locale="fr"
-      vehicleMaxHeight={5.0}
-      vehicleMaxWidth={2.5}
-      showsEndOfRouteFeedback
-      onRouteProgressChanged={async (event) => {
-        const { distanceRemaining, durationRemaining, distanceTraveled, fractionTraveled } =
-          event.nativeEvent;
-
-        // Notifier le client que le chauffeur approche
-        if (distanceRemaining <= 60) {
-          AXIOS_POST('reservations/livetracking/drivernear', { reservation });
-        }
-
-        const eta = new Date(Date.now() + durationRemaining * 1000);
-        dispatch(setNavigationData({ eta, distanceRemaining, durationRemaining }));
-      }}
-      onWaypointArrival={(event) => {
-        console.log('Waypoint atteint !', event.nativeEvent);
-      }}
-      onFinalDestinationArrival={async () => {
-        await playSound(SOUNDS.ROAD_RECALCULATE);
-        showToast({ toast_type: 'validation', title: 'Arrivée', body: 'Destination atteinte !' });
-      }}
-      onCancelNavigation={() => navigation.goBack()}
-      onRouteChanged={() => console.log('Reroutage en cours...')}
-      onUserOffRoute={() => console.log('Hors route !')}
-      onRoutesLoaded={() => console.log('Routes chargées')}
+      voiceUnits="metric"           // Fix for issue #31
+      language="fr"
+      navigationProfile="driving-traffic"
+      onArrival={() => console.log('Arrived!')}
+      onRoutesFailed={({ nativeEvent }) =>
+        console.error('Routes failed:', nativeEvent.message)
+      }
     />
   );
 }
@@ -173,104 +93,78 @@ export default function NavigationScreen({ navigation, reservation, currentPosit
 
 ## Props
 
-### Route
-
-| Prop | Type | Requis | Description |
-|------|------|--------|-------------|
-| `coordinates` | `Coordinate[]` | **Oui** | Tableau de `{latitude, longitude}`. Minimum 2 points. |
-| `waypointIndices` | `number[]` | Non | Indices des points considérés comme waypoints. Par défaut: tous. |
-
-### Options de routing
-
-| Prop | Type | Défaut | Description |
-|------|------|--------|-------------|
-| `locale` | `string` | locale appareil | Langue des instructions. Ex: `"fr"`, `"en"`, `"de"` |
-| `routeProfile` | `string` | `"mapbox/driving-traffic"` | Profil de routing. Android: sans `"mapbox/"`. |
-| `routeExcludeList` | `string[]` | `[]` | Routes à exclure: `"toll"`, `"ferry"`, `"motorway"` |
-| `useRouteMatchingApi` | `boolean` | `false` | Utilise l'API Map Matching au lieu de l'API Directions |
-| `disableAlternativeRoutes` | `boolean` | `false` | Désactive les routes alternatives |
-| `mute` | `boolean` | `false` | Coupe le son de navigation au démarrage |
-| `vehicleMaxHeight` | `number` | — | Hauteur max du véhicule en mètres |
-| `vehicleMaxWidth` | `number` | — | Largeur max du véhicule en mètres |
-
-### Personnalisation visuelle
-
-| Prop | Type | Défaut | Description |
-|------|------|--------|-------------|
-| `mapStyle` | `string` | style par défaut | URL du style Mapbox |
-| `customRasterSourceUrl` | `string` | — | URL template raster personnalisée (ex: OpenStreetMap) |
-| `placeCustomRasterLayerAbove` | `string` | — | ID du layer au-dessus duquel placer la couche raster |
-| `showsEndOfRouteFeedback` | `boolean` | `false` | Affiche l'UI de feedback à l'arrivée |
-
-### Callbacks
-
-| Prop | Paramètres | Description |
-|------|-----------|-------------|
-| `onRouteProgressChanged` | `{ nativeEvent: RouteProgress }` | Progression sur la route (appelé fréquemment) |
-| `onWaypointArrival` | `{ nativeEvent: RouteProgress }` (Android only) | Arrivée à un waypoint intermédiaire |
-| `onFinalDestinationArrival` | — | Arrivée à la destination finale |
-| `onCancelNavigation` | — | Annulation de la navigation par l'utilisateur |
-| `onRouteChanged` | — | Route modifiée ou reroutage |
-| `onUserOffRoute` | — | L'utilisateur est sorti de la route |
-| `onRoutesLoaded` | — | Routes chargées et prêtes |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `coordinates` | `Coordinate[]` | required | Route waypoints. Min 2 items. |
+| `waypointIndices` | `number[]` | all points | Which coordinates are waypoints. |
+| `language` | `string` | device locale | BCP-47 locale (e.g. `"fr"`, `"en-US"`). |
+| `voiceUnits` | `"metric" \| "imperial"` | auto | **Fix #31** — Voice/distance units. |
+| `navigationProfile` | `string` | `"driving-traffic"` | Mapbox routing profile. |
+| `excludeTypes` | `string[]` | — | Road types to avoid. |
+| `mapStyle` | `string` | Mapbox Navigation Day | Map style URL. |
+| `mute` | `boolean` | `false` | Silence voice instructions. |
+| `maxHeight` | `number` | — | Max vehicle height (m). |
+| `maxWidth` | `number` | — | Max vehicle width (m). |
+| `useMapMatching` | `boolean` | `false` | Use Map Matching API. |
+| `customRasterTileUrl` | `string` | — | Custom tile URL with `{x}/{y}/{z}`. |
+| `customRasterAboveLayerId` | `string` | — | Layer ID to place custom raster above. |
 
 ---
 
-## Types TypeScript
+## Events
 
-```ts
-interface Coordinate {
-  latitude: number;
-  longitude: number;
-}
-
-interface RouteProgress {
-  distanceRemaining: number;   // mètres restants
-  distanceTraveled: number;    // mètres parcourus
-  durationRemaining: number;   // secondes restantes
-  fractionTraveled: number;    // 0.0 → 1.0
-}
-```
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `onRoutesReady` | `{ routeCount, distanceMeters, durationSeconds }` | Routes calculated. |
+| `onRouteProgressChanged` | `{ distanceRemaining, durationRemaining, ... }` | Progress update. |
+| `onArrival` | `{}` | User reached destination. |
+| `onNavigationCancelled` | `{}` | User cancelled navigation. |
+| `onNavigationFinished` | `{}` | Session ended normally. |
+| `onRoutesFailed` | `{ message }` | Route calculation failed. |
 
 ---
 
-## Plugin `app.json` — Options complètes
+## Android Color Overrides
+
+Customize the Navigation UI colors by overriding Mapbox resource values:
 
 ```json
-[
-  "@jacques_gordon/expo-mapbox-navigation",
-  {
-    "accessToken": "pk.eyJ1...",
-    "mapboxMapsVersion": "11.11.0",
-    "androidColorOverrides": {
-      "mapbox_main_maneuver_background_color": "#1E88E5",
-      "mapbox_sub_maneuver_background_color": "#1565C0",
-      "mapbox_banner_background_color": "#FFFFFF"
-    }
+["@jacques_gordon/expo-mapbox-navigation", {
+  "accessToken": "pk.your_token",
+  "mapboxMapsVersion": "11.11.0",
+  "androidColorOverrides": {
+    "mapbox_main_maneuver_background_color": "#FF5500",
+    "mapbox_primary_route_color": "#0055FF"
   }
-]
+}]
 ```
 
-## Notes importantes
+---
 
-- Nécessite **Expo Dev Client** (Expo Go non supporté)
-- iOS minimum : **14.0**
-- Android minimum SDK : **24**
-- Le SDK Mapbox Navigation est propriétaire — facturation via votre compte Mapbox
-- Pour iOS, les `.xcframework` du SDK Mapbox Navigation doivent être compilés et inclus dans `ios/Frameworks/`
-  (voir [instructions dans le README du repo source](https://github.com/uju777/expo-mapbox-navigation))
+## 16 KB Page Size Compatibility
+
+Android 15 (API 35) requires all `.so` native libraries to be aligned to 16 KB boundaries for devices using 16 KB memory page sizes.
+
+This package enforces:
+- **NDK 27** (`27.0.12077973`) — the first NDK version with full 16 KB support
+- **`jniLibs.useLegacyPackaging = false`** — prevents `.so` compression, enabling proper alignment
+- **64-bit-only ABI filters** (`arm64-v8a`, `x86_64`) — 16 KB requirement applies to 64-bit only
+
+More info: [Android 16 KB page size guide](https://developer.android.com/guide/practices/page-sizes)
 
 ---
 
-## Obtenir vos tokens Mapbox
+## Changelog
 
-1. Créer un compte sur [mapbox.com](https://www.mapbox.com/)
-2. Aller dans [Account > Tokens](https://account.mapbox.com/access-tokens/)
-3. **Token public** (`pk.eyJ1...`) — token par défaut ou nouveau token
-4. **Token secret** (`sk.eyJ1...`) — nouveau token avec le scope `Downloads:Read`
+### 2.0.1
+- Fix #43: `CameraAnimationsUtils.calculateCameraAnimationHint` NoSuchMethodError on Android
+- Fix #31: Add `voiceUnits` prop for metric/imperial voice instructions
+- Force NDK 27 for 16 KB page size support
+- Enforce Mapbox Maps Android ≥ 11.11.0
+- Expo SDK 53 compatibility
 
 ---
 
-## Licence
+## License
 
 MIT

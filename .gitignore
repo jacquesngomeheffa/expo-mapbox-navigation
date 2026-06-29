@@ -1,7 +1,1 @@
-*node_modules/*
-*expo/*
-.expo/
-*.rest
-.env
-server/firebase/serviceAccountKey.json
-*.key
+node_modules
