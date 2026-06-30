@@ -8,6 +8,7 @@ const MAPBOX_MAPS_MIN_VERSION = '11.11.0';
 const withMapboxNavigation = (config, options = {}) => {
   const {
     accessToken,
+    downloadsToken,
     mapboxMapsVersion = MAPBOX_MAPS_MIN_VERSION,
     androidColorOverrides = {},
   } = options;
@@ -17,6 +18,21 @@ const withMapboxNavigation = (config, options = {}) => {
       '[@jacques_gordon/expo-mapbox-navigation] `accessToken` is required in the plugin config.\n' +
       'Add it to your app.json plugins array:\n' +
       '  ["@jacques_gordon/expo-mapbox-navigation", { "accessToken": "pk.your_token" }]'
+    );
+  }
+
+  // downloadsToken (a secret sk.* token with the Downloads:Read scope) is
+  // required on iOS to authenticate Swift Package Manager's fetch of the
+  // Mapbox Navigation SDK package — without it, `pod install`/`expo
+  // prebuild` will fail to resolve the SPM dependency declared in
+  // ExpoMapboxNavigation.podspec.
+  if (!downloadsToken) {
+    throw new Error(
+      '[@jacques_gordon/expo-mapbox-navigation] `downloadsToken` is required for iOS builds.\n' +
+      'This must be a SECRET Mapbox token (starts with "sk.") with the "Downloads:Read" scope,\n' +
+      'used to authenticate Swift Package Manager when fetching the Mapbox Navigation SDK.\n' +
+      'Add it to your app.json plugins array:\n' +
+      '  ["@jacques_gordon/expo-mapbox-navigation", { "accessToken": "pk.xxx", "downloadsToken": "sk.xxx" }]'
     );
   }
 
@@ -188,6 +204,33 @@ configurations.all {
     }
     return mod;
   });
+
+  // ── iOS: .netrc for SPM authentication ───────────────────────────────────
+  // Swift Package Manager (used by ExpoMapboxNavigation.podspec's
+  // spm_dependency() to fetch the Mapbox Navigation SDK) authenticates
+  // against api.mapbox.com using a machine entry in the user's ~/.netrc
+  // file — this is Mapbox's documented mechanism for private SPM package
+  // access, identical in spirit to the MAPBOX_DOWNLOADS_TOKEN gradle
+  // property used on Android.
+  config = withDangerousMod(config, [
+    'ios',
+    (mod) => {
+      const homeDir = require('os').homedir();
+      const netrcPath = path.join(homeDir, '.netrc');
+      const netrcEntry = `machine api.mapbox.com\nlogin mapbox\npassword ${downloadsToken}\n`;
+
+      let existingContent = '';
+      if (fs.existsSync(netrcPath)) {
+        existingContent = fs.readFileSync(netrcPath, 'utf8');
+      }
+
+      if (!existingContent.includes('machine api.mapbox.com')) {
+        fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
+      }
+
+      return mod;
+    },
+  ]);
 
   return config;
 };

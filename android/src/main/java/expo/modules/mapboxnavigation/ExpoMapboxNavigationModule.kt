@@ -15,7 +15,8 @@ class ExpoMapboxNavigationModule : Module() {
                 "onNavigationFinished",
                 "onNavigationCancelled",
                 "onRoutesFailed",
-                "onArrival"
+                "onArrival",
+                "onManeuverBannerPressed"
             )
 
             Prop("coordinates") { view: ExpoMapboxNavigationView, coordinates: List<Map<String, Double>> ->
@@ -56,6 +57,25 @@ class ExpoMapboxNavigationModule : Module() {
             }
             Prop("customRasterAboveLayerId") { view: ExpoMapboxNavigationView, layerId: String? ->
                 view.setCustomRasterAboveLayerId(layerId)
+            }
+            // ── Color customization props ────────────────────────────────────────
+            Prop("maneuverBackgroundColorDay") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setManeuverBackgroundColorDay(color)
+            }
+            Prop("maneuverTurnIconColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setManeuverTurnIconColor(color)
+            }
+            Prop("etaBarBackgroundColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setEtaBarBackgroundColor(color)
+            }
+            Prop("etaTextColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setEtaTextColor(color)
+            }
+            Prop("iconButtonColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setIconButtonColor(color)
+            }
+            Prop("iconButtonMutedColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setIconButtonMutedColor(color)
             }
         }
     }

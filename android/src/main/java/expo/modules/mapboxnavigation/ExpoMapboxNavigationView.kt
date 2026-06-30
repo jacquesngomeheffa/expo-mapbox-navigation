@@ -54,6 +54,7 @@ import com.mapbox.navigation.tripdata.progress.model.EstimatedTimeToArrivalForma
 import com.mapbox.navigation.tripdata.progress.model.TimeRemainingFormatter
 import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateFormatter
 import com.mapbox.navigation.tripdata.speedlimit.api.MapboxSpeedInfoApi
+import com.mapbox.navigation.ui.components.maneuver.model.ManeuverViewOptions
 import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
 import com.mapbox.navigation.ui.components.speedlimit.view.MapboxSpeedInfoView
 import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressView
@@ -93,6 +94,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private val onNavigationCancelled by EventDispatcher()
     private val onRoutesFailed by EventDispatcher()
     private val onArrival by EventDispatcher()
+    // Feature: emits the full list of turn-by-turn steps when the instruction
+    // banner is tapped, so the RN layer can render a steps list (bottom
+    // sheet/modal). Payload: { steps: [{ instruction, distanceMeters,
+    // maneuverType, maneuverModifier, laneInstructions }] }
+    private val onManeuverBannerPressed by EventDispatcher()
 
     // ── Views ─────────────────────────────────────────────────────────────────
     private val mapView: MapView = MapView(context)
@@ -134,12 +140,24 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // ── Pixel density ─────────────────────────────────────────────────────────
     private val dp = context.resources.displayMetrics.density
 
-    // ── Viewport padding ──────────────────────────────────────────────────────
+    // ── Viewport padding — EXACT official Mapbox values from the camera guide ──
+    // Previous bottom=300dp pushed the focal point too far up, causing
+    // the puck to visibly jump/drift between location updates.
+    // Official guide value: top=180, left=40, bottom=150, right=40
+    // ── Viewport padding — Waze-style vehicle position ──────────────────────────
+    // bottom=300dp pushes the focal point (and thus the vehicle puck) up to
+    // roughly 30% from the bottom of the screen, matching Waze/Google Maps.
+    // NOTE: this was briefly regressed to bottom=150dp (the "exact" value from
+    // the Mapbox camera guide example) while investigating puck jitter — but
+    // the jitter was actually caused by passing keyPoints to changePosition()
+    // (see the LocationObserver fix below), NOT by this padding value. The
+    // jitter fix and the Waze-style positioning are independent and both
+    // needed; restoring bottom=300dp here does not reintroduce the jitter.
     private val followingPadding by lazy {
         EdgeInsets(180.0 * dp, 40.0 * dp, 300.0 * dp, 40.0 * dp)
     }
     private val overviewPadding by lazy {
-        EdgeInsets(120.0 * dp, 40.0 * dp, 120.0 * dp, 40.0 * dp)
+        EdgeInsets(140.0 * dp, 40.0 * dp, 120.0 * dp, 40.0 * dp)
     }
 
     // ── Props ─────────────────────────────────────────────────────────────────
@@ -157,6 +175,18 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var customRasterTileUrl: String? = null
     private var customRasterAboveLayerId: String? = null
 
+    // ── Color customization props ────────────────────────────────────────────
+    // Maneuver banner colors — verified against ManeuverViewOptions public API
+    // (maneuverBackgroundColor, turnIconManeuver are real documented properties)
+    private var maneuverBackgroundColorDay: String? = null
+    private var maneuverTurnIconColor: String? = null
+    // ETA bottom bar colors — fully custom view, safe to color freely
+    private var etaBarBackgroundColor: String? = null
+    private var etaTextColor: String? = null
+    // Custom icon button colors (mute, overview, recenter) — our own bitmaps
+    private var iconButtonColor: String? = null
+    private var iconButtonMutedColor: String? = null
+
     init {
         buildUI()
         initAPIs()
@@ -167,43 +197,50 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // Draw icons programmatically (matching screenshot: speaker, route, arrow)
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Modern Google Maps / Waze style icons ──────────────────────────────────
+
     private fun drawSpeakerIcon(muted: Boolean): Bitmap {
         val size = (44 * dp).toInt()
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
+        val s = size.toFloat()
+        val defaultColor = if (muted) "#5F6368" else "#1A73E8"
+        val color = try {
+            Color.parseColor(if (muted) (iconButtonMutedColor ?: defaultColor) else (iconButtonColor ?: defaultColor))
+        } catch (e: Exception) { Color.parseColor(defaultColor) }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
+            this.color = color
             style = Paint.Style.FILL
         }
-        val s = size.toFloat()
-        // Speaker body (trapezoid)
+        // Speaker cone (rounded, modern Material style)
         val body = Path().apply {
-            moveTo(s * 0.18f, s * 0.38f)
-            lineTo(s * 0.38f, s * 0.38f)
-            lineTo(s * 0.58f, s * 0.22f)
-            lineTo(s * 0.58f, s * 0.78f)
-            lineTo(s * 0.38f, s * 0.62f)
-            lineTo(s * 0.18f, s * 0.62f)
+            moveTo(s * 0.16f, s * 0.40f)
+            lineTo(s * 0.34f, s * 0.40f)
+            lineTo(s * 0.56f, s * 0.20f)
+            quadTo(s * 0.60f, s * 0.17f, s * 0.60f, s * 0.22f)
+            lineTo(s * 0.60f, s * 0.78f)
+            quadTo(s * 0.60f, s * 0.83f, s * 0.56f, s * 0.80f)
+            lineTo(s * 0.34f, s * 0.60f)
+            lineTo(s * 0.16f, s * 0.60f)
+            quadTo(s * 0.12f, s * 0.60f, s * 0.12f, s * 0.56f)
+            lineTo(s * 0.12f, s * 0.44f)
+            quadTo(s * 0.12f, s * 0.40f, s * 0.16f, s * 0.40f)
             close()
         }
         c.drawPath(body, paint)
         if (!muted) {
-            // Sound waves arcs
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = s * 0.06f
+            paint.strokeCap = Paint.Cap.ROUND
+            c.drawArc(RectF(s*0.62f, s*0.34f, s*0.80f, s*0.66f), -45f, 90f, false, paint)
+            c.drawArc(RectF(s*0.66f, s*0.22f, s*0.92f, s*0.78f), -40f, 80f, false, paint)
+        } else {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = s * 0.065f
             paint.strokeCap = Paint.Cap.ROUND
-            // Inner arc
-            c.drawArc(RectF(s*0.60f, s*0.33f, s*0.80f, s*0.67f), -60f, 120f, false, paint)
-            // Outer arc
-            c.drawArc(RectF(s*0.64f, s*0.24f, s*0.92f, s*0.76f), -55f, 110f, false, paint)
-        } else {
-            // X mark for muted
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = s * 0.07f
-            paint.strokeCap = Paint.Cap.ROUND
-            paint.color = Color.parseColor("#FF4444")
-            c.drawLine(s*0.65f, s*0.32f, s*0.88f, s*0.68f, paint)
-            c.drawLine(s*0.88f, s*0.32f, s*0.65f, s*0.68f, paint)
+            paint.color = Color.parseColor("#EA4335")
+            c.drawLine(s*0.66f, s*0.34f, s*0.88f, s*0.66f, paint)
+            c.drawLine(s*0.88f, s*0.34f, s*0.66f, s*0.66f, paint)
         }
         return bmp
     }
@@ -212,34 +249,28 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val size = (44 * dp).toInt()
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = size * 0.08f
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
         val s = size.toFloat()
-        // Route line with S-curve (like the image: start dot → curve → end pin)
-        // Start dot
-        paint.style = Paint.Style.FILL
-        c.drawCircle(s * 0.28f, s * 0.75f, s * 0.07f, paint)
-        // Route path
-        paint.style = Paint.Style.STROKE
-        val routePath = Path().apply {
-            moveTo(s * 0.28f, s * 0.75f)
-            cubicTo(
-                s * 0.28f, s * 0.45f,
-                s * 0.72f, s * 0.55f,
-                s * 0.72f, s * 0.25f
-            )
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = try { Color.parseColor(iconButtonColor ?: "#1A73E8") } catch (e: Exception) { Color.parseColor("#1A73E8") }
         }
-        c.drawPath(routePath, paint)
-        // End pin (circle with dot)
         paint.style = Paint.Style.STROKE
-        c.drawCircle(s * 0.72f, s * 0.22f, s * 0.10f, paint)
-        paint.style = Paint.Style.FILL
-        c.drawCircle(s * 0.72f, s * 0.22f, s * 0.04f, paint)
+        paint.strokeWidth = s * 0.07f
+        paint.strokeJoin = Paint.Join.ROUND
+        paint.strokeCap = Paint.Cap.ROUND
+        // Outer diamond/map frame
+        val frame = Path().apply {
+            moveTo(s * 0.50f, s * 0.14f)
+            lineTo(s * 0.84f, s * 0.34f)
+            lineTo(s * 0.84f, s * 0.66f)
+            lineTo(s * 0.50f, s * 0.86f)
+            lineTo(s * 0.16f, s * 0.66f)
+            lineTo(s * 0.16f, s * 0.34f)
+            close()
+        }
+        c.drawPath(frame, paint)
+        // Two horizontal fold lines (classic map icon)
+        c.drawLine(s*0.36f, s*0.22f, s*0.36f, s*0.78f, paint)
+        c.drawLine(s*0.64f, s*0.22f, s*0.64f, s*0.78f, paint)
         return bmp
     }
 
@@ -247,17 +278,16 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val size = (44 * dp).toInt()
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
+        val s = size.toFloat()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
+            color = try { Color.parseColor(iconButtonColor ?: "#1A73E8") } catch (e: Exception) { Color.parseColor("#1A73E8") }
             style = Paint.Style.FILL
         }
-        val s = size.toFloat()
-        // Navigation arrow pointing up (filled chevron/arrow like Waze)
         val arrow = Path().apply {
-            moveTo(s * 0.50f, s * 0.14f)   // tip
-            lineTo(s * 0.78f, s * 0.76f)   // bottom-right
-            lineTo(s * 0.50f, s * 0.60f)   // bottom-center indent
-            lineTo(s * 0.22f, s * 0.76f)   // bottom-left
+            moveTo(s * 0.50f, s * 0.12f)    // tip
+            lineTo(s * 0.80f, s * 0.82f)    // bottom-right
+            lineTo(s * 0.50f, s * 0.64f)    // notch center
+            lineTo(s * 0.20f, s * 0.82f)    // bottom-left
             close()
         }
         c.drawPath(arrow, paint)
@@ -295,12 +325,29 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         ))
 
         // ── ManeuverView — top ─────────────────────────────────────────────────
-        val mv = MapboxManeuverView(context)
+        // Colors are customizable via maneuverBackgroundColorDay,
+        // maneuverTurnIconColor, and laneGuidanceTurnIconColor props using the
+        // SDK's official ManeuverViewOptions.Builder — confirmed public API
+        // (maneuverBackgroundColor, turnIconManeuver, laneGuidanceTurnIconManeuver
+        // are all real documented properties of ManeuverViewOptions).
+        val maneuverOptionsBuilder = ManeuverViewOptions.Builder()
+        maneuverBackgroundColorDay?.let {
+            try { maneuverOptionsBuilder.maneuverBackgroundColor(Color.parseColor(it)) } catch (e: Exception) {}
+        }
+        maneuverTurnIconColor?.let {
+            try { maneuverOptionsBuilder.turnIconManeuver(Color.parseColor(it)) } catch (e: Exception) {}
+        }
+        val mv = MapboxManeuverView(context, null, 0, maneuverOptionsBuilder.build())
         root.addView(mv as View, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).also { it.gravity = Gravity.TOP })
         mv.visibility = View.INVISIBLE
+        // Feature: tap the instruction banner to see the full list of upcoming
+        // turn-by-turn steps. We emit the data via event so the RN/JS layer can
+        // render a bottom sheet or modal using its own native UI components —
+        // consistent with how all other navigation events are surfaced.
+        mv.setOnClickListener { emitFullRouteSteps() }
         maneuverView = mv
 
         // ── Side buttons — RIGHT side, just below maneuver banner ─────────────
@@ -336,17 +383,21 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         })
         btnOverviewView = overviewBtn
 
-        // Button 3: Recenter / Navigation arrow (hidden until in overview mode)
+        // Button 3: Recenter / return to follow mode — ALWAYS visible, below button 2
+        // Greyed out (lower opacity) when already following; full opacity in overview mode
         val recenterBtn = makeIconButton(drawNavigationArrowIcon()) { recenterCamera() }
-        recenterBtn.visibility = View.GONE
+        recenterBtn.alpha = 0.4f  // dimmed by default (already following)
         sideCol.addView(recenterBtn, LinearLayout.LayoutParams(btnSize, btnSize))
         btnRecenterView = recenterBtn
 
         // ── SpeedInfoView — bottom-left, above ETA bar ────────────────────────
+        // FIX: use WRAP_CONTENT instead of fixed 72x72dp — the native Mapbox
+        // component renders both the posted speed limit sign AND the current
+        // vehicle speed side-by-side, which needs flexible width
         val siv = MapboxSpeedInfoView(context)
         root.addView(siv as View, FrameLayout.LayoutParams(
-            (72 * dp).toInt(),
-            (72 * dp).toInt()
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
         ).also {
             it.gravity = Gravity.BOTTOM or Gravity.START
             it.setMargins((12 * dp).toInt(), 0, 0, (88 * dp).toInt())
@@ -355,9 +406,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         speedInfoView = siv
 
         // ── ETA bottom bar ─────────────────────────────────────────────────────
+        val resolvedEtaBg = try { Color.parseColor(etaBarBackgroundColor ?: "#1E2433") } catch (e: Exception) { Color.parseColor("#1E2433") }
+        val resolvedEtaText = try { Color.parseColor(etaTextColor ?: "#FFFFFF") } catch (e: Exception) { Color.WHITE }
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#1E2433"))
+            setBackgroundColor(resolvedEtaBg)
             elevation = 8 * dp
             visibility = View.INVISIBLE
             gravity = Gravity.CENTER_VERTICAL
@@ -372,7 +425,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         ).also { it.gravity = Gravity.BOTTOM })
 
         val etaTime = TextView(context).apply {
-            textSize = 24f; setTextColor(Color.WHITE)
+            textSize = 24f; setTextColor(resolvedEtaText)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         bar.addView(etaTime, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -382,7 +435,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
         val dur = TextView(context).apply {
-            textSize = 18f; setTextColor(Color.WHITE)
+            textSize = 18f; setTextColor(resolvedEtaText)
             typeface = android.graphics.Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
         }
         val dist = TextView(context).apply {
@@ -391,6 +444,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         center.addView(dur); center.addView(dist)
         bar.addView(center, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f))
         tvDuration = dur; tvDistance = dist
+
 
         val cancelBtn = TextView(context).apply {
             text = "✕"; textSize = 22f; setTextColor(Color.parseColor("#AAAAAA"))
@@ -447,41 +501,30 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         voiceInstructionsPlayer = MapboxVoiceInstructionsPlayer(context, voiceLang)
     }
 
-    // ── Voice callbacks (exact pattern from official TurnByTurnExperienceActivity) ──
-    // SpeechError and SpeechValue are swapped vs v2: fold(error, value) in v3
-    // speechCallback: Consumer<Expected<SpeechError, SpeechValue>>
-    // Exact pattern from official TurnByTurnExperienceActivity
-    // NOTE: in v3 fold order is (error, value) — SpeechError is left, SpeechValue is right
+    // ── Voice callbacks — EXACT pattern from official TurnByTurnExperienceActivity ──
+    // MapboxNavigationConsumer is in com.mapbox.navigation.ui.base.util (NOT base.route)
+    // voiceInstructionsPlayerCallback must be defined BEFORE speechCallback (used inside it)
+    private val voiceInstructionsPlayerCallback =
+        com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer<SpeechAnnouncement> { value ->
+            speechApi.clean(value)
+        }
+
     private val speechCallback =
-        com.mapbox.navigation.base.route.MapboxNavigationConsumer<
+        com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer<
             com.mapbox.bindgen.Expected<SpeechError, SpeechValue>
         > { expected ->
             expected.fold(
                 { error ->
-                    // On-device TTS fallback when MP3 is not available
                     if (!isMuted) {
-                        voiceInstructionsPlayer.play(
-                            error.fallback,
-                            voiceInstructionsPlayerCallback
-                        )
+                        voiceInstructionsPlayer.play(error.fallback, voiceInstructionsPlayerCallback)
                     }
                 },
                 { value ->
-                    // Play the synthesized MP3 from Mapbox Voice API
                     if (!isMuted) {
-                        voiceInstructionsPlayer.play(
-                            value.announcement,
-                            voiceInstructionsPlayerCallback
-                        )
+                        voiceInstructionsPlayer.play(value.announcement, voiceInstructionsPlayerCallback)
                     }
                 }
             )
-        }
-
-    private val voiceInstructionsPlayerCallback =
-        { announcement: SpeechAnnouncement ->
-            // Cleanup the file after playing
-            speechApi.clean(announcement)
         }
 
     private val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
@@ -502,6 +545,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             viewportDataSource = MapboxNavigationViewportDataSource(mapView.mapboxMap)
             viewportDataSource.followingPadding = followingPadding
             viewportDataSource.overviewPadding = overviewPadding
+
+            // Waze-style tilted 3D following view — also helps stabilize the
+            // visual framing since pitch reduces perceived jitter from GPS noise
+            viewportDataSource.options.followingFrameOptions.defaultPitch = 45.0
+            viewportDataSource.options.followingFrameOptions.maxZoom = 17.0
 
             navigationCamera = NavigationCamera(
                 mapView.mapboxMap,
@@ -612,7 +660,15 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             override fun onNewRawLocation(rawLocation: Location) {}
             override fun onNewLocationMatcherResult(result: LocationMatcherResult) {
                 val loc = result.enhancedLocation
-                navigationLocationProvider.changePosition(location = loc, keyPoints = result.keyPoints)
+                // ── FIX: Puck jitter / drift ──────────────────────────────────────
+                // Root cause (confirmed via Mapbox GitHub issue #4140):
+                // When keyPoints are passed to changePosition(), the puck animator
+                // splits the 1-second transition EVENLY across all keypoints in time,
+                // but the keypoints are NOT evenly spaced in distance. This causes the
+                // puck to speed up/slow down and visibly drift left/right off the
+                // route line, even on a perfectly straight road.
+                // Official Mapbox workaround: pass emptyList() instead of keyPoints.
+                navigationLocationProvider.changePosition(location = loc, keyPoints = emptyList())
                 viewportDataSource.onLocationChanged(loc)
                 viewportDataSource.evaluate()
 
@@ -621,6 +677,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     safeCameraFollowing()
                 }
 
+                // ── Speed limit (issue #4: was not displaying) ──────────────────
+                // updatePostedAndCurrentSpeed returns null when:
+                //  1. The route response has no `maxspeed` annotation for this segment
+                //  2. GPS speed is unavailable
+                // We log this so issues can be diagnosed via `adb logcat`
                 val fmtOptions = DistanceFormatterOptions.Builder(context).build()
                 val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
                 if (speedInfo != null) {
@@ -628,6 +689,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     speedInfoView?.render(speedInfo)
                 } else {
                     speedInfoView?.visibility = View.GONE
+                    Log.d(TAG, "Speed info unavailable for this location/route segment " +
+                        "(no maxspeed annotation or GPS speed not ready yet)")
                 }
 
                 checkAndSwitchDayNight()
@@ -654,7 +717,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             recenterCamera()
         } else {
             isOverviewMode = true
-            btnRecenterView?.visibility = View.VISIBLE
+            // Button 3 lights up (full opacity) to invite the user to tap it
+            btnRecenterView?.alpha = 1f
             try {
                 navigationCamera.requestNavigationCameraToOverview()
             } catch (e: Exception) {
@@ -665,7 +729,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     private fun recenterCamera() {
         isOverviewMode = false
-        btnRecenterView?.visibility = View.GONE
+        // Button 3 dims again — already in following mode
+        btnRecenterView?.alpha = 0.4f
         safeCameraFollowing()
     }
 
@@ -724,6 +789,52 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feature: full route steps list (triggered by tapping the instruction
+    // banner). Extracts every LegStep across all legs of the active route,
+    // including lane guidance data when present on that step's BannerInstructions.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun emitFullRouteSteps() {
+        val routes = mapboxNavigation?.getNavigationRoutes()
+        val activeRoute = routes?.firstOrNull() ?: run {
+            onManeuverBannerPressed(mapOf("steps" to emptyList<Map<String, Any>>()))
+            return
+        }
+
+        val stepsPayload = mutableListOf<Map<String, Any>>()
+
+        activeRoute.directionsRoute.legs()?.forEach { leg ->
+            leg.steps()?.forEach { step ->
+                val maneuver = step.maneuver()
+                val firstBanner = step.bannerInstructions()?.firstOrNull()
+
+                // Lane guidance: present on BannerInstructions.sub() when type == "lane"
+                val laneData = firstBanner?.sub()?.components()
+                    ?.filter { it.type() == "lane" }
+                    ?.map { component ->
+                        mapOf(
+                            "active" to (component.active() ?: false),
+                            "directions" to (component.directions() ?: emptyList<String>())
+                        )
+                    } ?: emptyList()
+
+                stepsPayload.add(
+                    mapOf(
+                        "instruction" to (maneuver?.instruction() ?: ""),
+                        "distanceMeters" to (step.distance() ?: 0.0),
+                        "durationSeconds" to (step.duration() ?: 0.0),
+                        "maneuverType" to (maneuver?.type() ?: ""),
+                        "maneuverModifier" to (maneuver?.modifier() ?: ""),
+                        "roadName" to (step.name() ?: ""),
+                        "laneInstructions" to laneData
+                    )
+                )
+            }
+        }
+
+        onManeuverBannerPressed(mapOf("steps" to stepsPayload))
+    }
+
     private fun cancelNavigation() {
         speechApi.cancel()
         voiceInstructionsPlayer.clear()
@@ -771,6 +882,21 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             .voiceUnits(resolveVoiceUnits())
             .coordinatesList(points)
             .annotations("maxspeed,congestion,duration,speed")
+            // ── FIX: Lane guidance was not displaying ───────────────────────────
+            // Root cause: BannerInstructions.sub() (which carries lane data) is
+            // only returned by the Directions API when explicitly requested.
+            // applyDefaultNavigationOptions() does set bannerInstructions(true)
+            // internally, but several confirmed cases (Mapbox GitHub issue #7377,
+            // "Lane guidance not showing, using Navigation Drop-in UI") show this
+            // needs to be set explicitly to reliably trigger lane data in the
+            // response — official Mapbox examples do the same as a defensive fix.
+            .bannerInstructions(true)
+            // steps(true) is required for any BannerInstructions/VoiceInstructions
+            // to be present in the response at all.
+            .steps(true)
+            // roundaboutExits(true) ensures lane + exit guidance is generated for
+            // roundabout maneuvers specifically (separate flag from bannerInstructions).
+            .roundaboutExits(true)
         waypointIndices?.let { builder.waypointIndicesList(it) }
         navigationProfile?.let { builder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }
         excludeTypes?.takeIf { it.isNotEmpty() }?.let { builder.exclude(it.joinToString(",")) }
@@ -802,6 +928,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setUseMapMatching(u: Boolean) { useMapMatching = u }
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
+    fun setManeuverBackgroundColorDay(c: String?) { maneuverBackgroundColorDay = c }
+    fun setManeuverTurnIconColor(c: String?) { maneuverTurnIconColor = c }
+    fun setEtaBarBackgroundColor(c: String?) { etaBarBackgroundColor = c }
+    fun setEtaTextColor(c: String?) { etaTextColor = c }
+    fun setIconButtonColor(c: String?) { iconButtonColor = c }
+    fun setIconButtonMutedColor(c: String?) { iconButtonMutedColor = c }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()

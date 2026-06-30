@@ -64,6 +64,21 @@ export interface MapboxNavigationViewProps {
     customRasterTileUrl?: string;
     /** Map layer ID above which the custom raster layer is placed. */
     customRasterAboveLayerId?: string;
+    /**
+     * Background color of the turn-by-turn instruction banner, as a hex string
+     * (e.g. "#1A73E8"). Uses the SDK's official ManeuverViewOptions API.
+     */
+    maneuverBackgroundColorDay?: string;
+    /** Color of the turn arrow icon inside the instruction banner. */
+    maneuverTurnIconColor?: string;
+    /** Background color of the bottom ETA/duration/distance bar. */
+    etaBarBackgroundColor?: string;
+    /** Text color used for the ETA time and duration in the bottom bar. */
+    etaTextColor?: string;
+    /** Color of the mute/overview/recenter icon buttons (default state). */
+    iconButtonColor?: string;
+    /** Color of the mute icon when voice guidance is muted. */
+    iconButtonMutedColor?: string;
     onRouteProgressChanged?: (event: {
         nativeEvent: RouteProgressEvent;
     }) => void;
@@ -84,6 +99,14 @@ export interface MapboxNavigationViewProps {
     onArrival?: (event: {
         nativeEvent: {};
     }) => void;
+    /**
+     * Fired when the user taps the turn-by-turn instruction banner.
+     * Use this to open a bottom sheet / modal listing every upcoming step
+     * of the route, including lane guidance data where available.
+     */
+    onManeuverBannerPressed?: (event: {
+        nativeEvent: ManeuverBannerPressedEvent;
+    }) => void;
     style?: ViewStyle;
 }
 export interface RouteProgressEvent {
@@ -97,6 +120,33 @@ export interface RoutesReadyEvent {
     routeCount: number;
     distanceMeters: number;
     durationSeconds: number;
+}
+/** A single lane's directional options at an upcoming intersection. */
+export interface LaneInstruction {
+    /** Whether this lane is the recommended lane for the upcoming maneuver. */
+    active: boolean;
+    /** Directions this lane allows, e.g. ["straight"], ["left"], ["straight", "right"]. */
+    directions: string[];
+}
+/** One step (maneuver) along the route, used for the full-route steps list. */
+export interface RouteStep {
+    /** Human-readable instruction text, e.g. "Turn left onto Main St". */
+    instruction: string;
+    /** Distance in metres for this step. */
+    distanceMeters: number;
+    /** Duration in seconds for this step. */
+    durationSeconds: number;
+    /** Directions API maneuver type, e.g. "turn", "merge", "roundabout". */
+    maneuverType: string;
+    /** Directions API maneuver modifier, e.g. "left", "right", "straight". */
+    maneuverModifier: string;
+    /** Name of the road for this step, if available. */
+    roadName: string;
+    /** Lane guidance for this step's upcoming maneuver, if available. */
+    laneInstructions: LaneInstruction[];
+}
+export interface ManeuverBannerPressedEvent {
+    steps: RouteStep[];
 }
 /**
  * MapboxNavigationView

@@ -12,6 +12,7 @@ Expo module for Mapbox Navigation SDK — forked from [`@badatgil/expo-mapbox-na
 | ✅ **16 KB page size** | `jniLibs.useLegacyPackaging = false` + `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON` — required for Google Play compliance from 2025 onwards. |
 | ✅ **Expo SDK 53+** | Compatible with Expo SDK ≥ 53 and React Native 0.79+. |
 | ✅ **Maps v11.11.0** | Minimum Mapbox Maps Android SDK enforced to 11.11.0 (config plugin validates this). |
+| ✅ **iOS support** | Full native iOS implementation (`NavigationViewController` drop-in UI) via Swift Package Manager — feature parity with Android (lane guidance, speed limit, voice instructions, day/night, steps list). |
 
 ---
 
@@ -46,6 +47,7 @@ Follow the [full @rnmapbox/maps installation guide](https://rnmapbox.github.io/d
     "@jacques_gordon/expo-mapbox-navigation",
     {
       "accessToken": "pk.your_public_token",
+      "downloadsToken": "sk.your_secret_token",
       "mapboxMapsVersion": "11.11.0"
     }
   ]
@@ -53,6 +55,14 @@ Follow the [full @rnmapbox/maps installation guide](https://rnmapbox.github.io/d
 ```
 
 > ⚠️ `mapboxMapsVersion` must match the version set in `@rnmapbox/maps`. Minimum: `11.11.0`.
+
+> ⚠️ `downloadsToken` is **required** — it's a secret Mapbox token (starts with `sk.`) with the **Downloads:Read** scope. On iOS it's used to authenticate Swift Package Manager when it fetches the Mapbox Navigation SDK from Mapbox's private package registry (via a generated `.netrc` entry). This is the same token already used for `RNMapboxMapsDownloadToken` above — you can reuse it.
+
+### iOS architecture
+
+iOS uses the **official Mapbox Navigation SDK v3 drop-in UI** (`NavigationViewController`), installed via **Swift Package Manager** — not prebuilt `.xcframework` binaries. This is the only officially supported distribution method for the Navigation SDK v3 on iOS; CocoaPods doesn't host it directly, so this package bridges it in automatically through CocoaPods' `spm_dependency()` mechanism when you run `pod install` / `expo prebuild`.
+
+Because `NavigationViewController` is a complete drop-in experience, lane guidance, speed limit display, voice instructions, and the recenter/overview camera button all come built-in from Mapbox — no extra wiring needed, unlike the more manual Android implementation.
 
 ### iOS: enable static frameworks
 
@@ -155,6 +165,12 @@ More info: [Android 16 KB page size guide](https://developer.android.com/guide/p
 ---
 
 ## Changelog
+
+### 2.2.0
+- **iOS support added.** Full native implementation using Mapbox Navigation SDK v3 (`NavigationViewController` drop-in UI) via Swift Package Manager.
+- Fixed: previous versions referenced non-existent `.xcframework` files in the podspec, causing `Unimplemented component: ViewManagerAdapter_ExpoMapboxNavigation` crashes on iOS — no native module was ever actually registered.
+- New required `downloadsToken` config plugin option (secret Mapbox token, used to authenticate Swift Package Manager).
+- iOS feature parity with Android: lane guidance, speed limit, voice instructions (with working mute), day/night auto-switching, and the `onManeuverBannerPressed` full-steps-list event.
 
 ### 2.0.1
 - Fix #43: `CameraAnimationsUtils.calculateCameraAnimationHint` NoSuchMethodError on Android
