@@ -5,7 +5,8 @@ public class ExpoMapboxNavigationModule: Module {
     Name("ExpoMapboxNavigation")
 
     View(ExpoMapboxNavigationView.self) {
-      // Events must exactly mirror the Android module's Events() list.
+
+      // ── Events (exact parity with Android module Events() list) ─────────────
       Events(
         "onRouteProgressChanged",
         "onRoutesReady",
@@ -16,44 +17,65 @@ public class ExpoMapboxNavigationModule: Module {
         "onManeuverBannerPressed"
       )
 
-      Prop("coordinates") { (view: ExpoMapboxNavigationView, coordinates: [[String: Double]]) in
-        view.setCoordinates(coordinates)
+      // ── Base props ────────────────────────────────────────────────────────────
+      Prop("coordinates") { (view: ExpoMapboxNavigationView, v: [[String: Double]]) in
+        view.setCoordinates(v)
       }
-      Prop("waypointIndices") { (view: ExpoMapboxNavigationView, indices: [Int]?) in
-        view.setWaypointIndices(indices)
+      Prop("waypointIndices") { (view: ExpoMapboxNavigationView, v: [Int]?) in
+        view.setWaypointIndices(v)
       }
-      Prop("language") { (view: ExpoMapboxNavigationView, language: String?) in
-        view.setLanguage(language)
+      Prop("language") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setLanguage(v)
       }
-      Prop("voiceUnits") { (view: ExpoMapboxNavigationView, units: String?) in
-        view.setVoiceUnits(units)
+      Prop("voiceUnits") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setVoiceUnits(v)
       }
-      Prop("navigationProfile") { (view: ExpoMapboxNavigationView, profile: String?) in
-        view.setNavigationProfile(profile)
+      Prop("navigationProfile") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setNavigationProfile(v)
       }
-      Prop("excludeTypes") { (view: ExpoMapboxNavigationView, types: [String]?) in
-        view.setExcludeTypes(types)
+      Prop("excludeTypes") { (view: ExpoMapboxNavigationView, v: [String]?) in
+        view.setExcludeTypes(v)
       }
-      Prop("mapStyle") { (view: ExpoMapboxNavigationView, style: String?) in
-        view.setMapStyle(style)
+      Prop("mapStyle") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setMapStyle(v)
       }
-      Prop("mute") { (view: ExpoMapboxNavigationView, mute: Bool) in
-        view.setMute(mute)
+      Prop("mute") { (view: ExpoMapboxNavigationView, v: Bool) in
+        view.setMute(v)
       }
-      Prop("maxHeight") { (view: ExpoMapboxNavigationView, height: Double?) in
-        view.setMaxHeight(height)
+      Prop("maxHeight") { (view: ExpoMapboxNavigationView, v: Double?) in
+        view.setMaxHeight(v)
       }
-      Prop("maxWidth") { (view: ExpoMapboxNavigationView, width: Double?) in
-        view.setMaxWidth(width)
+      Prop("maxWidth") { (view: ExpoMapboxNavigationView, v: Double?) in
+        view.setMaxWidth(v)
       }
-      Prop("useMapMatching") { (view: ExpoMapboxNavigationView, use: Bool) in
-        view.setUseMapMatching(use)
+      Prop("useMapMatching") { (view: ExpoMapboxNavigationView, v: Bool) in
+        view.setUseMapMatching(v)
       }
-      Prop("customRasterTileUrl") { (view: ExpoMapboxNavigationView, url: String?) in
-        view.setCustomRasterTileUrl(url)
+      Prop("customRasterTileUrl") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setCustomRasterTileUrl(v)
       }
-      Prop("customRasterAboveLayerId") { (view: ExpoMapboxNavigationView, layerId: String?) in
-        view.setCustomRasterAboveLayerId(layerId)
+      Prop("customRasterAboveLayerId") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setCustomRasterAboveLayerId(v)
+      }
+
+      // ── Color customization props (parity with Android) ───────────────────────
+      Prop("maneuverBackgroundColorDay") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setManeuverBackgroundColorDay(v)
+      }
+      Prop("maneuverTurnIconColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setManeuverTurnIconColor(v)
+      }
+      Prop("etaBarBackgroundColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setEtaBarBackgroundColor(v)
+      }
+      Prop("etaTextColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setEtaTextColor(v)
+      }
+      Prop("iconButtonColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setIconButtonColor(v)
+      }
+      Prop("iconButtonMutedColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setIconButtonMutedColor(v)
       }
     }
   }

@@ -882,6 +882,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             .voiceUnits(resolveVoiceUnits())
             .coordinatesList(points)
             .annotations("maxspeed,congestion,duration,speed")
+            // overview("full") is required by Mapbox support (GitHub issue #4069)
+            // to maximize the coverage of maxspeed annotations in the response.
+            // Without it, many road segments return no maxspeed data even when
+            // the speed limit is known — confirmed via Mapbox Support correspondence.
+            .overview("full")
             // ── FIX: Lane guidance was not displaying ───────────────────────────
             // Root cause: BannerInstructions.sub() (which carries lane data) is
             // only returned by the Directions API when explicitly requested.
@@ -928,12 +933,54 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setUseMapMatching(u: Boolean) { useMapMatching = u }
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
-    fun setManeuverBackgroundColorDay(c: String?) { maneuverBackgroundColorDay = c }
+
+    fun setManeuverBackgroundColorDay(c: String?) {
+        maneuverBackgroundColorDay = c
+        // ManeuverView is constructed with options in buildUI() which runs before
+        // props are received — we cannot rebuild it, but the color can be applied
+        // by updating the ManeuverView background tint directly on the view itself.
+        c?.let { hex ->
+            try { maneuverView?.setBackgroundColor(Color.parseColor(hex)) } catch (e: Exception) {}
+        }
+    }
+
     fun setManeuverTurnIconColor(c: String?) { maneuverTurnIconColor = c }
-    fun setEtaBarBackgroundColor(c: String?) { etaBarBackgroundColor = c }
-    fun setEtaTextColor(c: String?) { etaTextColor = c }
-    fun setIconButtonColor(c: String?) { iconButtonColor = c }
-    fun setIconButtonMutedColor(c: String?) { iconButtonMutedColor = c }
+
+    fun setEtaBarBackgroundColor(c: String?) {
+        etaBarBackgroundColor = c
+        c?.let { hex ->
+            try { etaBar?.setBackgroundColor(Color.parseColor(hex)) } catch (e: Exception) {}
+        }
+    }
+
+    fun setEtaTextColor(c: String?) {
+        etaTextColor = c
+        c?.let { hex ->
+            try {
+                val color = Color.parseColor(hex)
+                tvEtaTime?.setTextColor(color)
+                tvDuration?.setTextColor(color)
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun setIconButtonColor(c: String?) {
+        iconButtonColor = c
+        // Redraw overview and recenter icons with new color
+        btnOverviewView?.setImageBitmap(drawRouteOverviewIcon())
+        // Recenter keeps its current alpha (0.4 following / 1.0 overview)
+        val currentAlpha = btnRecenterView?.alpha ?: 0.4f
+        btnRecenterView?.setImageBitmap(drawNavigationArrowIcon())
+        btnRecenterView?.alpha = currentAlpha
+        // Redraw mute icon only if not currently muted (muted uses iconButtonMutedColor)
+        if (!isMuted) btnMuteView?.setImageBitmap(drawSpeakerIcon(false))
+    }
+
+    fun setIconButtonMutedColor(c: String?) {
+        iconButtonMutedColor = c
+        // Redraw mute icon only if currently muted
+        if (isMuted) btnMuteView?.setImageBitmap(drawSpeakerIcon(true))
+    }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()

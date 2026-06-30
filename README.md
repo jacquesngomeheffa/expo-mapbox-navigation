@@ -99,6 +99,42 @@ export default function Navigation() {
 }
 ```
 
+### Color customization (Android)
+
+All color props are optional — if not provided, the defaults below are applied automatically.
+
+```tsx
+<MapboxNavigationView
+  // Maneuver banner (turn-by-turn instruction banner)
+  maneuverBackgroundColorDay="#1E2433"   // default: Mapbox native style color
+  maneuverTurnIconColor="#1A73E8"        // default: Mapbox native style color
+
+  // Bottom ETA / duration / distance bar
+  etaBarBackgroundColor="#1E2433"        // default: #1E2433 (dark navy)
+  etaTextColor="#FFFFFF"                 // default: #FFFFFF (white)
+
+  // Control buttons (mute, overview, recenter)
+  iconButtonColor="#1A73E8"              // default: #1A73E8 (Google Blue)
+  iconButtonMutedColor="#EA4335"         // default: #EA4335 (Google Red)
+
+  // Route line color — set via plugin config, not a view prop
+  // (uses androidColorOverrides in app.json)
+  {...otherProps}
+/>
+```
+
+```json
+// app.json — route line and other Mapbox native resource colors
+["@jacques_gordon/expo-mapbox-navigation", {
+  "accessToken": "pk.xxx",
+  "downloadsToken": "sk.xxx",
+  "androidColorOverrides": {
+    "mapbox_primary_route_color": "#0055FF",
+    "mapbox_main_maneuver_background_color": "#FF5500"
+  }
+}]
+```
+
 ---
 
 ## Props

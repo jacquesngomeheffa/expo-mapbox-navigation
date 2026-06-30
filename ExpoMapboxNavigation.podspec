@@ -10,46 +10,40 @@ Pod::Spec.new do |s|
   s.license        = package['license']
   s.author         = package['author']
   s.homepage       = package['homepage']
-
-  # ── 16 KB / SPM minimum: Mapbox Navigation SDK v3 for iOS requires iOS 14+,
-  # but Swift Package Manager dependencies resolved through CocoaPods'
-  # spm_dependency() mechanism require iOS 15.1+ as the minimum deployment
-  # target (Apple's SPM-via-CocoaPods bridging constraint).
-  s.platforms      = { :ios => '15.1' }
+  s.platforms      = { :ios => '14.0' }
   s.swift_version  = '5.9'
   s.source         = { git: package['repository']['url'], tag: "v#{s.version}" }
-  s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
 
-  # ── iOS: Mapbox Navigation SDK v3 via Swift Package Manager ─────────────────
+  # ── iOS: Mapbox Navigation SDK v3 ───────────────────────────────────────────
   #
-  # IMPORTANT: earlier versions of this podspec referenced prebuilt
-  # .xcframework files (MapboxNavigationUIKit.xcframework,
-  # MapboxNavigationCore.xcframework, MapboxDirections.xcframework) that were
-  # NEVER actually built or shipped in the npm package — this caused
-  # "Unimplemented component: ViewManagerAdapter_ExpoMapboxNavigation" at
-  # runtime on iOS, since no native module was ever registered.
+  # IMPORTANT — do NOT use spm_dependency() here.
   #
-  # The Mapbox Navigation SDK v3 for iOS is officially distributed ONLY via
-  # Swift Package Manager (CocoaPods support is not provided by Mapbox).
-  # We use CocoaPods' built-in spm_dependency() helper (available since
-  # CocoaPods 1.13+, and exactly the mechanism Expo's own modules use for
-  # this exact situation) to pull the SPM package transparently as part of
-  # `pod install` / `expo prebuild`. No manual Xcode steps, no vendored
-  # binaries to build or maintain.
-  spm_dependency(
-    s,
-    url: 'https://github.com/mapbox/mapbox-navigation-ios.git',
-    requirement: { kind: 'upToNextMajorVersion', minimumVersion: '3.24.2' },
-    products: ['MapboxNavigationCore', 'MapboxNavigationUIKit', 'MapboxDirections']
-  )
+  # spm_dependency() causes "43029 duplicate symbols" linker errors when used
+  # alongside @rnmapbox/maps in an Expo project (confirmed: React Native
+  # GitHub issue #47344, Expo GitHub issue #37813). The root cause is that
+  # spm_dependency() links the SPM framework into both the Pod target AND
+  # the main app target simultaneously, so the linker sees every symbol twice.
+  #
+  # The correct approach for Expo modules that need SPM-only packages:
+  # add the SPM dependency directly to the Xcode project's main target via
+  # the config plugin (withXcodeProject + withDangerousMod), which is exactly
+  # what our plugin/src/index.js does via the addMapboxNavigationSPM function.
+  # That way there is only ONE copy of each framework in the final binary.
+  #
+  # MapboxNavigationCore and MapboxNavigationUIKit are therefore listed as
+  # weak framework references here so the module compiles against them, while
+  # the actual linking happens at the app level from the SPM dependency added
+  # by the config plugin.
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE'                          => 'YES',
+    'SWIFT_COMPILATION_MODE'                  => 'wholemodule',
+    'OTHER_SWIFT_FLAGS'                       => '$(inherited) -Xfrontend -disable-reflection-metadata',
+    'FRAMEWORK_SEARCH_PATHS'                  => '$(inherited) $(PLATFORM_DIR)/Developer/Library/Frameworks',
+    'OTHER_LDFLAGS'                           => '$(inherited)',
+    'IPHONEOS_DEPLOYMENT_TARGET'              => '14.0',
+  }
 
   s.source_files = 'ios/**/*.{swift,h,m,mm}'
-
-  s.pod_target_xcconfig = {
-    'DEFINES_MODULE' => 'YES',
-    'SWIFT_COMPILATION_MODE' => 'wholemodule',
-    'IPHONEOS_DEPLOYMENT_TARGET' => '15.1'
-  }
 end
