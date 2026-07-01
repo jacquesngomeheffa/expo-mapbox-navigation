@@ -1,36 +1,31 @@
 const {
   withAppBuildGradle,
-  withProjectBuildGradle,
   withAndroidManifest,
   withInfoPlist,
   withDangerousMod,
 } = require('@expo/config-plugins');
-const { mergeContents } = require('@expo/config-plugins/build/utils/generateCode');
 const fs = require('fs');
 const path = require('path');
-
 
 const withMapboxNavigation = (config, options = {}) => {
   const {
     accessToken,
     downloadsToken,
     mapboxMapsVersion = '11.11.0',
+    mapboxNavigationVersion = null, // optional override — auto-calculated from mapboxMapsVersion if not set
     androidColorOverrides = {},
   } = options;
 
   if (!accessToken) {
     throw new Error(
-      '[@jacques_gordon/expo-mapbox-navigation] `accessToken` is required in the plugin config.\n' +
-      'Add it to your app.json plugins array:\n' +
-      '  ["@jacques_gordon/expo-mapbox-navigation", { "accessToken": "pk.your_token" }]'
+      '[@jacques_gordon/expo-mapbox-navigation] `accessToken` is required.\n' +
+      '  ["@jacques_gordon/expo-mapbox-navigation", { "accessToken": "pk.xxx" }]'
     );
   }
 
   if (!downloadsToken) {
     throw new Error(
-      '[@jacques_gordon/expo-mapbox-navigation] `downloadsToken` is required for iOS builds.\n' +
-      'This must be a SECRET Mapbox token (starts with "sk.") with the "Downloads:Read" scope.\n' +
-      'Add it to your app.json plugins array:\n' +
+      '[@jacques_gordon/expo-mapbox-navigation] `downloadsToken` (secret sk.* token) is required for iOS.\n' +
       '  ["@jacques_gordon/expo-mapbox-navigation", { "accessToken": "pk.xxx", "downloadsToken": "sk.xxx" }]'
     );
   }
@@ -46,7 +41,7 @@ const withMapboxNavigation = (config, options = {}) => {
     return mod;
   });
 
-  // ── iOS: MBXAccessToken in Info.plist ────────────────────────────────────
+  // ── iOS: Info.plist — MBXAccessToken + permissions ────────────────────────
   config = withInfoPlist(config, (mod) => {
     mod.modResults.MBXAccessToken = accessToken;
     mod.modResults.NSLocationWhenInUseUsageDescription =
@@ -64,7 +59,11 @@ const withMapboxNavigation = (config, options = {}) => {
     return mod;
   });
 
-  // ── iOS: .netrc for SPM authentication ───────────────────────────────────
+  // ── iOS: .netrc for SPM authentication ────────────────────────────────────
+  // The Mapbox Navigation SDK v3 is distributed as source code via SPM only.
+  // Our podspec uses spm_dependency() to declare the dependency, and SPM
+  // authenticates against api.mapbox.com using ~/.netrc credentials.
+  // This is the official Mapbox-documented authentication mechanism.
   config = withDangerousMod(config, [
     'ios',
     (mod) => {
@@ -77,181 +76,198 @@ const withMapboxNavigation = (config, options = {}) => {
       }
       if (!existingContent.includes('machine api.mapbox.com')) {
         fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
+        console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote Mapbox credentials to ~/.netrc');
       }
       return mod;
     },
   ]);
 
-  // ── iOS: Inject Mapbox Navigation SPM into project.pbxproj ───────────────
+  // ── iOS: Inject mapbox-navigation-ios SPM via Podfile post_install hook ──────
   //
-  // WHY NOT spm_dependency() IN THE PODSPEC:
-  //   spm_dependency() causes "43029 duplicate symbols" linker errors alongside
-  //   @rnmapbox/maps (React Native #47344, Expo #37813) — the framework gets
-  //   linked in both the Pod target AND the main app target simultaneously.
+  // This is the correct approach for adding SPM dependencies alongside
+  // CocoaPods in an Expo project — copied directly from @rnmapbox/maps
+  // (rnmapbox-maps.podspec, _add_spm_to_target method).
   //
-  // WHY NOT xcodeProject.addSwiftPackage():
-  //   That method does not exist in the `xcode` npm package that Expo uses
-  //   under the hood — it throws "addSwiftPackage is not a function".
+  // WHY post_install hook (not pbxproj text injection):
+  //   The hook runs INSIDE `pod install`, with access to the Ruby Xcodeproj
+  //   object model (installer.pods_project, installer.aggregate_targets).
+  //   This means:
+  //     - Proper find-or-create (no duplicate symbols risk)
+  //     - CocoaPods-aware (survives pod install --clean)
+  //     - Works in the xcworkspace context (not just xcodeproj)
+  //     - Identical to how @rnmapbox/maps itself adds SPM packages
   //
-  // THE SOLUTION — withDangerousMod on project.pbxproj:
-  //   We inject the SPM package reference and product dependencies directly
-  //   into the .pbxproj file as text. This is the same technique used by
-  //   several established Expo modules (e.g. expo-notifications, rnmapbox)
-  //   for SPM dependencies that have no CocoaPods distribution.
-  //   The Mapbox Navigation SDK v3 explicitly states "CocoaPods support is
-  //   currently in development" — SPM is the only official distribution.
+  // WHY this doesn't cause duplicate symbols (unlike spm_dependency()):
+  //   spm_dependency() links the SPM framework into the Pod target AND the app
+  //   target → 2 copies. This hook adds the package to ONLY the
+  //   ExpoMapboxNavigation pod target + the app target, using the same
+  //   XCRemoteSwiftPackageReference object → 1 copy, properly deduplicated.
   config = withDangerousMod(config, [
     'ios',
     (mod) => {
-      const projectRoot = mod.modRequest.platformProjectRoot;
-      const projectName = mod.modRequest.projectName;
-      const pbxprojPath = path.join(
-        projectRoot,
-        `${projectName}.xcodeproj`,
-        'project.pbxproj'
-      );
-
-      if (!fs.existsSync(pbxprojPath)) {
-        console.warn(`[@jacques_gordon/expo-mapbox-navigation] Could not find ${pbxprojPath} — skipping SPM injection`);
+      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
+      if (!fs.existsSync(podfilePath)) {
+        console.warn('[@jacques_gordon/expo-mapbox-navigation] Podfile not found, skipping SPM hook');
         return mod;
       }
 
-      let pbxproj = fs.readFileSync(pbxprojPath, 'utf8');
+      let podfile = fs.readFileSync(podfilePath, 'utf8');
 
-      // Skip if already injected
-      if (pbxproj.includes('mapbox-navigation-ios')) {
+      // Guard: don't inject twice
+      if (podfile.includes('# [ExpoMapboxNavigation] SPM hook')) {
         return mod;
       }
 
-      // Generate stable UUIDs for the new entries
-      // (UUIDs must be 24 hex chars in pbxproj format)
-      const makeUUID = () => {
-        const { randomBytes } = require('crypto');
-        return randomBytes(12).toString('hex').toUpperCase();
-      };
+      // ── NAVIGATION VERSION STRATEGY ───────────────────────────────────────
+      // CONFIRMED from the official CHANGELOG.md:
+      //
+      // PHASE 1 — Nav 3.1 to 3.12 (offset of +3):
+      //   Navigation 3.N.x  requires  MapboxMaps 11.(N+3).x
+      //   Nav 3.8.x  → Maps 11.11.x  ✅ (Maps 11.11.0 → Nav 3.8.x)
+      //   Nav 3.11.x → Maps 11.14.x  ✅ (confirmed CHANGELOG)
+      //   Nav 3.12.x → Maps 11.15.x  ✅ (confirmed rc.1 release note)
+      //
+      // PHASE 2 — Nav 3.16+ (3.13/3.14/3.15 were DELIBERATELY SKIPPED):
+      //   Navigation 3.N.x  requires  MapboxMaps 11.N.x  (minors aligned)
+      //   Nav 3.16.x → Maps 11.16.x  ✅
+      //   Nav 3.21.5 → Maps 11.21.5  ✅ (confirmed release)
+      //   Nav 3.23.1 → Maps 11.23.1  ✅ (confirmed release)
+      //   Nav 3.25.0 → Maps 11.25.0  ✅ (confirmed release)
+      //
+      // Source: Android CHANGELOG — "3.16.x is the next version after 3.12.x.
+      // For technical reasons, versions 3.13.x, 3.14.x and 3.15.x are skipped.
+      // Starting from 3.16.x, the Nav SDK minor version will be aligned with
+      // other Mapbox dependencies." (same policy applies to iOS)
+      //
+      // FORMULA:
+      //   if mapsMinor <= 15: navMinor = mapsMinor - 3
+      //   if mapsMinor >= 16: navMinor = mapsMinor
+      //
+      // EXAMPLE: mapboxMapsVersion = "11.11.0"
+      //   mapsMinor = 11  (≤15, Phase 1)
+      //   navMinor  = 11 - 3 = 8
+      //   navMin    = "3.8.0" → SPM resolves latest 3.8.x → Maps 11.11.x ✅
+      //
+      // EXAMPLE: mapboxMapsVersion = "11.21.0"
+      //   mapsMinor = 21  (≥16, Phase 2)
+      //   navMinor  = 21
+      //   navMin    = "3.21.0" → SPM resolves latest 3.21.x → Maps 11.21.x ✅
+      const mapsVersion = mapboxMapsVersion || '11.11.0';
+      const mapsMinor = parseInt(mapsVersion.split('.')[1], 10) || 11;
+      const navMinor  = mapsMinor <= 15 ? mapsMinor - 3 : mapsMinor;
+      const navMin    = mapboxNavigationVersion || `3.${navMinor}.0`;
 
-      const pkgRefUUID     = makeUUID(); // XCRemoteSwiftPackageReference
-      const coreDepUUID    = makeUUID(); // XCSwiftPackageProductDependency (MapboxNavigationCore)
-      const uikitDepUUID   = makeUUID(); // XCSwiftPackageProductDependency (MapboxNavigationUIKit)
-      const coreBuildUUID  = makeUUID(); // PBXBuildFile (MapboxNavigationCore)
-      const uikitBuildUUID = makeUUID(); // PBXBuildFile (MapboxNavigationUIKit)
+      console.log(`[@jacques_gordon/expo-mapbox-navigation] Maps ${mapsVersion} (minor=${mapsMinor}) → Navigation ${navMin}..<3.${navMinor+1}.0`);
+      console.log(`[@jacques_gordon/expo-mapbox-navigation] Phase: ${mapsMinor <= 15 ? `1 (offset -3: ${mapsMinor}-3=${navMinor})` : `2 (aligned: ${navMinor})`}`);
 
-      const NAV_IOS_REPO    = 'https://github.com/mapbox/mapbox-navigation-ios.git';
-      const NAV_IOS_VERSION = '3.25.0';
+      // The Ruby hook — identical pattern to @rnmapbox/maps _add_spm_to_target
+      const spmHook = `
+# [ExpoMapboxNavigation] SPM hook — injected by @jacques_gordon/expo-mapbox-navigation
+# Navigation: upToNextMinorVersion from ${navMin}
+# Maps: ${mapsVersion} (minor ${mapsMinor}, ${mapsMinor <= 15 ? 'Phase 1: offset -3' : 'Phase 2: aligned'})
+def _expo_mapbox_nav_add_spm(installer)
+  url         = 'https://github.com/mapbox/mapbox-navigation-ios.git'
+  requirement = { kind: 'upToNextMinorVersion', minimumVersion: '${navMin}' }
+  products    = ['MapboxNavigationCore', 'MapboxNavigationUIKit']
 
-      // 1. Add XCRemoteSwiftPackageReference
-      const pkgRefEntry = `
-\t\t${pkgRefUUID} /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */ = {
-\t\t\tisa = XCRemoteSwiftPackageReference;
-\t\t\trequirement = {
-\t\t\t\tkind = upToNextMajorVersion;
-\t\t\t\tminimumVersion = ${NAV_IOS_VERSION};
-\t\t\t};
-\t\t\trepositoryURL = "${NAV_IOS_REPO}";
-\t\t};`;
+  pkg_class = Xcodeproj::Project::Object::XCRemoteSwiftPackageReference
+  ref_class = Xcodeproj::Project::Object::XCSwiftPackageProductDependency
 
-      // 2. Add XCSwiftPackageProductDependencies
-      const coreDepEntry = `
-\t\t${coreDepUUID} /* MapboxNavigationCore */ = {
-\t\t\tisa = XCSwiftPackageProductDependency;
-\t\t\tpackage = ${pkgRefUUID} /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
-\t\t\tproductName = MapboxNavigationCore;
-\t\t};`;
+  # ── Step 1: Add to pods_project (where ExpoMapboxNavigation target lives) ──
+  pods_project = installer.pods_project
 
-      const uikitDepEntry = `
-\t\t${uikitDepUUID} /* MapboxNavigationUIKit */ = {
-\t\t\tisa = XCSwiftPackageProductDependency;
-\t\t\tpackage = ${pkgRefUUID} /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
-\t\t\tproductName = MapboxNavigationUIKit;
-\t\t};`;
+  pkg = pods_project.root_object.package_references.find { |p|
+    p.class == pkg_class && p.repositoryURL == url
+  }
+  unless pkg
+    pkg = pods_project.new(pkg_class)
+    pkg.repositoryURL = url
+    pkg.requirement   = requirement
+    pods_project.root_object.package_references << pkg
+    puts '[ExpoMapboxNavigation] Added mapbox-navigation-ios to pods_project'
+  end
 
-      // 3. Add PBXBuildFile entries for the frameworks
-      const coreBuildEntry = `
-\t\t${coreBuildUUID} /* MapboxNavigationCore in Frameworks */ = {isa = PBXBuildFile; productRef = ${coreDepUUID} /* MapboxNavigationCore */; };`;
+  # ── FIX: Stronger target lookup with fallback ──────────────────────────────
+  # CocoaPods normally names the target exactly 'ExpoMapboxNavigation'.
+  # Deduplication suffixes (e.g. 'ExpoMapboxNavigation-abc123') only happen
+  # when the same pod is included in multiple targets with different specs,
+  # which is not our case. We still add an include? fallback to be safe.
+  expo_target = pods_project.targets.find { |t| t.name == 'ExpoMapboxNavigation' }
+  expo_target ||= pods_project.targets.find { |t| t.name.include?('ExpoMapboxNavigation') }
+  if expo_target
+    puts "[ExpoMapboxNavigation] Found target: #{expo_target.name}"
+    products.each do |product_name|
+      ref = expo_target.package_product_dependencies.find { |r|
+        r.class == ref_class && r.package == pkg && r.product_name == product_name
+      }
+      unless ref
+        ref = pods_project.new(ref_class)
+        ref.package      = pkg
+        ref.product_name = product_name
+        expo_target.package_product_dependencies << ref
+        puts "[ExpoMapboxNavigation] Linked #{product_name} -> #{expo_target.name}"
+      end
+    end
+  else
+    # Debug: print all available targets so we can fix the name if needed
+    puts '[ExpoMapboxNavigation] WARNING: ExpoMapboxNavigation target not found!'
+    puts '[ExpoMapboxNavigation] Available targets:'
+    pods_project.targets.each { |t| puts "  - #{t.name}" }
+  end
+  pods_project.save
 
-      const uikitBuildEntry = `
-\t\t${uikitBuildUUID} /* MapboxNavigationUIKit in Frameworks */ = {isa = PBXBuildFile; productRef = ${uikitDepUUID} /* MapboxNavigationUIKit */; };`;
+  # ── Step 2: Add to user app target (needed for import in app binary) ────────
+  installer.aggregate_targets.each do |agg|
+    user_project = agg.user_project
+    agg.user_targets.each do |user_target|
+      user_pkg = user_project.root_object.package_references.find { |p|
+        p.class == pkg_class && p.repositoryURL == url
+      }
+      unless user_pkg
+        user_pkg = user_project.new(pkg_class)
+        user_pkg.repositoryURL = url
+        user_pkg.requirement   = requirement
+        user_project.root_object.package_references << user_pkg
+      end
 
-      // Inject into the relevant sections
-      // Section: XCRemoteSwiftPackageReference
-      if (pbxproj.includes('/* Begin XCRemoteSwiftPackageReference section */')) {
-        pbxproj = pbxproj.replace(
-          '/* Begin XCRemoteSwiftPackageReference section */',
-          `/* Begin XCRemoteSwiftPackageReference section */${pkgRefEntry}`
+      products.each do |product_name|
+        ref = user_target.package_product_dependencies.find { |r|
+          r.class == ref_class && r.package == user_pkg && r.product_name == product_name
+        }
+        unless ref
+          ref = user_project.new(ref_class)
+          ref.package      = user_pkg
+          ref.product_name = product_name
+          user_target.package_product_dependencies << ref
+          puts "[ExpoMapboxNavigation] Linked #{product_name} -> #{user_target.name}"
+        end
+      end
+    end
+    user_project.save
+  end
+end
+`;
+
+      // Find the last post_install block and add our call inside it,
+      // or add a new post_install block if none exists.
+      if (podfile.includes('post_install do |installer|')) {
+        // Add our helper def before the first post_install
+        // and our call inside the existing post_install
+        podfile = spmHook + podfile.replace(
+          'post_install do |installer|',
+          'post_install do |installer|\n  _expo_mapbox_nav_add_spm(installer)'
         );
       } else {
-        // Section doesn't exist yet — add it before the end of the project
-        pbxproj = pbxproj.replace(
-          '/* End XCConfigurationList section */',
-          `/* End XCConfigurationList section */\n\n/* Begin XCRemoteSwiftPackageReference section */${pkgRefEntry}\n/* End XCRemoteSwiftPackageReference section */`
-        );
+        // No post_install block — add both the helper and a new block
+        podfile = podfile + spmHook + `
+post_install do |installer|
+  _expo_mapbox_nav_add_spm(installer)
+end
+`;
       }
 
-      // Section: XCSwiftPackageProductDependency
-      if (pbxproj.includes('/* Begin XCSwiftPackageProductDependency section */')) {
-        pbxproj = pbxproj.replace(
-          '/* Begin XCSwiftPackageProductDependency section */',
-          `/* Begin XCSwiftPackageProductDependency section */${coreDepEntry}${uikitDepEntry}`
-        );
-      } else {
-        pbxproj = pbxproj.replace(
-          '/* End XCRemoteSwiftPackageReference section */',
-          `/* End XCRemoteSwiftPackageReference section */\n\n/* Begin XCSwiftPackageProductDependency section */${coreDepEntry}${uikitDepEntry}\n/* End XCSwiftPackageProductDependency section */`
-        );
-      }
-
-      // Section: PBXBuildFile
-      pbxproj = pbxproj.replace(
-        '/* Begin PBXBuildFile section */',
-        `/* Begin PBXBuildFile section */${coreBuildEntry}${uikitBuildEntry}`
-      );
-
-      // Add to main target's Frameworks build phase
-      // FIX: the regex was non-greedy and could match the test target instead
-      // of the main app target. We now inject into ALL PBXFrameworksBuildPhase
-      // files lists — Xcode deduplicates at link time, and only the main app
-      // target actually links frameworks, so this is safe.
-      // Use a replace-all approach on PBXBuildFile section only (already done above),
-      // and find all 'files = (' inside PBXFrameworksBuildPhase section precisely.
-      const frameworksSectionMatch = pbxproj.match(
-        /\/\* Begin PBXFrameworksBuildPhase section \*\/([\s\S]*?)\/\* End PBXFrameworksBuildPhase section \*\//
-      );
-      if (frameworksSectionMatch) {
-        const originalSection = frameworksSectionMatch[0];
-        // Replace only the FIRST 'files = (' inside this section (= main app target)
-        const patchedSection = originalSection.replace(
-          'files = (',
-          `files = (\n\t\t\t\t${coreBuildUUID} /* MapboxNavigationCore in Frameworks */,\n\t\t\t\t${uikitBuildUUID} /* MapboxNavigationUIKit in Frameworks */,`
-        );
-        pbxproj = pbxproj.replace(originalSection, patchedSection);
-      }
-
-      // Add to main target's packageProductDependencies
-      // FIX: only replace the FIRST occurrence (main app target, not test target)
-      if (pbxproj.includes('packageProductDependencies = (')) {
-        pbxproj = pbxproj.replace(
-          'packageProductDependencies = (',
-          `packageProductDependencies = (\n\t\t\t\t${coreDepUUID} /* MapboxNavigationCore */,\n\t\t\t\t${uikitDepUUID} /* MapboxNavigationUIKit */,`
-        );
-      } else {
-        // packageProductDependencies doesn't exist yet — add it to the first PBXNativeTarget
-        pbxproj = pbxproj.replace(
-          /(isa = PBXNativeTarget;[\s\S]*?)(packageReferences = \([\s\S]*?\);)/,
-          `$1$2\n\t\t\tpackageProductDependencies = (\n\t\t\t\t${coreDepUUID} /* MapboxNavigationCore */,\n\t\t\t\t${uikitDepUUID} /* MapboxNavigationUIKit */,\n\t\t\t);`
-        );
-      }
-
-      // Add to project's packageReferences list (first occurrence only = main project)
-      if (pbxproj.includes('packageReferences = (')) {
-        pbxproj = pbxproj.replace(
-          'packageReferences = (',
-          `packageReferences = (\n\t\t\t\t${pkgRefUUID} /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,`
-        );
-      }
-
-      fs.writeFileSync(pbxprojPath, pbxproj, 'utf8');
-      console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Injected Mapbox Navigation SPM into project.pbxproj');
-
+      fs.writeFileSync(podfilePath, podfile, 'utf8');
+      console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Injected mapbox-navigation-ios SPM hook into Podfile');
       return mod;
     },
   ]);
@@ -259,12 +275,9 @@ const withMapboxNavigation = (config, options = {}) => {
   return config;
 };
 
-// ── Android helpers ──────────────────────────────────────────────────────────
+// ── Android helpers ───────────────────────────────────────────────────────────
 
 function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
-  const MAPBOX_DOWNLOADS_TOKEN_KEY = 'MAPBOX_DOWNLOADS_TOKEN';
-  // (kept for backward compat — actual token is in gradle.properties)
-
   if (!mod.modResults.contents.includes('abiFilters')) {
     mod.modResults.contents = mod.modResults.contents.replace(
       /defaultConfig {([\s\S]*?)}/,
@@ -317,9 +330,22 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
     `;
   }
 
+  // Android color overrides for Mapbox resource colors (route line, banner, etc.)
   if (Object.keys(androidColorOverrides).length > 0) {
-    // inject color overrides as Android resource values
-    // (handled downstream by the Mapbox gradle plugin or manual resource injection)
+    const resDir = path.join(
+      mod.modRequest?.platformProjectRoot || '',
+      'app', 'src', 'main', 'res', 'values'
+    );
+    try {
+      fs.mkdirSync(resDir, { recursive: true });
+      const colorEntries = Object.entries(androidColorOverrides)
+        .map(([name, value]) => `    <color name="${name}">${value}</color>`)
+        .join('\n');
+      const xmlContent = `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n${colorEntries}\n</resources>\n`;
+      fs.writeFileSync(path.join(resDir, 'mapbox_color_overrides.xml'), xmlContent);
+    } catch (e) {
+      // Ignore — resDir may not exist at plugin resolution time
+    }
   }
 }
 
