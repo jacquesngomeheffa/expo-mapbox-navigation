@@ -216,35 +216,13 @@ def _expo_mapbox_nav_add_spm(installer)
   end
   pods_project.save
 
-  # ── Step 2: Add to user app target (needed for import in app binary) ────────
-  installer.aggregate_targets.each do |agg|
-    user_project = agg.user_project
-    agg.user_targets.each do |user_target|
-      user_pkg = user_project.root_object.package_references.find { |p|
-        p.class == pkg_class && p.repositoryURL == url
-      }
-      unless user_pkg
-        user_pkg = user_project.new(pkg_class)
-        user_pkg.repositoryURL = url
-        user_pkg.requirement   = requirement
-        user_project.root_object.package_references << user_pkg
-      end
-
-      products.each do |product_name|
-        ref = user_target.package_product_dependencies.find { |r|
-          r.class == ref_class && r.package == user_pkg && r.product_name == product_name
-        }
-        unless ref
-          ref = user_project.new(ref_class)
-          ref.package      = user_pkg
-          ref.product_name = product_name
-          user_target.package_product_dependencies << ref
-          puts "[ExpoMapboxNavigation] Linked #{product_name} -> #{user_target.name}"
-        end
-      end
-    end
-    user_project.save
-  end
+  # ── NOTE: We do NOT add products to the user app target ────────────────────
+  # Adding MapboxNavigationCore/UIKit directly to the app target causes
+  # "Multiple commands produce" errors for MapboxCommon, MapboxCoreMaps, Turf
+  # because @rnmapbox/maps already embeds them via CocoaPods/SPM.
+  # The ExpoMapboxNavigation pod target is sufficient: when CocoaPods links
+  # the pod into the app, SPM resolves the transitive dependencies correctly
+  # without re-embedding them.
 end
 `;
 
