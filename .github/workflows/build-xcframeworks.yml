@@ -19,19 +19,17 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      # Use the well-tested setup-xcode action instead of hand-rolling
-      # `xcode-select -s /Applications/Xcode_X.app` — manually guessed paths
-      # have twice caused failures on this runner image: once because the
-      # matching iOS Simulator runtime for an older forced Xcode had been
-      # pruned from the image, and once because the runner's own reported
-      # default (Xcode_16.4.app) pointed at a path whose xcbuild binary
-      # didn't actually resolve ("posix_spawn error: No such file or
-      # directory"). This action resolves and verifies the Xcode install
-      # itself rather than us guessing a path string.
-      - name: Select Xcode (latest stable)
+      # GitHub officially documents macos-15 + Xcode 16.4 as the
+      # recommended, fully-supported pairing (Xcode 26.x on macos-15 has an
+      # open, currently-unresolved bug as of writing — see
+      # actions/runner-images#13743, broken Xcode symlinks causing
+      # "cannot be located" / "No such file or directory" errors on
+      # internal SDK/tool paths). "latest-stable" picked Xcode 26.3 and hit
+      # exactly that bug, so we pin explicitly instead.
+      - name: Select Xcode 16.4
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '16.4'
 
       - name: Verify Xcode selection
         run: |
