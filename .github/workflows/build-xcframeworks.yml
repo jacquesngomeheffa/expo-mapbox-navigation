@@ -36,6 +36,20 @@ jobs:
           xcodebuild -version
           xcode-select -p
 
+      # A freshly `xcode-select`-switched Xcode version can leave some
+      # internal components (like direct invocations of the low-level
+      # xcbuild binary, as opposed to going through the xcodebuild CLI
+      # wrapper) unregistered/unactivated. `-runFirstLaunch` is the
+      # documented way to finish first-time setup for a given Xcode
+      # install without a GUI. Worth trying since `xcodebuild -version`
+      # already succeeds fine (proving Xcode itself is fine) while direct
+      # xcbuild subprocess spawning consistently fails — suggesting
+      # something in between those two paths isn't fully set up.
+      - name: Run Xcode first-launch tasks
+        run: |
+          sudo xcodebuild -license accept
+          sudo xcodebuild -runFirstLaunch
+
       - name: Configure Mapbox downloads credentials
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
@@ -51,6 +65,12 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
+      # The build step below is wrapped in an automatic retry. The failure
+      # pattern we've observed (getting progressively further each run,
+      # failing on a DIFFERENT target each time, always near the end of
+      # the build) points to intermittent resource pressure on this free
+      # runner rather than a deterministic blocker — so simply retrying
+      # has a real chance of succeeding without any code change.
       # nest's own docs: "Fetching releases sometimes fails due to API
       # limit, so we recommended to pass a GitHub API token." GITHUB_TOKEN
       # is automatically provided by Actions — passing it as GH_TOKEN
