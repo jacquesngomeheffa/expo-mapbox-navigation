@@ -19,6 +19,22 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
 
+  # ── Sibling Mapbox pods (provided by @rnmapbox/maps, not vendored here) ───
+  # Our vendored MapboxNavigationCore/MapboxDirections frameworks' private
+  # Swift interfaces (.private.swiftinterface) import MapboxCommon_Private
+  # and Turf internally. Without an explicit CocoaPods dependency declared
+  # here, CocoaPods doesn't wire up the module/header search paths needed
+  # for Swift to resolve those imports from OUR target when compiling
+  # against our vendored frameworks — even though @rnmapbox/maps already
+  # installs these same pods elsewhere in the project. No version pin here:
+  # CocoaPods resolves one version per pod name across the whole Podfile,
+  # so this just reuses whatever version @rnmapbox/maps already pulls in
+  # rather than risking a second, conflicting constraint.
+  s.dependency 'MapboxCommon'
+  s.dependency 'MapboxCoreMaps'
+  s.dependency 'MapboxMaps'
+  s.dependency 'Turf'
+
   # ── iOS: Mapbox Navigation SDK v3 via VENDORED XCFRAMEWORKS ───────────────
   #
   # Mapbox Navigation SDK v3 is distributed as SOURCE CODE via SPM only — it
@@ -78,6 +94,30 @@ Pod::Spec.new do |s|
     'DEFINES_MODULE'             => 'YES',
     'SWIFT_COMPILATION_MODE'     => 'wholemodule',
     'IPHONEOS_DEPLOYMENT_TARGET' => '14.0',
+  }
+
+  # ── Avoid the .private.swiftinterface toolchain-version check ─────────────
+  # Debug builds default to ENABLE_TESTABILITY = YES (needed for @testable
+  # import elsewhere in the project). That setting makes Xcode re-verify our
+  # vendored frameworks' .private.swiftinterface (the "testable" textual
+  # interface) instead of just linking the precompiled .swiftmodule binary
+  # directly — and THAT re-verification step is what triggers Swift's
+  # strict "this SDK is not supported by the compiler" check if the Swift
+  # compiler that built the vendored xcframeworks differs at all from the
+  # one doing the build (a real, standard, well-documented Swift/Xcode
+  # check — see forums.swift.org and developer.apple.com/forums threads on
+  # this exact error, and mapbox/mapbox-maps-ios#1363 for the same issue
+  # with an earlier Mapbox binary distribution). Precompiled binaries built
+  # with library evolution enabled (which is how Mapbox ships these) are
+  # meant to tolerate a newer consuming compiler without this stricter
+  # recheck — disabling testability avoids forcing that recheck in the
+  # first place. This is scoped to app (not test) targets; if your project
+  # relies on @testable import of your OWN code elsewhere, this setting
+  # does not affect that — it only affects whether Xcode treats imports of
+  # vendored/third-party frameworks like this one as needing their private
+  # interface.
+  s.user_target_xcconfig = {
+    'ENABLE_TESTABILITY' => 'NO',
   }
 
   s.prepare_command = <<-CMD
