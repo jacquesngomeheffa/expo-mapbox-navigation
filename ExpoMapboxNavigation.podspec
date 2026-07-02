@@ -38,37 +38,39 @@ Pod::Spec.new do |s|
   #     "Undefined symbols"/duplicate-symbol errors on statically-linked
   #     Expo modules (see facebook/react-native#47344) — a structural
   #     conflict with ExpoModulesCore, which must be static.
-  #   - A Mapbox engineer confirmed on mapbox/mapbox-navigation-ios#4703
-  #     that MapboxNavigationCore/MapboxNavigationUIKit are source-only as
-  #     of v3.2.0+ (unlike MapboxNavigationNative/MapboxCommon/
-  #     MapboxCoreMaps, which remain precompiled binaries) and that the
-  #     supported workaround for this exact class of project (a
-  #     modularized target consuming the Nav SDK alongside other
-  #     pre-existing Mapbox dependencies) is to prebuild local xcframeworks
-  #     with `xcodebuild -create-xcframework` or the Scipio tool, then
-  #     vendor them directly.
+  #   - Earlier (2024), MapboxNavigationCore/MapboxNavigationUIKit were
+  #     source-only (a Mapbox engineer confirmed this on
+  #     mapbox/mapbox-navigation-ios#4703 and suggested prebuilding local
+  #     xcframeworks with a tool like Scipio as a workaround). Mapbox has
+  #     SINCE closed that gap themselves: they now publish a dedicated
+  #     repo, mapbox-navigation-ios-build-artifacts, which exposes
+  #     MapboxNavigationCore/UIKit (and their own transitive dependencies)
+  #     as officially precompiled .xcframework downloads — the same
+  #     api.mapbox.com/downloads/v2/... mechanism already used for
+  #     MapboxNavigationNative/MapboxCommon/MapboxCoreMaps/Turf throughout
+  #     this project. No local compilation is needed for any of it anymore.
   #
-  # So: ios/Frameworks/*.xcframework are prebuilt ONCE (via
+  # So: ios/Frameworks/*.xcframework are fetched ONCE (via
   # .github/workflows/build-xcframeworks.yml, on a free GitHub-hosted
-  # macOS runner — see that file) and committed to this package. No
-  # network access to api.mapbox.com, no SPM package resolution, and none
-  # of the CocoaPods/SPM interop machinery above is needed at `pod install`
-  # or `xcodebuild` time for any consumer of this pod anymore.
+  # macOS runner — see that file and ios/fetch-xcframeworks.sh) and
+  # committed to this package. No network access to api.mapbox.com, no SPM
+  # package resolution, and none of the CocoaPods/SPM interop machinery
+  # above is needed at `pod install` or `xcodebuild` time for any consumer
+  # of this pod anymore.
   #
   # IMPORTANT — do NOT vendor MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf
   # here. @rnmapbox/maps already installs those via CocoaPods, and
   # MapboxNavigationCore.xcframework is built to link against that SAME
-  # version (kept in sync — see ios/Package.swift and
-  # ios/build-xcframeworks.sh for the version-alignment requirement).
-  # Vendoring a second copy of those specific frameworks would reintroduce
-  # duplicate-symbol errors, per the exact guidance a Mapbox engineer gave
-  # for this same scenario in the issue linked above.
+  # version (kept in sync — see ios/fetch-xcframeworks.sh for the
+  # version-alignment requirement). Vendoring a second copy of those
+  # specific frameworks would reintroduce duplicate-symbol errors, per the
+  # exact guidance a Mapbox engineer gave for this same scenario in the
+  # issue linked above.
   s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework'))
 
   s.source_files = 'ios/**/*.{swift,h,m,mm}'
   s.exclude_files = [
-    'ios/Package.swift',
-    'ios/build-xcframeworks.sh',
+    'ios/fetch-xcframeworks.sh',
     'ios/Frameworks/*.xcframework/**/*.h',
   ]
 
