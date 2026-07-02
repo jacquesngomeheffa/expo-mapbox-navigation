@@ -5,7 +5,7 @@ package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 Pod::Spec.new do |s|
   s.name           = 'ExpoMapboxNavigation'
   s.version        = package['version']
-  s.summary        = package['description']
+  s.summary        = 'Expo module for Mapbox Navigation SDK v3 — Android and iOS'
   s.description    = package['description']
   s.license        = package['license']
   s.author         = package['author']
@@ -66,7 +66,7 @@ Pod::Spec.new do |s|
   # specific frameworks would reintroduce duplicate-symbol errors, per the
   # exact guidance a Mapbox engineer gave for this same scenario in the
   # issue linked above.
-  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework'))
+  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework')).map { |f| f.sub("#{__dir__}/", '') }
 
   s.source_files = 'ios/**/*.{swift,h,m,mm}'
   s.exclude_files = [

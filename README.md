@@ -233,6 +233,9 @@ See [Android 16 KB page size guide](https://developer.android.com/guide/practice
 
 ## Changelog
 
+### 2.3.1
+- **iOS: fixed `vendored_frameworks` using an absolute path**, which CocoaPods rejects outright (`File Patterns: File patterns must be relative and cannot start with a slash`). `Dir.glob` still resolves against the absolute package directory (needed for the glob to actually find files on disk), but the resulting paths are now stripped back to relative before being assigned to `s.vendored_frameworks`. This is the only change in this release — 2.3.0's architecture (vendored prebuilt xcframeworks) is otherwise unchanged.
+
 ### 2.3.0
 - **iOS: complete architecture rewrite — vendored prebuilt xcframeworks, no more live SPM.** The 2.2.x `post_install` Ruby-hook approach (injecting SPM package references into your project at `pod install` time) has been replaced entirely. It proved structurally unreliable: React Native's own CocoaPods SPM manager (`react-native/scripts/cocoapods/spm.rb`) unconditionally strips any manually-added SPM package reference during `post_install` unless it's declared through React Native's own `spm_dependency()` API — and that API is itself documented to cause duplicate-symbol errors on statically-linked Expo modules (see [facebook/react-native#47344](https://github.com/facebook/react-native/issues/47344)).
 - **iOS SDK binaries now fetched from Mapbox's official `mapbox-navigation-ios-build-artifacts`** and vendored directly in the npm package (`ios/Frameworks/*.xcframework`, via `s.vendored_frameworks` in the podspec). No network access to `api.mapbox.com`, no SPM resolution, and no CocoaPods/SPM interop machinery is needed at `pod install` or `xcodebuild` time for any consumer anymore.
