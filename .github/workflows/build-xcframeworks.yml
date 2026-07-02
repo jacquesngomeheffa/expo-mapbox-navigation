@@ -19,8 +19,15 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+      # NOTE: we intentionally do NOT force a specific Xcode version here.
+      # GitHub periodically prunes older iOS Simulator runtimes from its
+      # macOS runner images (keeping only the ~3 most recent), and pinning
+      # to an older Xcode (e.g. "Xcode_16.app") can end up pointing at an
+      # SDK whose matching simulator runtime is no longer installed on the
+      # runner, causing errors like "No simulator runtime version [...]
+      # available to use with iphonesimulator SDK version [...]" during
+      # asset-catalog compilation. The runner's default Xcode is always
+      # guaranteed to have its matching runtimes present.
 
       - name: Configure Mapbox downloads credentials
         env:
