@@ -26,7 +26,15 @@ import PackageDescription
 // compatibility table corresponds to Navigation SDK ~3.8.x and
 // MapboxCommon ~24.11.x.
 let navNativeVersion = "324.0.5"
-let navNativeChecksum = "placeholder_run_swift_build_to_get_real_checksum"
+// Obtained from a real CI run's checksum-mismatch error message (SPM prints
+// the correct checksum when the manifest's placeholder doesn't match):
+// "checksum of downloaded artifact of binary target 'MapboxNavigationNative'
+// (bd24400d8fdb8be02ceb416166c95b9331c2bcc4746b5f0bee6d3122d6aee4ee) does
+// not match checksum specified by the manifest (...)". If you bump
+// navNativeVersion above, this checksum MUST be updated to match — either
+// re-run build-xcframeworks.sh (which auto-detects it) or read it off the
+// same kind of error message in the next failed CI run.
+let navNativeChecksum = "bd24400d8fdb8be02ceb416166c95b9331c2bcc4746b5f0bee6d3122d6aee4ee"
 let mapsVersion: Version = "11.11.0"
 let commonVersion: Version = "24.11.0"
 let mapboxApiDownloads = "https://api.mapbox.com/downloads/v2"
