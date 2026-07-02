@@ -101,14 +101,20 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'             => 'YES',
     'SWIFT_COMPILATION_MODE'     => 'wholemodule',
-    # NOTE: IPHONEOS_DEPLOYMENT_TARGET intentionally NOT set here. It was
-    # previously duplicated in both s.platforms (above) and here, which is
-    # exactly the kind of two-places-to-update situation that let this
-    # value go stale in the first place (see 2.3.4 changelog). s.platforms
-    # is the single source of truth CocoaPods uses to derive this build
-    # setting automatically — keeping only one declaration means there's
-    # only one place to update when the vendored SDK version bumps its own
-    # minimum requirement.
+    # CORRECTION (see 2.3.5 changelog): this WAS removed on the theory that
+    # s.platforms (above) alone was sufficient and kept as the single
+    # source of truth, to reduce the risk of the two declarations going
+    # out of sync. That theory was wrong — confirmed by a real build still
+    # failing with "compiling for iOS 14.0" even with s.platforms set to
+    # 15.1 and this line removed. s.platforms governs CocoaPods'
+    # dependency-compatibility validation; it does NOT reliably force the
+    # actual IPHONEOS_DEPLOYMENT_TARGET build setting used to invoke the
+    # compiler for this target in this project — something (likely the
+    # generated Podfile's own default platform declaration) overrides it
+    # back down to a lower value otherwise. Both declarations are needed;
+    # when bumping the vendored SDK version, update BOTH this value and
+    # s.platforms above.
+    'IPHONEOS_DEPLOYMENT_TARGET' => '15.1',
   }
 
   # ── Avoid the .private.swiftinterface toolchain-version check ─────────────
