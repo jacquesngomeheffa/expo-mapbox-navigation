@@ -81,6 +81,24 @@ echo ""
 # project's own code.)
 SCIPIO_VERSION="0.21.0"
 git clone --depth 1 --branch "$SCIPIO_VERSION" https://github.com/giginet/Scipio.git Scipio
+
+# Patch Scipio's source: some `@retroactive ExpressibleByArgument`
+# conformances (added defensively when Swift 6 mode was still new) are now
+# rejected by newer Swift toolchains with "'retroactive' attribute does not
+# apply; 'ExpressibleByArgument' is declared in this module" — the compiler
+# now resolves that protocol as being in the same module as these types, so
+# the marker is no longer valid. This is unrelated to this project's own
+# code; it's purely a Scipio 0.21.0 / current-Swift-toolchain friction
+# point. Stripping the now-invalid attribute (leaving the conformance
+# itself intact) fixes it regardless of the exact Swift version in use,
+# without needing to chase down a Scipio release built for this exact
+# compiler.
+echo "🩹 Patching Scipio: removing invalid @retroactive ExpressibleByArgument markers..."
+grep -rl "@retroactive ExpressibleByArgument" Scipio/Sources | while read -r f; do
+  sed -i '' 's/@retroactive ExpressibleByArgument/ExpressibleByArgument/g' "$f"
+  echo "   patched: $f"
+done
+
 cd Scipio
 swift build -c release
 
