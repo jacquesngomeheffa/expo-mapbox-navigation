@@ -11,8 +11,16 @@ Pod::Spec.new do |s|
   s.author         = package['author']
   s.homepage       = package['homepage']
 
-  # Mapbox Navigation SDK v3 requires iOS 14+
-  s.platforms      = { :ios => '14.0' }
+  # MapboxMaps 11.11.0 (installed by @rnmapbox/maps) has a minimum
+  # deployment target of iOS 15.1 — confirmed directly from a real build
+  # error: "compiling for iOS 14.0, but module 'MapboxMaps' has a minimum
+  # deployment target of iOS 15.1". Our own target must match or exceed
+  # that, since our vendored MapboxNavigationCore/UIKit frameworks import
+  # MapboxMaps internally (@_spi imports visible in their private Swift
+  # interfaces). iOS 14.0 was carried over from early in this package's
+  # history and never actually re-validated against MapboxMaps' real
+  # minimum once the SDK version was pinned to 11.11.0.
+  s.platforms      = { :ios => '15.1' }
   s.swift_version  = '5.9'
   s.source         = { git: package['repository']['url'], tag: "v#{s.version}" }
   s.static_framework = true
@@ -93,7 +101,14 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'             => 'YES',
     'SWIFT_COMPILATION_MODE'     => 'wholemodule',
-    'IPHONEOS_DEPLOYMENT_TARGET' => '14.0',
+    # NOTE: IPHONEOS_DEPLOYMENT_TARGET intentionally NOT set here. It was
+    # previously duplicated in both s.platforms (above) and here, which is
+    # exactly the kind of two-places-to-update situation that let this
+    # value go stale in the first place (see 2.3.4 changelog). s.platforms
+    # is the single source of truth CocoaPods uses to derive this build
+    # setting automatically — keeping only one declaration means there's
+    # only one place to update when the vendored SDK version bumps its own
+    # minimum requirement.
   }
 
   # ── Avoid the .private.swiftinterface toolchain-version check ─────────────

@@ -35,6 +35,14 @@ FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 # Must match what @rnmapbox/maps installs via CocoaPods in this project
 # (check `pod install` log for "Installing MapboxCommon (...)" etc). This
 # exact tag was confirmed to exist in mapbox-navigation-ios-build-artifacts.
+#
+# ⚠️  MAINTAINER REMINDER: when bumping this version, also check whether
+# the target MapboxMaps release raised its own minimum iOS deployment
+# target, and update ExpoMapboxNavigation.podspec's `s.platforms` to match
+# if so (see 2.3.4 changelog — this exact mismatch broke real builds once
+# already: "compiling for iOS 14.0, but module 'MapboxMaps' has a minimum
+# deployment target of iOS 15.1"). Check the target version's release
+# notes at https://github.com/mapbox/mapbox-maps-ios/releases.
 MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.2}"
 
 echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
