@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v4
@@ -51,12 +51,23 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
-      - name: Run build-xcframeworks.sh
+      # The build step below is wrapped in an automatic retry. The failure
+      # pattern we've observed (getting progressively further each run,
+      # failing on a DIFFERENT target each time, always near the end of
+      # the build) points to intermittent resource pressure on this free
+      # runner rather than a deterministic blocker — so simply retrying
+      # has a real chance of succeeding without any code change.
+      - name: Run build-xcframeworks.sh (with retry)
+        uses: nick-fields/retry@v3
         env:
           MAPBOX_NAV_VERSION: ${{ inputs.mapbox_nav_version }}
-        run: |
-          chmod +x ios/build-xcframeworks.sh
-          ./ios/build-xcframeworks.sh
+        with:
+          timeout_minutes: 60
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            chmod +x ios/build-xcframeworks.sh
+            ./ios/build-xcframeworks.sh
 
       - name: Verify frameworks were produced
         run: |
