@@ -100,7 +100,12 @@ grep -rl "@retroactive ExpressibleByArgument" Scipio/Sources | while read -r f; 
 done
 
 cd Scipio
-swift build -c release
+# --disable-sandbox matches Scipio's own official release-build workflow
+# (github-action-artifactbundle's example: `swift build --disable-sandbox
+# -c release`). SPM's build-time sandbox can affect the resulting binary's
+# runtime behavior; building without it matches how the maintainer's own
+# published Scipio releases are built.
+swift build --disable-sandbox -c release
 
 # Build the xcframeworks
 # NOTE: --support-simulators was removed. Building both device AND
