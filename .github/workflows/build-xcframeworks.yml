@@ -1,54 +1,35 @@
 name: Build Mapbox Navigation xcframeworks
 
-# Manual trigger only — this is a one-time (or per-Mapbox-version) build,
+# Manual trigger only — this is a one-time (or per-Mapbox-version) fetch,
 # not something that needs to run on every push. Runs on a free GitHub-hosted
 # macOS runner (macOS runners are free & unlimited for public repositories).
 on:
   workflow_dispatch:
     inputs:
       mapbox_nav_version:
-        description: 'mapbox-navigation-ios version tag (e.g. 3.8.2)'
+        description: 'mapbox-navigation-ios-build-artifacts version tag (e.g. 3.8.2)'
         required: true
         default: '3.8.2'
 
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 180
+    timeout-minutes: 30
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      # GitHub officially documents macos-15 + Xcode 16.4 as the
-      # recommended, fully-supported pairing (Xcode 26.x on macos-15 has an
-      # open, currently-unresolved bug as of writing — see
-      # actions/runner-images#13743, broken Xcode symlinks causing
-      # "cannot be located" / "No such file or directory" errors on
-      # internal SDK/tool paths). "latest-stable" picked Xcode 26.3 and hit
-      # exactly that bug, so we pin explicitly instead.
+      # macos-15 + Xcode 16.4 is GitHub's own documented, fully-supported
+      # pairing. This step is much less load-bearing than it used to be —
+      # we're no longer invoking Xcode's internal xcbuild binary directly
+      # (that was Scipio's approach, since replaced by fetching Mapbox's
+      # own officially prebuilt binaries) — but pinning a known-good,
+      # verified Xcode/Swift toolchain for the plain `swift build` call
+      # below is still good practice.
       - name: Select Xcode 16.4
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '16.4'
-
-      - name: Verify Xcode selection
-        run: |
-          xcodebuild -version
-          xcode-select -p
-
-      # A freshly `xcode-select`-switched Xcode version can leave some
-      # internal components (like direct invocations of the low-level
-      # xcbuild binary, as opposed to going through the xcodebuild CLI
-      # wrapper) unregistered/unactivated. `-runFirstLaunch` is the
-      # documented way to finish first-time setup for a given Xcode
-      # install without a GUI. Worth trying since `xcodebuild -version`
-      # already succeeds fine (proving Xcode itself is fine) while direct
-      # xcbuild subprocess spawning consistently fails — suggesting
-      # something in between those two paths isn't fully set up.
-      - name: Run Xcode first-launch tasks
-        run: |
-          sudo xcodebuild -license accept
-          sudo xcodebuild -runFirstLaunch
 
       - name: Configure Mapbox downloads credentials
         env:
@@ -65,30 +46,21 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
-      # The build step below is wrapped in an automatic retry. The failure
-      # pattern we've observed (getting progressively further each run,
-      # failing on a DIFFERENT target each time, always near the end of
-      # the build) points to intermittent resource pressure on this free
-      # runner rather than a deterministic blocker — so simply retrying
-      # has a real chance of succeeding without any code change.
-      # nest's own docs: "Fetching releases sometimes fails due to API
-      # limit, so we recommended to pass a GitHub API token." GITHUB_TOKEN
-      # is automatically provided by Actions — passing it as GH_TOKEN
-      # raises nest's GitHub API limit from 60/hour (unauthenticated,
-      # shared across all runners using the same egress IP) to a much
-      # higher authenticated limit, avoiding a new class of flaky failure.
-      - name: Run build-xcframeworks.sh (with retry)
+      # Light retry kept only for transient network hiccups during
+      # download — this is no longer a 10-30 minute compile, just fetching
+      # a handful of prebuilt .xcframework.zip files, so 2 attempts with a
+      # short wait is plenty.
+      - name: Fetch prebuilt xcframeworks (with retry)
         uses: nick-fields/retry@v3
         env:
           MAPBOX_NAV_VERSION: ${{ inputs.mapbox_nav_version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          timeout_minutes: 60
-          max_attempts: 3
-          retry_wait_seconds: 30
+          timeout_minutes: 15
+          max_attempts: 2
+          retry_wait_seconds: 15
           command: |
-            chmod +x ios/build-xcframeworks.sh
-            ./ios/build-xcframeworks.sh
+            chmod +x ios/fetch-xcframeworks.sh
+            ./ios/fetch-xcframeworks.sh
 
       - name: Verify frameworks were produced
         run: |
@@ -111,6 +83,6 @@ jobs:
           BRANCH="xcframeworks/${{ inputs.mapbox_nav_version }}"
           git checkout -b "$BRANCH"
           git add -f ios/Frameworks/
-          git commit -m "Build xcframeworks for mapbox-navigation-ios ${{ inputs.mapbox_nav_version }}"
+          git commit -m "Fetch prebuilt xcframeworks for mapbox-navigation-ios ${{ inputs.mapbox_nav_version }}"
           git push origin "$BRANCH" --force
           echo "::notice::Pushed to branch $BRANCH — open a PR or merge it, then npm pack/publish from that branch."
