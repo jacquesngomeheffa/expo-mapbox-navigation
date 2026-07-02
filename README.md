@@ -239,6 +239,20 @@ See [Android 16 KB page size guide](https://developer.android.com/guide/practice
 
 ## Changelog
 
+### 2.3.6
+- **iOS: found what looks like the ACTUAL root cause of `compiling for iOS 14.0, but module 'MapboxMaps' has a minimum deployment target of iOS 15.1`, after two earlier attempts (podspec `s.platforms`/`pod_target_xcconfig`, then `withXcodeProject` forcing the app's own project deployment target) both failed to resolve it.** Verified by directly inspecting the real downloaded binaries (not a guess):
+  ```
+  $ head -3 MapboxNavigationCore.framework/Modules/.../arm64-apple-ios.private.swiftinterface
+  // swift-interface-format-version: 1.0
+  // swift-compiler-version: Apple Swift version 5.9.2 (swiftlang-5.9.2.2.56 clang-1500.1.0.2.5)
+  // swift-module-flags: -target arm64-apple-ios14.0 -enable-objc-interop ... -module-name MapboxNavigationCore
+  ```
+  **`-target arm64-apple-ios14.0` is hard-baked into the first line of every `.swiftinterface`/`.private.swiftinterface` file Mapbox ships in their official precompiled binaries for Navigation SDK 3.8.2** (compiled by Mapbox themselves with Xcode 15.1 / Swift 5.9.2 — visible in the same file's own metadata). This is a permanent property of that specific binary release. It lives inside the vendored `.xcframework` itself — **not** in anything CocoaPods, a Podfile, a podspec, or the consuming app's `project.pbxproj` controls, which would explain why neither prior attempt had any effect: neither could reach this file. Even `mapbox-navigation-ios-build-artifacts`'s latest `Package.swift` still only declares `platforms: [.iOS(.v14)]`, so a version bump alone wasn't a safe assumption either.
+  - **Fix**: `ios/fetch-xcframeworks.sh` now patches every `.swiftinterface` file's embedded target triple (`arm64-apple-ios14.0`, `arm64-apple-ios14.0-simulator`, `x86_64-apple-ios14.0-simulator` — all three architecture slices) from `14.0` to `15.1` immediately after copying the frameworks into `ios/Frameworks/`. This only modifies this package's own vendored copies — never Mapbox's original downloaded artifacts.
+  - **Verification status: confirmed via a real run of the GitHub Actions workflow** on the actual macOS runner (not just a local simulation) — the log shows `patched 30 .swiftinterface file(s)`, matching exactly. Spot-checked the merged result directly: `MapboxNavigationCore`'s `.private.swiftinterface` now reads `-target arm64-apple-ios15.1`, all three architecture slices (`arm64`, `arm64-simulator`, `x86_64-simulator`) confirmed patched, and the framework's Mach-O binary itself is untouched/uncorrupted (`file` still reports a valid dynamically linked shared library).
+  - **Also fixed in this release**: the `withXcodeProject` fix from the prior attempt hadn't actually made it into the GitHub repo before the workflow ran (a gap caught during this release's audit) — added now, so both fixes ship together.
+  - The `withXcodeProject` fix from the previous attempt (forcing the app's own project deployment target) is kept in place as a reasonable safety net for unrelated reasons, even though it turned out not to be what this specific error needed.
+
 ### 2.3.5
 - **iOS: reverted the 2.3.4 deduplication — restored the explicit `IPHONEOS_DEPLOYMENT_TARGET` in `pod_target_xcconfig`.** 2.3.4 removed it on the theory that `s.platforms` alone would be sufficient and act as a single source of truth. **That theory was wrong.** Confirmed with a real `pod install` log showing `Installing ExpoMapboxNavigation (2.3.4)` — i.e. the fixed version genuinely was installed — yet the build still failed with `compiling for iOS 14.0, but module 'MapboxMaps' has a minimum deployment target of iOS 15.1`. `s.platforms` governs CocoaPods' own dependency-compatibility checks; it does not reliably override the actual `IPHONEOS_DEPLOYMENT_TARGET` build setting used to compile this target in this project. Both declarations are needed. The maintainer reminder in `ios/fetch-xcframeworks.sh` now says to update both when bumping the vendored SDK version, instead of just one.
 
