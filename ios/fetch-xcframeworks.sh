@@ -165,6 +165,53 @@ for fw in "${NEEDED_FRAMEWORKS[@]}"; do
   fi
 done
 
+# ── Step 4: Patch the deployment target baked into Mapbox's own binaries ────
+#
+# THE REAL FIX for "compiling for iOS 14.0, but module 'MapboxMaps' has a
+# minimum deployment target of iOS 15.1":
+#
+# This has nothing to do with our own podspec, config plugin, or the
+# consuming app's Xcode project (all of which were tried and failed in
+# 2.3.4/2.3.5/2.3.6). Mapbox's own officially-published, precompiled
+# MapboxNavigationCore/UIKit/Directions/_MapboxNavigationHelpers binaries
+# for Navigation SDK 3.8.2 have `-target arm64-apple-ios14.0` (and
+# `...-simulator` for the simulator slice) hard-baked into the first line
+# of every one of their .swiftinterface / .private.swiftinterface files —
+# confirmed by directly inspecting the downloaded binaries:
+#   // swift-module-flags: -target arm64-apple-ios14.0 ... -module-name MapboxNavigationCore
+# This is a permanent property of THIS SPECIFIC BINARY RELEASE, embedded
+# by Mapbox at their own build time (compiled with Xcode 15.1 / Swift
+# 5.9.2, per the same file's DTXcode/swift-compiler-version metadata) —
+# no consumer-side setting (podspec, Podfile, project.pbxproj) can reach
+# or override it, which is exactly why every earlier attempt at this fix
+# had no effect. Even mapbox-navigation-ios-build-artifacts' latest
+# Package.swift (as of this writing) still only declares
+# `platforms: [.iOS(.v14)]`, so a version bump alone is not guaranteed to
+# fix this either.
+#
+# Since these .swiftinterface files are plain text (not binary), and this
+# exact same "-target arm64-apple-ios14.0" string appears exactly once
+# per file (verified — never appears elsewhere in these files), it's safe
+# to patch directly: raise it to match MapboxMaps' actual real minimum
+# (15.1, confirmed from the build error itself) in our OWN vendored copy,
+# after copying but before this package ships. This does not modify
+# Mapbox's original downloaded artifacts, only the copies in
+# ios/Frameworks/ that get published in this npm package.
+echo ""
+echo "🩹 Patching iOS target baked into vendored .swiftinterface files (14.0 → 15.1)..."
+PATCHED_COUNT=0
+while IFS= read -r -d '' interface_file; do
+  if grep -q -- "-ios14\.0" "$interface_file"; then
+    # Matches every architecture slice's target triple in one pass
+    # (arm64-apple-ios14.0, arm64-apple-ios14.0-simulator,
+    # x86_64-apple-ios14.0-simulator, ...) since "-ios14.0" is a common
+    # substring across all of them, rather than hardcoding each triple.
+    sed -i '' 's/-ios14\.0/-ios15.1/g' "$interface_file"
+    PATCHED_COUNT=$((PATCHED_COUNT + 1))
+  fi
+done < <(find "$FRAMEWORKS_DIR" -name "*.swiftinterface" -print0)
+echo "   patched $PATCHED_COUNT .swiftinterface file(s)"
+
 # ── Cleanup ───────────────────────────────────────────────────────────────
 cd /
 rm -rf "$TMPDIR"
