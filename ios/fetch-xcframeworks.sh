@@ -50,6 +50,53 @@ git clone --branch "v$MAPBOX_NAV_VERSION" --depth 1 \
 
 cd "$TMPDIR/build-artifacts"
 
+# ── Step 1b: Patch out MapboxNavigationCustomRoute ───────────────────────────
+# `--product` filtering on `swift build` (tried first) does NOT prevent SPM
+# from resolving/validating every declared target in the manifest before
+# selecting what to actually compile — it still attempts to fetch
+# MapboxNavigationCustomRoute's binary even when we only ask for the other
+# three products, and that specific binary 403s (gated behind separate
+# account permissions we don't have and don't need). The only reliable fix
+# is to remove it from the manifest entirely before building: strip its
+# `.library(...)` product declaration, its `.target(...)` wrapper, and the
+# `libraryTargets()` call that creates its underlying binaryTarget.
+echo "🩹 Removing unused/gated MapboxNavigationCustomRoute product from Package.swift..."
+python3 - << 'PYEOF'
+import re
+
+with open("Package.swift") as f:
+    content = f.read()
+
+original_len = len(content)
+
+# Remove the .library(...) product declaration for MapboxNavigationCustomRoute
+content = re.sub(
+    r'\.library\(\s*name:\s*"MapboxNavigationCustomRoute".*?\),\s*\n',
+    '',
+    content,
+    flags=re.DOTALL,
+)
+
+# Remove the .target(...) wrapper for MapboxNavigationCustomRouteWrapper
+content = re.sub(
+    r'\.target\(\s*name:\s*"MapboxNavigationCustomRouteWrapper".*?\),\s*\n',
+    '',
+    content,
+    flags=re.DOTALL,
+)
+
+# Remove the libraryTargets() call that declares the gated binaryTarget
+content = content.replace('binaryTargets() + libraryTargets() + [', 'binaryTargets() + [')
+
+if len(content) == original_len:
+    print("⚠️  WARNING: patch made no changes — Package.swift structure may have changed upstream.")
+else:
+    print("   patched Package.swift")
+
+with open("Package.swift", "w") as f:
+    f.write(content)
+PYEOF
+
 # ── Step 2: Resolve + download the precompiled binaries ─────────────────────
 # `swift build` (not just `swift package resolve`) is used deliberately:
 # resolve alone only pins Package.resolved, it does not necessarily fetch
@@ -60,19 +107,7 @@ cd "$TMPDIR/build-artifacts"
 # and does not invoke Xcode's internal xcbuild the way Scipio did.
 echo ""
 echo "⬇️  Resolving and downloading precompiled binaries..."
-# Build only the specific products we need, NOT the whole package.
-# `swift build` with no args builds every declared product, including
-# MapboxNavigationCustomRoute (a 4th product in Mapbox's Package.swift,
-# gated behind separate account permissions — its binary download 403s
-# for accounts without that specific feature enabled). We don't use
-# MapboxNavigationCustomRoute at all, so we explicitly build only the
-# three products that give us everything in NEEDED_FRAMEWORKS below
-# (MapboxNavigationNative/MapboxCommon/MapboxCoreMaps/Turf/MapboxMaps come
-# along automatically as transitive dependencies of these three).
-swift build -c release \
-  --product MapboxNavigationCore \
-  --product MapboxNavigationUIKit \
-  --product MapboxDirections
+swift build -c release
 
 # ── Step 3: Copy the needed xcframeworks into the module ────────────────────
 echo ""
