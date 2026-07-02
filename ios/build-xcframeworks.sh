@@ -29,10 +29,12 @@ MODULE_ROOT="$(dirname "$SCRIPT_DIR")"
 FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MAPBOX_NAV_VERSION="3.25.0"
-MAPBOX_MAPS_VERSION="11.25.0"
-MAPBOX_COMMON_VERSION="24.25.0"
-MAPBOX_NAV_NATIVE_VERSION="324.25.0"
+# These must match what @rnmapbox/maps installs via CocoaPods in this project
+# (check `pod install` log for "Installing MapboxCommon (...)" etc).
+MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.2}"
+MAPBOX_MAPS_VERSION="11.11.0"
+MAPBOX_COMMON_VERSION="24.11.0"
+MAPBOX_NAV_NATIVE_VERSION="324.0.5"
 
 echo "🔧 Building xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
 echo "   Output: $FRAMEWORKS_DIR"

@@ -15,10 +15,20 @@
 
 import PackageDescription
 
-let navNativeVersion = "324.25.0"
+// IMPORTANT: these three versions must stay aligned with whatever
+// @rnmapbox/maps installs via CocoaPods for MapboxCommon/MapboxCoreMaps/
+// MapboxMaps/Turf in THIS project (check the `pod install` log for
+// "Installing MapboxCommon (...)" etc). A mismatch here means
+// MapboxNavigationCore.xcframework is compiled against a different
+// MapboxCommon ABI than what's actually linked into the app, which can
+// cause symbol/runtime issues even if the build succeeds. As of writing,
+// this project pins mapboxMapsVersion "11.11.0", which per Mapbox's own
+// compatibility table corresponds to Navigation SDK ~3.8.x and
+// MapboxCommon ~24.11.x.
+let navNativeVersion = "324.0.5"
 let navNativeChecksum = "placeholder_run_swift_build_to_get_real_checksum"
-let mapsVersion: Version = "11.25.0"
-let commonVersion: Version = "24.25.0"
+let mapsVersion: Version = "11.11.0"
+let commonVersion: Version = "24.11.0"
 let mapboxApiDownloads = "https://api.mapbox.com/downloads/v2"
 
 let package = Package(

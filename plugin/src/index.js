@@ -59,11 +59,13 @@ const withMapboxNavigation = (config, options = {}) => {
     return mod;
   });
 
-  // ── iOS: .netrc for SPM authentication ────────────────────────────────────
-  // The Mapbox Navigation SDK v3 is distributed as source code via SPM only.
-  // Our podspec uses spm_dependency() to declare the dependency, and SPM
-  // authenticates against api.mapbox.com using ~/.netrc credentials.
-  // This is the official Mapbox-documented authentication mechanism.
+  // ── iOS: .netrc for Mapbox downloads authentication ───────────────────────
+  // NOTE: as of the vendored-xcframeworks architecture, this is no longer
+  // needed at app-build time (the Mapbox Navigation binaries are pre-built
+  // once via GitHub Actions and committed to this package — no live SPM
+  // resolution happens during `pod install` or `xcodebuild` anymore).
+  // Left in place, harmless, in case other tooling still expects it, and to
+  // avoid a breaking change to the `downloadsToken` option's behavior.
   config = withDangerousMod(config, [
     'ios',
     (mod) => {
@@ -78,174 +80,6 @@ const withMapboxNavigation = (config, options = {}) => {
         fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
         console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote Mapbox credentials to ~/.netrc');
       }
-      return mod;
-    },
-  ]);
-
-  // ── iOS: Inject mapbox-navigation-ios SPM via Podfile post_install hook ──────
-  //
-  // This is the correct approach for adding SPM dependencies alongside
-  // CocoaPods in an Expo project — copied directly from @rnmapbox/maps
-  // (rnmapbox-maps.podspec, _add_spm_to_target method).
-  //
-  // WHY post_install hook (not pbxproj text injection):
-  //   The hook runs INSIDE `pod install`, with access to the Ruby Xcodeproj
-  //   object model (installer.pods_project, installer.aggregate_targets).
-  //   This means:
-  //     - Proper find-or-create (no duplicate symbols risk)
-  //     - CocoaPods-aware (survives pod install --clean)
-  //     - Works in the xcworkspace context (not just xcodeproj)
-  //     - Identical to how @rnmapbox/maps itself adds SPM packages
-  //
-  // WHY this doesn't cause duplicate symbols (unlike spm_dependency()):
-  //   spm_dependency() links the SPM framework into the Pod target AND the app
-  //   target → 2 copies. This hook adds the package to ONLY the
-  //   ExpoMapboxNavigation pod target + the app target, using the same
-  //   XCRemoteSwiftPackageReference object → 1 copy, properly deduplicated.
-  config = withDangerousMod(config, [
-    'ios',
-    (mod) => {
-      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
-      if (!fs.existsSync(podfilePath)) {
-        console.warn('[@jacques_gordon/expo-mapbox-navigation] Podfile not found, skipping SPM hook');
-        return mod;
-      }
-
-      let podfile = fs.readFileSync(podfilePath, 'utf8');
-
-      // Guard: don't inject twice
-      if (podfile.includes('# [ExpoMapboxNavigation] SPM hook')) {
-        return mod;
-      }
-
-      // ── NAVIGATION VERSION STRATEGY ───────────────────────────────────────
-      // CONFIRMED from the official CHANGELOG.md:
-      //
-      // PHASE 1 — Nav 3.1 to 3.12 (offset of +3):
-      //   Navigation 3.N.x  requires  MapboxMaps 11.(N+3).x
-      //   Nav 3.8.x  → Maps 11.11.x  ✅ (Maps 11.11.0 → Nav 3.8.x)
-      //   Nav 3.11.x → Maps 11.14.x  ✅ (confirmed CHANGELOG)
-      //   Nav 3.12.x → Maps 11.15.x  ✅ (confirmed rc.1 release note)
-      //
-      // PHASE 2 — Nav 3.16+ (3.13/3.14/3.15 were DELIBERATELY SKIPPED):
-      //   Navigation 3.N.x  requires  MapboxMaps 11.N.x  (minors aligned)
-      //   Nav 3.16.x → Maps 11.16.x  ✅
-      //   Nav 3.21.5 → Maps 11.21.5  ✅ (confirmed release)
-      //   Nav 3.23.1 → Maps 11.23.1  ✅ (confirmed release)
-      //   Nav 3.25.0 → Maps 11.25.0  ✅ (confirmed release)
-      //
-      // Source: Android CHANGELOG — "3.16.x is the next version after 3.12.x.
-      // For technical reasons, versions 3.13.x, 3.14.x and 3.15.x are skipped.
-      // Starting from 3.16.x, the Nav SDK minor version will be aligned with
-      // other Mapbox dependencies." (same policy applies to iOS)
-      //
-      // FORMULA:
-      //   if mapsMinor <= 15: navMinor = mapsMinor - 3
-      //   if mapsMinor >= 16: navMinor = mapsMinor
-      //
-      // EXAMPLE: mapboxMapsVersion = "11.11.0"
-      //   mapsMinor = 11  (≤15, Phase 1)
-      //   navMinor  = 11 - 3 = 8
-      //   navMin    = "3.8.0" → SPM resolves latest 3.8.x → Maps 11.11.x ✅
-      //
-      // EXAMPLE: mapboxMapsVersion = "11.21.0"
-      //   mapsMinor = 21  (≥16, Phase 2)
-      //   navMinor  = 21
-      //   navMin    = "3.21.0" → SPM resolves latest 3.21.x → Maps 11.21.x ✅
-      const mapsVersion = mapboxMapsVersion || '11.11.0';
-      const mapsMinor = parseInt(mapsVersion.split('.')[1], 10) || 11;
-      const navMinor  = mapsMinor <= 15 ? mapsMinor - 3 : mapsMinor;
-      const navMin    = mapboxNavigationVersion || `3.${navMinor}.0`;
-
-      console.log(`[@jacques_gordon/expo-mapbox-navigation] Maps ${mapsVersion} (minor=${mapsMinor}) → Navigation ${navMin}..<3.${navMinor+1}.0`);
-      console.log(`[@jacques_gordon/expo-mapbox-navigation] Phase: ${mapsMinor <= 15 ? `1 (offset -3: ${mapsMinor}-3=${navMinor})` : `2 (aligned: ${navMinor})`}`);
-
-      // The Ruby hook — identical pattern to @rnmapbox/maps _add_spm_to_target
-      const spmHook = `
-# [ExpoMapboxNavigation] SPM hook — injected by @jacques_gordon/expo-mapbox-navigation
-# Navigation: upToNextMinorVersion from ${navMin}
-# Maps: ${mapsVersion} (minor ${mapsMinor}, ${mapsMinor <= 15 ? 'Phase 1: offset -3' : 'Phase 2: aligned'})
-def _expo_mapbox_nav_add_spm(installer)
-  url         = 'https://github.com/mapbox/mapbox-navigation-ios.git'
-  requirement = { kind: 'upToNextMinorVersion', minimumVersion: '${navMin}' }
-  products    = ['MapboxNavigationCore', 'MapboxNavigationUIKit']
-
-  pkg_class = Xcodeproj::Project::Object::XCRemoteSwiftPackageReference
-  ref_class = Xcodeproj::Project::Object::XCSwiftPackageProductDependency
-
-  # ── Step 1: Add to pods_project (where ExpoMapboxNavigation target lives) ──
-  pods_project = installer.pods_project
-
-  pkg = pods_project.root_object.package_references.find { |p|
-    p.class == pkg_class && p.repositoryURL == url
-  }
-  unless pkg
-    pkg = pods_project.new(pkg_class)
-    pkg.repositoryURL = url
-    pkg.requirement   = requirement
-    pods_project.root_object.package_references << pkg
-    puts '[ExpoMapboxNavigation] Added mapbox-navigation-ios to pods_project'
-  end
-
-  # ── FIX: Stronger target lookup with fallback ──────────────────────────────
-  # CocoaPods normally names the target exactly 'ExpoMapboxNavigation'.
-  # Deduplication suffixes (e.g. 'ExpoMapboxNavigation-abc123') only happen
-  # when the same pod is included in multiple targets with different specs,
-  # which is not our case. We still add an include? fallback to be safe.
-  expo_target = pods_project.targets.find { |t| t.name == 'ExpoMapboxNavigation' }
-  expo_target ||= pods_project.targets.find { |t| t.name.include?('ExpoMapboxNavigation') }
-  if expo_target
-    puts "[ExpoMapboxNavigation] Found target: #{expo_target.name}"
-    products.each do |product_name|
-      ref = expo_target.package_product_dependencies.find { |r|
-        r.class == ref_class && r.package == pkg && r.product_name == product_name
-      }
-      unless ref
-        ref = pods_project.new(ref_class)
-        ref.package      = pkg
-        ref.product_name = product_name
-        expo_target.package_product_dependencies << ref
-        puts "[ExpoMapboxNavigation] Linked #{product_name} -> #{expo_target.name}"
-      end
-    end
-  else
-    # Debug: print all available targets so we can fix the name if needed
-    puts '[ExpoMapboxNavigation] WARNING: ExpoMapboxNavigation target not found!'
-    puts '[ExpoMapboxNavigation] Available targets:'
-    pods_project.targets.each { |t| puts "  - #{t.name}" }
-  end
-  pods_project.save
-
-  # ── NOTE: We do NOT add products to the user app target ────────────────────
-  # Adding MapboxNavigationCore/UIKit directly to the app target causes
-  # "Multiple commands produce" errors for MapboxCommon, MapboxCoreMaps, Turf
-  # because @rnmapbox/maps already embeds them via CocoaPods/SPM.
-  # The ExpoMapboxNavigation pod target is sufficient: when CocoaPods links
-  # the pod into the app, SPM resolves the transitive dependencies correctly
-  # without re-embedding them.
-end
-`;
-
-      // Find the last post_install block and add our call inside it,
-      // or add a new post_install block if none exists.
-      if (podfile.includes('post_install do |installer|')) {
-        // Add our helper def before the first post_install
-        // and our call inside the existing post_install
-        podfile = spmHook + podfile.replace(
-          'post_install do |installer|',
-          'post_install do |installer|\n  _expo_mapbox_nav_add_spm(installer)'
-        );
-      } else {
-        // No post_install block — add both the helper and a new block
-        podfile = podfile + spmHook + `
-post_install do |installer|
-  _expo_mapbox_nav_add_spm(installer)
-end
-`;
-      }
-
-      fs.writeFileSync(podfilePath, podfile, 'utf8');
-      console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Injected mapbox-navigation-ios SPM hook into Podfile');
       return mod;
     },
   ]);
