@@ -10,9 +10,9 @@
 #        login mapbox
 #        password sk.your_downloads_token
 #   3. Swift Package Manager available (comes with Xcode)
-#   4. Scipio installed (https://github.com/giginet/Scipio):
-#        swift package --disable-sandbox experimental-publish-xcbundles
-#      OR install via Homebrew: brew install giginet/scipio/scipio
+#   4. Scipio, installed automatically by this script via nest
+#      (https://github.com/mtj0928/nest), which downloads a prebuilt
+#      release binary instead of compiling from source.
 #
 # This script builds MapboxNavigationCore and MapboxNavigationUIKit
 # (and their dependencies) as xcframeworks and copies them into the
@@ -23,6 +23,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -71,41 +72,36 @@ echo "🏗️  Building xcframeworks with Scipio..."
 echo "   This will take 10-30 minutes on first run."
 echo ""
 
-# Clone Scipio inside the navigation-ios repo
-# Pinned to 0.21.0 — the exact version a Mapbox engineer confirmed works for
-# building Navigation SDK v3 xcframeworks in mapbox/mapbox-navigation-ios#4703.
-# (Cloning Scipio's main branch instead of a pinned tag can pull in newer
-# Swift syntax, like SE-0439 trailing commas in parameter lists, that the
-# CI runner's Swift compiler may not support yet — causing Scipio itself to
-# fail to build with "unexpected ',' separator" errors, unrelated to this
-# project's own code.)
+# Install Scipio via nest, instead of building it from source ourselves.
+#
+# WHY: building Scipio locally with `swift build` (with or without
+# --disable-sandbox) consistently produced a binary that fails immediately
+# on its first real subprocess call to Xcode's internal xcbuild tool
+# ("posix_spawn error: No such file or directory"), reproducibly across
+# 3 different Xcode versions (16.4, 26.3) and multiple build-flag
+# variations. This points to something specific about a freshly, locally
+# `swift build`-compiled binary's ability to spawn subprocesses in this CI
+# environment — not a version or resource problem, since the exact same
+# xcbuild path works fine for `xcodebuild -version` and for every other
+# process on the machine.
+#
+# `nest` (https://github.com/mtj0928/nest) is a package manager that
+# installs Swift CLI tools from prebuilt GitHub Release artifact bundles
+# rather than compiling them locally. Its own bootstrap script does this
+# same trick for itself (downloads a prebuilt nest, uses it to "install"
+# nest under nest's own management). Using a properly-built, officially
+# published release binary for Scipio — instead of an ad-hoc local build —
+# sidesteps this whole class of issue entirely, and also removes the need
+# for the @retroactive patch and Scipio version pinning workarounds below,
+# since we're no longer compiling Scipio's source at all.
+echo "📥 Installing nest (prebuilt binary, not compiled locally)..."
+curl -s https://raw.githubusercontent.com/mtj0928/nest/main/Scripts/install.sh | bash
+export PATH="$HOME/.nest/bin:$PATH"
+
 SCIPIO_VERSION="0.21.0"
-git clone --depth 1 --branch "$SCIPIO_VERSION" https://github.com/giginet/Scipio.git Scipio
-
-# Patch Scipio's source: some `@retroactive ExpressibleByArgument`
-# conformances (added defensively when Swift 6 mode was still new) are now
-# rejected by newer Swift toolchains with "'retroactive' attribute does not
-# apply; 'ExpressibleByArgument' is declared in this module" — the compiler
-# now resolves that protocol as being in the same module as these types, so
-# the marker is no longer valid. This is unrelated to this project's own
-# code; it's purely a Scipio 0.21.0 / current-Swift-toolchain friction
-# point. Stripping the now-invalid attribute (leaving the conformance
-# itself intact) fixes it regardless of the exact Swift version in use,
-# without needing to chase down a Scipio release built for this exact
-# compiler.
-echo "🩹 Patching Scipio: removing invalid @retroactive ExpressibleByArgument markers..."
-grep -rl "@retroactive ExpressibleByArgument" Scipio/Sources | while read -r f; do
-  sed -i '' 's/@retroactive ExpressibleByArgument/ExpressibleByArgument/g' "$f"
-  echo "   patched: $f"
-done
-
-cd Scipio
-# --disable-sandbox matches Scipio's own official release-build workflow
-# (github-action-artifactbundle's example: `swift build --disable-sandbox
-# -c release`). SPM's build-time sandbox can affect the resulting binary's
-# runtime behavior; building without it matches how the maintainer's own
-# published Scipio releases are built.
-swift build --disable-sandbox -c release
+echo "📥 Installing Scipio $SCIPIO_VERSION via nest (prebuilt artifact bundle)..."
+nest install giginet/Scipio "$SCIPIO_VERSION"
+SCIPIO_BIN="$HOME/.nest/bin/scipio"
 
 # Build the xcframeworks
 # NOTE: --support-simulators was removed. Building both device AND
@@ -122,7 +118,7 @@ swift build --disable-sandbox -c release
 # frameworks are sufficient for real EAS/App Store builds; simulator
 # support isn't needed for what this package vendors.
 cd "$TMPDIR/mapbox-navigation-ios"
-Scipio/.build/release/scipio create ./ -f \
+"$SCIPIO_BIN" create ./ -f \
   --platforms iOS \
   --only-use-versions-from-resolved-file \
   --enable-library-evolution \
