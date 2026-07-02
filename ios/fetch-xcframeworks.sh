@@ -60,7 +60,19 @@ cd "$TMPDIR/build-artifacts"
 # and does not invoke Xcode's internal xcbuild the way Scipio did.
 echo ""
 echo "⬇️  Resolving and downloading precompiled binaries..."
-swift build -c release
+# Build only the specific products we need, NOT the whole package.
+# `swift build` with no args builds every declared product, including
+# MapboxNavigationCustomRoute (a 4th product in Mapbox's Package.swift,
+# gated behind separate account permissions — its binary download 403s
+# for accounts without that specific feature enabled). We don't use
+# MapboxNavigationCustomRoute at all, so we explicitly build only the
+# three products that give us everything in NEEDED_FRAMEWORKS below
+# (MapboxNavigationNative/MapboxCommon/MapboxCoreMaps/Turf/MapboxMaps come
+# along automatically as transitive dependencies of these three).
+swift build -c release \
+  --product MapboxNavigationCore \
+  --product MapboxNavigationUIKit \
+  --product MapboxDirections
 
 # ── Step 3: Copy the needed xcframeworks into the module ────────────────────
 echo ""
