@@ -72,7 +72,15 @@ echo "   This will take 10-30 minutes on first run."
 echo ""
 
 # Clone Scipio inside the navigation-ios repo
-git clone --depth 1 https://github.com/giginet/Scipio.git Scipio
+# Pinned to 0.21.0 — the exact version a Mapbox engineer confirmed works for
+# building Navigation SDK v3 xcframeworks in mapbox/mapbox-navigation-ios#4703.
+# (Cloning Scipio's main branch instead of a pinned tag can pull in newer
+# Swift syntax, like SE-0439 trailing commas in parameter lists, that the
+# CI runner's Swift compiler may not support yet — causing Scipio itself to
+# fail to build with "unexpected ',' separator" errors, unrelated to this
+# project's own code.)
+SCIPIO_VERSION="0.21.0"
+git clone --depth 1 --branch "$SCIPIO_VERSION" https://github.com/giginet/Scipio.git Scipio
 cd Scipio
 swift build -c release
 
