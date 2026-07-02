@@ -1,0 +1,70 @@
+name: Build Mapbox Navigation xcframeworks
+
+# Manual trigger only — this is a one-time (or per-Mapbox-version) build,
+# not something that needs to run on every push. Runs on a free GitHub-hosted
+# macOS runner (macOS runners are free & unlimited for public repositories).
+on:
+  workflow_dispatch:
+    inputs:
+      mapbox_nav_version:
+        description: 'mapbox-navigation-ios version tag (e.g. 3.8.2)'
+        required: true
+        default: '3.8.2'
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Configure Mapbox downloads credentials
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        run: |
+          if [ -z "$MAPBOX_DOWNLOADS_TOKEN" ]; then
+            echo "::error::MAPBOX_DOWNLOADS_TOKEN secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          cat > ~/.netrc << EOF
+          machine api.mapbox.com
+          login mapbox
+          password $MAPBOX_DOWNLOADS_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+      - name: Run build-xcframeworks.sh
+        env:
+          MAPBOX_NAV_VERSION: ${{ inputs.mapbox_nav_version }}
+        run: |
+          chmod +x ios/build-xcframeworks.sh
+          ./ios/build-xcframeworks.sh
+
+      - name: Verify frameworks were produced
+        run: |
+          ls -la ios/Frameworks/
+          test -d "ios/Frameworks/MapboxNavigationCore.xcframework" || { echo "::error::MapboxNavigationCore.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxNavigationUIKit.xcframework" || { echo "::error::MapboxNavigationUIKit.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxNavigationNative.xcframework" || { echo "::error::MapboxNavigationNative.xcframework missing"; exit 1; }
+
+      - name: Upload frameworks as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapbox-navigation-xcframeworks-${{ inputs.mapbox_nav_version }}
+          path: ios/Frameworks/
+          retention-days: 30
+
+      - name: Commit frameworks to a branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="xcframeworks/${{ inputs.mapbox_nav_version }}"
+          git checkout -b "$BRANCH"
+          git add -f ios/Frameworks/
+          git commit -m "Build xcframeworks for mapbox-navigation-ios ${{ inputs.mapbox_nav_version }}"
+          git push origin "$BRANCH" --force
+          echo "::notice::Pushed to branch $BRANCH — open a PR or merge it, then npm pack/publish from that branch."
