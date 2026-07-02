@@ -1,87 +1,146 @@
-// swift-tools-version:5.9
-// This Package.swift is used ONLY to download and build xcframeworks for
-// the ExpoMapboxNavigation module's vendored_frameworks in the podspec.
-// It is NOT the main entry point for Expo/CocoaPods — that is
-// ExpoMapboxNavigation.podspec.
-//
-// Based on the approach by youssefhenna/expo-mapbox-navigation (the only
-// community package proven to work in production EAS iOS builds with the
-// Mapbox Navigation SDK v3, which is SPM-only and has no CocoaPods support).
-//
-// The xcframeworks produced by building this package are vendored directly
-// into the npm package (ios/Frameworks/*.xcframework), so no network access
-// to api.mapbox.com is needed at `pod install` time — only the .netrc file
-// is required during `npm install` / package download, NOT during the build.
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# build-xcframeworks.sh
+# Builds xcframeworks for the ExpoMapboxNavigation module.
+#
+# PREREQUISITES:
+#   1. macOS + Xcode 16+
+#   2. ~/.netrc configured with your Mapbox Downloads token:
+#        machine api.mapbox.com
+#        login mapbox
+#        password sk.your_downloads_token
+#   3. Swift Package Manager available (comes with Xcode)
+#   4. Scipio installed (https://github.com/giginet/Scipio):
+#        swift package --disable-sandbox experimental-publish-xcbundles
+#      OR install via Homebrew: brew install giginet/scipio/scipio
+#
+# This script builds MapboxNavigationCore and MapboxNavigationUIKit
+# (and their dependencies) as xcframeworks and copies them into the
+# ios/Frameworks/ directory, which is referenced by ExpoMapboxNavigation.podspec.
+#
+# Based on the approach by youssefhenna/expo-mapbox-navigation:
+# https://github.com/uju777/expo-mapbox-navigation#getting-the-xcframework-files
+# ─────────────────────────────────────────────────────────────────────────────
 
-import PackageDescription
+set -e
 
-// IMPORTANT: these three versions must stay aligned with whatever
-// @rnmapbox/maps installs via CocoaPods for MapboxCommon/MapboxCoreMaps/
-// MapboxMaps/Turf in THIS project (check the `pod install` log for
-// "Installing MapboxCommon (...)" etc). A mismatch here means
-// MapboxNavigationCore.xcframework is compiled against a different
-// MapboxCommon ABI than what's actually linked into the app, which can
-// cause symbol/runtime issues even if the build succeeds. As of writing,
-// this project pins mapboxMapsVersion "11.11.0", which per Mapbox's own
-// compatibility table corresponds to Navigation SDK ~3.8.x and
-// MapboxCommon ~24.11.x.
-let navNativeVersion = "324.0.5"
-// Obtained from a real CI run's checksum-mismatch error message (SPM prints
-// the correct checksum when the manifest's placeholder doesn't match):
-// "checksum of downloaded artifact of binary target 'MapboxNavigationNative'
-// (bd24400d8fdb8be02ceb416166c95b9331c2bcc4746b5f0bee6d3122d6aee4ee) does
-// not match checksum specified by the manifest (...)". If you bump
-// navNativeVersion above, this checksum MUST be updated to match — either
-// re-run build-xcframeworks.sh (which auto-detects it) or read it off the
-// same kind of error message in the next failed CI run.
-let navNativeChecksum = "bd24400d8fdb8be02ceb416166c95b9331c2bcc4746b5f0bee6d3122d6aee4ee"
-let mapsVersion: Version = "11.11.0"
-let commonVersion: Version = "24.11.0"
-let mapboxApiDownloads = "https://api.mapbox.com/downloads/v2"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULE_ROOT="$(dirname "$SCRIPT_DIR")"
+FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 
-let package = Package(
-    name: "MapboxNavigation",
-    defaultLocalization: "en",
-    platforms: [.iOS(.v14)],
-    products: [
-        .library(name: "MapboxNavigationUIKit",  targets: ["MapboxNavigationUIKit"]),
-        .library(name: "MapboxNavigationCore",   targets: ["MapboxNavigationCore"]),
-    ],
-    dependencies: [
-        .package(url: "https://github.com/mapbox/mapbox-maps-ios.git",   exact: mapsVersion),
-        .package(url: "https://github.com/mapbox/mapbox-common-ios.git", exact: commonVersion),
-        .package(url: "https://github.com/mapbox/turf-swift.git",        exact: "4.0.0"),
-    ],
-    targets: [
-        .target(
-            name: "MapboxNavigationUIKit",
-            dependencies: ["MapboxNavigationCore"],
-            exclude: ["Info.plist"],
-            resources: [
-                .copy("Resources/MBXInfo.plist"),
-                .copy("Resources/PrivacyInfo.xcprivacy"),
-            ]
-        ),
-        .target(name: "_MapboxNavigationHelpers"),
-        .target(
-            name: "MapboxNavigationCore",
-            dependencies: [
-                .product(name: "MapboxCommon", package: "mapbox-common-ios"),
-                "MapboxNavigationNative",
-                "MapboxDirections",
-                "_MapboxNavigationHelpers",
-                .product(name: "MapboxMaps", package: "mapbox-maps-ios"),
-            ],
-            resources: [.process("Resources")]
-        ),
-        .target(
-            name: "MapboxDirections",
-            dependencies: [.product(name: "Turf", package: "turf-swift")]
-        ),
-        .binaryTarget(
-            name: "MapboxNavigationNative",
-            url: "\(mapboxApiDownloads)/dash-native/releases/ios/packages/\(navNativeVersion)/MapboxNavigationNative.xcframework.zip",
-            checksum: navNativeChecksum
-        ),
-    ]
+# ── Config ────────────────────────────────────────────────────────────────────
+# These must match what @rnmapbox/maps installs via CocoaPods in this project
+# (check `pod install` log for "Installing MapboxCommon (...)" etc).
+MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.2}"
+MAPBOX_MAPS_VERSION="11.11.0"
+MAPBOX_COMMON_VERSION="24.11.0"
+MAPBOX_NAV_NATIVE_VERSION="324.0.5"
+
+echo "🔧 Building xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
+echo "   Output: $FRAMEWORKS_DIR"
+echo ""
+
+# ── Step 1: Clone mapbox-navigation-ios ──────────────────────────────────────
+TMPDIR=$(mktemp -d)
+echo "📦 Cloning mapbox-navigation-ios v$MAPBOX_NAV_VERSION..."
+git clone --branch "v$MAPBOX_NAV_VERSION" --depth 1 \
+  https://github.com/mapbox/mapbox-navigation-ios.git \
+  "$TMPDIR/mapbox-navigation-ios"
+
+cd "$TMPDIR/mapbox-navigation-ios"
+
+# ── Step 2: Replace Package.swift with the modified version ──────────────────
+echo "📝 Patching Package.swift..."
+cp "$SCRIPT_DIR/Package.swift" Package.swift
+
+# ── Step 3: Get the correct navNative checksum ───────────────────────────────
+echo "🔍 Resolving navNative checksum (this may take a moment)..."
+# Run swift build once to get the correct checksum — it will fail and print it
+CHECKSUM=$(swift build -c release 2>&1 | grep -oE '"[a-f0-9]{64}"' | head -1 | tr -d '"' || true)
+
+if [ -z "$CHECKSUM" ]; then
+  echo "⚠️  Could not auto-detect checksum. Please run manually and update Package.swift."
+else
+  echo "   Checksum: $CHECKSUM"
+  sed -i '' "s/placeholder_run_swift_build_to_get_real_checksum/$CHECKSUM/g" Package.swift
+fi
+
+# ── Step 4: Build xcframeworks with Scipio ────────────────────────────────────
+echo ""
+echo "🏗️  Building xcframeworks with Scipio..."
+echo "   This will take 10-30 minutes on first run."
+echo ""
+
+# Clone Scipio inside the navigation-ios repo
+# Pinned to 0.21.0 — the exact version a Mapbox engineer confirmed works for
+# building Navigation SDK v3 xcframeworks in mapbox/mapbox-navigation-ios#4703.
+# (Cloning Scipio's main branch instead of a pinned tag can pull in newer
+# Swift syntax, like SE-0439 trailing commas in parameter lists, that the
+# CI runner's Swift compiler may not support yet — causing Scipio itself to
+# fail to build with "unexpected ',' separator" errors, unrelated to this
+# project's own code.)
+SCIPIO_VERSION="0.21.0"
+git clone --depth 1 --branch "$SCIPIO_VERSION" https://github.com/giginet/Scipio.git Scipio
+
+# Patch Scipio's source: some `@retroactive ExpressibleByArgument`
+# conformances (added defensively when Swift 6 mode was still new) are now
+# rejected by newer Swift toolchains with "'retroactive' attribute does not
+# apply; 'ExpressibleByArgument' is declared in this module" — the compiler
+# now resolves that protocol as being in the same module as these types, so
+# the marker is no longer valid. This is unrelated to this project's own
+# code; it's purely a Scipio 0.21.0 / current-Swift-toolchain friction
+# point. Stripping the now-invalid attribute (leaving the conformance
+# itself intact) fixes it regardless of the exact Swift version in use,
+# without needing to chase down a Scipio release built for this exact
+# compiler.
+echo "🩹 Patching Scipio: removing invalid @retroactive ExpressibleByArgument markers..."
+grep -rl "@retroactive ExpressibleByArgument" Scipio/Sources | while read -r f; do
+  sed -i '' 's/@retroactive ExpressibleByArgument/ExpressibleByArgument/g' "$f"
+  echo "   patched: $f"
+done
+
+cd Scipio
+swift build -c release
+
+# Build the xcframeworks
+cd "$TMPDIR/mapbox-navigation-ios"
+Scipio/.build/release/scipio create ./ -f \
+  --platforms iOS \
+  --only-use-versions-from-resolved-file \
+  --enable-library-evolution \
+  --support-simulators \
+  --embed-debug-symbols \
+  --verbose
+
+# ── Step 5: Copy to module ────────────────────────────────────────────────────
+echo ""
+echo "📋 Copying xcframeworks to $FRAMEWORKS_DIR..."
+mkdir -p "$FRAMEWORKS_DIR"
+
+BUILT_FRAMEWORKS="$TMPDIR/mapbox-navigation-ios/XCFrameworks"
+
+# Copy the frameworks we need (others like MapboxMaps come from @rnmapbox/maps)
+NEEDED_FRAMEWORKS=(
+  "MapboxNavigationCore"
+  "MapboxNavigationUIKit"
+  "MapboxNavigationNative"
+  "MapboxDirections"
+  "_MapboxNavigationHelpers"
 )
+
+for fw in "${NEEDED_FRAMEWORKS[@]}"; do
+  if [ -d "$BUILT_FRAMEWORKS/$fw.xcframework" ]; then
+    echo "   ✅ $fw.xcframework"
+    cp -R "$BUILT_FRAMEWORKS/$fw.xcframework" "$FRAMEWORKS_DIR/"
+  else
+    echo "   ❌ $fw.xcframework not found in $BUILT_FRAMEWORKS"
+  fi
+done
+
+# ── Cleanup ────────────────────────────────────────────────────────────────────
+cd /
+rm -rf "$TMPDIR"
+
+echo ""
+echo "✅ Done! xcframeworks are in $FRAMEWORKS_DIR"
+echo "   Commit the Frameworks/ directory and publish the package."
