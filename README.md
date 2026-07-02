@@ -233,6 +233,9 @@ See [Android 16 KB page size guide](https://developer.android.com/guide/practice
 
 ## Changelog
 
+### 2.3.2
+- **Android: fixed `<service>` incorrectly placed as a direct child of `<manifest>` instead of `<application>`** — caused `AAPT: error: unexpected element <service> found in <manifest>` at build time. This was a pre-existing bug (present since the plugin's original Android implementation, unrelated to the 2.3.x iOS architecture changes), only now surfaced by a build that actually exercised this code path. `<uses-permission>` entries are unaffected — those are correctly direct children of `<manifest>` per the Android manifest schema; only `<service>`, along with other app components, must be nested inside `<application>`.
+
 ### 2.3.1
 - **iOS: fixed `vendored_frameworks` using an absolute path**, which CocoaPods rejects outright (`File Patterns: File patterns must be relative and cannot start with a slash`). `Dir.glob` still resolves against the absolute package directory (needed for the glob to actually find files on disk), but the resulting paths are now stripped back to relative before being assigned to `s.vendored_frameworks`. This is the only change in this release — 2.3.0's architecture (vendored prebuilt xcframeworks) is otherwise unchanged.
 

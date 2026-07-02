@@ -189,10 +189,10 @@ function addAndroidPermissions(mod, accessToken) {
     }
   }
 
-  if (!manifest.service) manifest.service = [];
+  if (!application.service) application.service = [];
   const svcName = 'com.mapbox.navigation.core.trip.service.NavigationNotificationService';
-  if (!manifest.service.find((s) => s['$']['android:name'] === svcName)) {
-    manifest.service.push({
+  if (!application.service.find((s) => s['$']['android:name'] === svcName)) {
+    application.service.push({
       $: {
         'android:name': svcName,
         'android:foregroundServiceType': 'location',

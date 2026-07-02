@@ -1,6 +1,6 @@
 {
   "name": "@jacques_gordon/expo-mapbox-navigation",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Expo module for Mapbox Navigation SDK with 16KB page size support, NDK27, and Mapbox Maps v11.11.0+",
   "main": "build/index.js",
   "types": "build/index.d.ts",
