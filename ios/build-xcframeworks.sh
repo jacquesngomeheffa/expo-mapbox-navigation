@@ -103,12 +103,24 @@ cd Scipio
 swift build -c release
 
 # Build the xcframeworks
+# NOTE: --support-simulators was removed. Building both device AND
+# simulator slices for every target (this package's dependency graph has
+# ~9 targets: MapboxNavigationCore, MapboxNavigationUIKit,
+# MapboxNavigationNative, MapboxDirections, _MapboxNavigationHelpers,
+# MapboxMaps, MapboxCoreMaps, MapboxCommon, Turf) roughly doubles memory
+# and CPU pressure during the parallel build. On the free GitHub-hosted
+# macOS runner (limited cores/RAM), this appears to exhaust resources and
+# crash the underlying xcbuild build service mid-build, which then
+# manifests as a confusing "posix_spawn error: No such file or directory"
+# for the xcbuild binary itself on whichever target happens to be
+# building next — even though the binary is actually present. Device-only
+# frameworks are sufficient for real EAS/App Store builds; simulator
+# support isn't needed for what this package vendors.
 cd "$TMPDIR/mapbox-navigation-ios"
 Scipio/.build/release/scipio create ./ -f \
   --platforms iOS \
   --only-use-versions-from-resolved-file \
   --enable-library-evolution \
-  --support-simulators \
   --embed-debug-symbols \
   --verbose
 
