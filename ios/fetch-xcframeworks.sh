@@ -4,26 +4,6 @@
 # Fetches prebuilt xcframeworks for the ExpoMapboxNavigation module and
 # copies them into ios/Frameworks/, which ExpoMapboxNavigation.podspec
 # vendors via s.vendored_frameworks.
-#
-# WHY THIS SCRIPT LOOKS SO SIMPLE (no Scipio, no local compilation):
-# Mapbox officially publishes a SEPARATE repository,
-# mapbox-navigation-ios-build-artifacts, whose sole purpose is to expose
-# MapboxNavigationCore / MapboxNavigationUIKit / MapboxDirections /
-# _MapboxNavigationHelpers (and their own transitive binary dependencies)
-# as precompiled .xcframework.zip downloads — the exact same download
-# mechanism (api.mapbox.com/downloads/v2/...) that already worked
-# flawlessly, every single time, for MapboxNavigationNative/MapboxCommon/
-# MapboxCoreMaps/Turf throughout this project's whole build history.
-# Earlier (2024) these two targets were source-only, which is why the
-# community ended up reaching for Scipio in the first place (see
-# mapbox/mapbox-navigation-ios#4703) — Mapbox has since closed that gap
-# themselves by publishing this dedicated artifacts repo, so we no longer
-# need to build anything locally at all.
-#
-# We clone Mapbox's own repo AT THE MATCHING TAG and let SwiftPM resolve +
-# download the binaries using MAPBOX'S OWN Package.swift and checksums —
-# nothing here is hand-transcribed, so there's no risk of a copy-paste
-# checksum mismatch.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -32,44 +12,35 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 
-# Must match what @rnmapbox/maps installs via CocoaPods in this project
-# (check `pod install` log for "Installing MapboxCommon (...)" etc). This
-# exact tag was confirmed to exist in mapbox-navigation-ios-build-artifacts.
+# Must match the version used by @rnmapbox/maps
 MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.2}"
 
 echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
 echo "   Output: $FRAMEWORKS_DIR"
 echo ""
 
-# ── Step 1: Clone Mapbox's own build-artifacts repo at the matching tag ─────
+# ── Step 1: Clone Mapbox build-artifacts repo ───────────────────────────────
 TMPDIR=$(mktemp -d)
+
 echo "📦 Cloning mapbox-navigation-ios-build-artifacts v$MAPBOX_NAV_VERSION..."
+
 git clone --branch "v$MAPBOX_NAV_VERSION" --depth 1 \
   https://github.com/mapbox/mapbox-navigation-ios-build-artifacts.git \
   "$TMPDIR/build-artifacts"
 
 cd "$TMPDIR/build-artifacts"
 
-# ── Step 1b: Patch out MapboxNavigationCustomRoute ───────────────────────────
-# `--product` filtering on `swift build` (tried first) does NOT prevent SPM
-# from resolving/validating every declared target in the manifest before
-# selecting what to actually compile — it still attempts to fetch
-# MapboxNavigationCustomRoute's binary even when we only ask for the other
-# three products, and that specific binary 403s (gated behind separate
-# account permissions we don't have and don't need). The only reliable fix
-# is to remove it from the manifest entirely before building: strip its
-# `.library(...)` product declaration, its `.target(...)` wrapper, and the
-# `libraryTargets()` call that creates its underlying binaryTarget.
-echo "🩹 Removing unused/gated MapboxNavigationCustomRoute product from Package.swift..."
-python3 - << 'PYEOF'
+# ── Step 1b: Remove MapboxNavigationCustomRoute (403 binary) ────────────────
+echo "🩹 Removing MapboxNavigationCustomRoute from Package.swift..."
+
+python3 <<'PYEOF'
+from pathlib import Path
 import re
 
-with open("Package.swift") as f:
-    content = f.read()
+package = Path("Package.swift")
+content = package.read_text()
 
-original_len = len(content)
-
-# Remove the .library(...) product declaration for MapboxNavigationCustomRoute
+# Remove product
 content = re.sub(
     r'\.library\(\s*name:\s*"MapboxNavigationCustomRoute".*?\),\s*\n',
     '',
@@ -77,7 +48,7 @@ content = re.sub(
     flags=re.DOTALL,
 )
 
-# Remove the .target(...) wrapper for MapboxNavigationCustomRouteWrapper
+# Remove wrapper target
 content = re.sub(
     r'\.target\(\s*name:\s*"MapboxNavigationCustomRouteWrapper".*?\),\s*\n',
     '',
@@ -85,41 +56,51 @@ content = re.sub(
     flags=re.DOTALL,
 )
 
-# Remove the libraryTargets() call that declares the gated binaryTarget
-content = content.replace('binaryTargets() + libraryTargets() + [', 'binaryTargets() + [')
+# Remove binaryTargets() + libraryTargets()
+content = content.replace(
+    'binaryTargets() + libraryTargets() + [',
+    'binaryTargets() + ['
+)
 
-if len(content) == original_len:
-    print("⚠️  WARNING: patch made no changes — Package.swift structure may have changed upstream.")
-else:
-    print("   patched Package.swift")
-
-with open("Package.swift", "w") as f:
-    f.write(content)
+package.write_text(content)
 PYEOF
 
-# ── Step 2: Resolve + download the precompiled binaries ─────────────────────
-# `swift build` (not just `swift package resolve`) is used deliberately:
-# resolve alone only pins Package.resolved, it does not necessarily fetch
-# and extract binary target .zip artifacts to disk. Building the package
-# forces that download/extraction. The only "targets" that actually compile
-# here are Mapbox's own tiny empty wrapper stubs (see their Package.swift:
-# `path: "Sources/.empty/..."`) — this is plain `swift build`, not Scipio,
-# and does not invoke Xcode's internal xcbuild the way Scipio did.
+# ── Step 1c: Fix macOS deployment target ────────────────────────────────────
+echo "🩹 Updating macOS deployment target to 10.15..."
+
+python3 <<'PYEOF'
+from pathlib import Path
+import re
+
+package = Path("Package.swift")
+content = package.read_text()
+
+content = re.sub(
+    r'\.macOS\(\.v10_[0-9]+\)',
+    '.macOS(.v10_15)',
+    content
+)
+
+package.write_text(content)
+PYEOF
+
+# ── Step 2: Resolve + download binaries ─────────────────────────────────────
 echo ""
 echo "⬇️  Resolving and downloading precompiled binaries..."
-swift build -c release
 
-# ── Step 3: Copy the needed xcframeworks into the module ────────────────────
+swift build -c release \
+  --product MapboxNavigationCore \
+  --product MapboxNavigationUIKit \
+  --product MapboxDirections
+
+# ── Step 3: Copy xcframeworks ───────────────────────────────────────────────
 echo ""
 echo "📋 Copying xcframeworks to $FRAMEWORKS_DIR..."
+
 mkdir -p "$FRAMEWORKS_DIR"
 
 ARTIFACTS_DIR="$TMPDIR/build-artifacts/.build/artifacts"
 
-# Copy only what @rnmapbox/maps doesn't already provide via CocoaPods
-# (MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf stay out — vendoring a
-# second copy of those would reintroduce duplicate-symbol errors, per
-# mapbox/mapbox-navigation-ios#4703).
 NEEDED_FRAMEWORKS=(
   "MapboxNavigationCore"
   "MapboxNavigationUIKit"
@@ -130,19 +111,22 @@ NEEDED_FRAMEWORKS=(
 )
 
 for fw in "${NEEDED_FRAMEWORKS[@]}"; do
-  found=$(find "$ARTIFACTS_DIR" -iname "${fw}.xcframework" -type d | head -1)
-  if [ -n "$found" ]; then
+  found=$(find "$ARTIFACTS_DIR" -type d -name "${fw}.xcframework" | head -1)
+
+  if [[ -n "$found" ]]; then
     echo "   ✅ $fw.xcframework"
+    rm -rf "$FRAMEWORKS_DIR/${fw}.xcframework"
     cp -R "$found" "$FRAMEWORKS_DIR/"
   else
-    echo "   ❌ $fw.xcframework not found under $ARTIFACTS_DIR"
+    echo "   ❌ $fw.xcframework not found"
   fi
 done
 
-# ── Cleanup ───────────────────────────────────────────────────────────────
+# ── Cleanup ─────────────────────────────────────────────────────────────────
 cd /
 rm -rf "$TMPDIR"
 
 echo ""
-echo "✅ Done! xcframeworks are in $FRAMEWORKS_DIR"
-echo "   Commit the Frameworks/ directory and publish the package."
+echo "✅ Done!"
+echo "Frameworks copied to:"
+echo "  $FRAMEWORKS_DIR"
