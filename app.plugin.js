@@ -1,5 +1,6 @@
 const {
   withAppBuildGradle,
+  withProjectBuildGradle,
   withAndroidManifest,
   withInfoPlist,
   withDangerousMod,
@@ -13,7 +14,21 @@ const withMapboxNavigation = (config, options = {}) => {
     accessToken,
     downloadsToken,
     mapboxMapsVersion = '11.11.0',
-    mapboxNavigationVersion = null, // optional override — auto-calculated from mapboxMapsVersion if not set
+    // Android only (see calculateAndroidNavVersion below / withProjectBuildGradle
+    // mod). If set, used EXACTLY as given — no auto-calculation, no safety
+    // net. If omitted, derived from mapboxMapsVersion via the Phase 1/Phase 2
+    // formula. Reactivated for 2.3.7 — previously deprecated/unused after
+    // the 2.3.0 iOS rewrite removed its old (different) purpose.
+    mapboxNavigationVersion = null,
+    // Android only. Opt-in, default false (zero behavior change unless set).
+    // Switches all 6 Mapbox Gradle dependencies to their "-ndk27" variant
+    // for 16 KB page-size support (Google Play requirement, Android 15+).
+    // Only exists for Navigation SDK >= 3.11.0 / Maps SDK >= 11.7.0 — you
+    // MUST also pass a verified mapboxNavigationVersion/mapboxMapsVersion
+    // pair at or above those, or Gradle will fail with "Could not resolve"
+    // for an artifact that doesn't exist at your pinned version. See
+    // "16 KB Page Size" in the README before enabling this.
+    androidUseNdk27 = false,
     androidColorOverrides = {},
   } = options;
 
@@ -34,6 +49,41 @@ const withMapboxNavigation = (config, options = {}) => {
   // ── Android ───────────────────────────────────────────────────────────────
   config = withAppBuildGradle(config, (mod) => {
     addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides);
+    return mod;
+  });
+
+  // ── Android: dynamic Mapbox Navigation SDK version ─────────────────────────
+  // Writes `ext.mapboxMapsVersion` / `ext.mapboxNavVersion` into the app's
+  // OWN root-level android/build.gradle, which this package's own
+  // android/build.gradle then reads via `safeExtGet('mapboxNavVersion', ...)`
+  // — the same standard Expo/RN idiom already used there for
+  // compileSdkVersion/minSdkVersion/etc. This is what actually makes the
+  // Gradle dependency versions configurable; setting `mapboxMapsVersion` in
+  // app.json alone does NOT do this on its own (see 2.3.7 changelog — this
+  // was previously hardcoded and silently ignored any app.json value).
+  //
+  // Logic, per explicit request: if BOTH mapboxMapsVersion AND
+  // mapboxNavigationVersion are given, use both exactly as provided — no
+  // recalculation, full trust in the caller (this is the safe path: pin an
+  // exact pair you've actually verified against Mapbox's own release notes).
+  // If ONLY mapboxMapsVersion is given, mapboxNavVersion is auto-derived via
+  // the Phase 1/Phase 2 formula documented in the README. That formula is a
+  // best-effort approximation, not a guarantee — Mapbox's own patch releases
+  // don't always follow it exactly (see the "Patch versions drift" note in
+  // this package's iOS history). Prefer passing both explicitly once you
+  // know a working pair.
+  config = withProjectBuildGradle(config, (mod) => {
+    const navVersion = mapboxNavigationVersion || calculateAndroidNavVersion(mapboxMapsVersion);
+    if (!mod.modResults.contents.includes('ext.mapboxMapsVersion')) {
+      mod.modResults.contents = mod.modResults.contents.replace(
+        /rootProject\.ext\s*{/,
+        `rootProject.ext {\n        mapboxMapsVersion = "${mapboxMapsVersion}"\n        mapboxNavVersion = "${navVersion}"\n        mapboxUseNdk27 = ${androidUseNdk27 === true}`
+      );
+      console.log(
+        `[@jacques_gordon/expo-mapbox-navigation] Android: mapboxMapsVersion=${mapboxMapsVersion}, mapboxNavVersion=${navVersion}, ndk27=${androidUseNdk27 === true}` +
+          (mapboxNavigationVersion ? ' (nav version explicit)' : ' (nav version auto-calculated — pass mapboxNavigationVersion to override)')
+      );
+    }
     return mod;
   });
 
@@ -131,6 +181,30 @@ const withMapboxNavigation = (config, options = {}) => {
 };
 
 // ── Android helpers ───────────────────────────────────────────────────────────
+
+// Reconstructed from this package's earlier (2.2.x-era) iOS version-pairing
+// research — Mapbox's Navigation/Maps SDK release pattern, confirmed from
+// their own GitHub release history at the time:
+//   Phase 1 (Nav 3.1–3.12): navMinor = mapsMinor - 3
+//   Phase 2 (Nav 3.16+):    navMinor = mapsMinor (aligned)
+//   Nav 3.13–3.15 were deliberately skipped by Mapbox entirely, which is why
+//   the crossover point is mapsMinor 16, not mapsMinor 15 (15 - 3 = 12,
+//   still valid Phase 1; 16 - 3 = 13, which doesn't exist, so Phase 2 takes
+//   over exactly there instead).
+// This is a best-effort APPROXIMATION, not a guarantee — Mapbox's patch
+// releases don't always follow it exactly. Pass `mapboxNavigationVersion`
+// explicitly once you've verified a working pair against Mapbox's release
+// notes, rather than relying on this for anything beyond a starting point.
+function calculateAndroidNavVersion(mapboxMapsVersion) {
+  const parts = String(mapboxMapsVersion).split('.');
+  const mapsMinor = parseInt(parts[1], 10);
+  if (Number.isNaN(mapsMinor)) {
+    // Can't parse — fall back to this package's originally shipped, tested pairing.
+    return '3.8.1';
+  }
+  const navMinor = mapsMinor <= 15 ? mapsMinor - 3 : mapsMinor;
+  return `3.${navMinor}.0`;
+}
 
 function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
   if (!mod.modResults.contents.includes('abiFilters')) {

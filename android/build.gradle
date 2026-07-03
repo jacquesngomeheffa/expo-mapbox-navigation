@@ -1,9 +1,41 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
-def MAPBOX_NAV_VERSION = "3.8.1"
-def MAPBOX_MAPS_MIN_VERSION = "11.11.0"
+// These were previously hardcoded ("3.8.1" / "11.11.0"). Now read via the
+// same safeExtGet(prop, fallback) pattern already used below for
+// compileSdkVersion/minSdkVersion/etc. — the standard Expo/RN convention
+// for a module reading values the consuming app's root build.gradle sets
+// in its `ext { }` block. The app-level `ext.mapboxNavVersion` /
+// `ext.mapboxMapsVersion` values are written by this package's config
+// plugin (plugin/src/index.js, withProjectBuildGradle) based on the
+// `mapboxMapsVersion`/`mapboxNavVersion` options passed to the plugin in
+// app.json — see that file for the explicit-override-vs-auto-calculate
+// logic. Falls back to these exact defaults if the plugin never set them
+// (e.g. an old cached prebuild), matching this package's originally
+// shipped, tested pairing.
+def MAPBOX_NAV_VERSION = safeExtGet('mapboxNavVersion', '3.8.1')
+def MAPBOX_MAPS_MIN_VERSION = safeExtGet('mapboxMapsVersion', '11.11.0')
 def REQUIRED_NDK_VERSION = "27.0.12077973"
+
+// 16 KB page-size support (Android 15+ / Google Play requirement).
+// Mapbox publishes a SEPARATE "-ndk27" artifact variant for both
+// com.mapbox.navigationcore:* and com.mapbox.maps:android, compiled for
+// 16 KB page alignment — confirmed from Mapbox's own official changelog:
+// "Navigation SDK Core Framework 3.11.0-beta.1 - 04 July, 2025 — Added
+// support for Android 16 KB page-size devices. To consume SDK compatible
+// with NDK 27 you need to add `-ndk27` suffix to the artifact name."
+// (https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)
+// This ONLY exists for Navigation >= 3.11.0 (>= 2.21.0 for Maps SDK's own
+// numbering) — NOT for this package's default-pinned 3.8.1. Defaulted to
+// OFF (false) so existing installs see zero behavior change. Opt in by
+// passing BOTH `androidUseNdk27: true` AND a `mapboxNavigationVersion`
+// (>= "3.11.0") you've verified actually has this artifact — Mapbox's own
+// docs warn pairing Nav/Maps/Common versions incorrectly is easy to get
+// wrong for anything below Nav 3.16.0; don't rely on this package's
+// Phase 1/Phase 2 auto-calculation alone for this without checking
+// Mapbox's release notes for your exact target version first.
+def MAPBOX_USE_NDK27 = safeExtGet('mapboxUseNdk27', false)
+def MAPBOX_NDK27_SUFFIX = MAPBOX_USE_NDK27 ? "-ndk27" : ""
 
 android {
     compileSdkVersion safeExtGet("compileSdkVersion", 35)
@@ -58,24 +90,24 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${safeExtGet('kotlinVersion', '1.9.0')}"
 
     // Mapbox Navigation SDK v3
-    implementation "com.mapbox.navigationcore:android:${MAPBOX_NAV_VERSION}"
+    implementation "com.mapbox.navigationcore:android${MAPBOX_NDK27_SUFFIX}:${MAPBOX_NAV_VERSION}"
 
     // Mapbox Maps SDK
-    implementation("com.mapbox.maps:android:${MAPBOX_MAPS_MIN_VERSION}") {
+    implementation("com.mapbox.maps:android${MAPBOX_NDK27_SUFFIX}:${MAPBOX_MAPS_MIN_VERSION}") {
         transitive = true
     }
 
     // Navigation UI Components (ManeuverView, SpeedInfoView)
-    implementation "com.mapbox.navigationcore:ui-components:${MAPBOX_NAV_VERSION}"
+    implementation "com.mapbox.navigationcore:ui-components${MAPBOX_NDK27_SUFFIX}:${MAPBOX_NAV_VERSION}"
 
     // TripData (ManeuverApi, SpeedInfoApi, TripProgressApi)
-    implementation "com.mapbox.navigationcore:tripdata:${MAPBOX_NAV_VERSION}"
+    implementation "com.mapbox.navigationcore:tripdata${MAPBOX_NDK27_SUFFIX}:${MAPBOX_NAV_VERSION}"
 
     // UI Maps (NavigationStyles, NavigationLocationProvider, NavigationCamera)
-    implementation "com.mapbox.navigationcore:ui-maps:${MAPBOX_NAV_VERSION}"
+    implementation "com.mapbox.navigationcore:ui-maps${MAPBOX_NDK27_SUFFIX}:${MAPBOX_NAV_VERSION}"
 
     // Voice instructions (MapboxSpeechApi, MapboxVoiceInstructionsPlayer, SpeechVolume)
-    implementation "com.mapbox.navigationcore:voice:${MAPBOX_NAV_VERSION}"
+    implementation "com.mapbox.navigationcore:voice${MAPBOX_NDK27_SUFFIX}:${MAPBOX_NAV_VERSION}"
 
     // ConstraintLayout — required because MapboxManeuverView extends ConstraintLayout
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'

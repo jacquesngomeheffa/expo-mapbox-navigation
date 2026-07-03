@@ -57,8 +57,8 @@ This is required by the vendored xcframework approach (same requirement as the o
 |--------|----------|---------|-------------|
 | `accessToken` | ✅ | — | Public Mapbox token (`pk.*`). Used for map tiles and routing. |
 | `downloadsToken` | ✅ | — | Secret Mapbox token (`sk.*`) with **Downloads:Read** scope. Same token as `RNMapboxMapsDownloadToken`. Kept for backward compatibility with app.json configs from earlier versions — as of 2.3.0 it's no longer used at app-build time (the iOS SDK is vendored as prebuilt binaries; nothing downloads from `api.mapbox.com` during your `pod install`/EAS build anymore). |
-| `mapboxMapsVersion` | ✅ | `"11.11.0"` | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0 (used to pick compatible native resource versions). iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
-| `mapboxNavigationVersion` | — | — | **Deprecated, no longer used.** Accepted for backward compatibility only; safe to remove from your config. iOS Navigation SDK version is now fixed by which npm package version you install, not runtime-configurable. |
+| `mapboxMapsVersion` | ✅ | `"11.11.0"` | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
+| `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7 — was deprecated/unused after 2.3.0's iOS rewrite). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula (see [iOS Architecture](#ios-architecture) history) — a best-effort approximation, not a guarantee. Has no effect on iOS; the iOS SDK version is fixed by which npm package version you install. |
 | `androidColorOverrides` | — | `{}` | Override Mapbox native resource colors on Android. |
 
 ---
@@ -226,18 +226,51 @@ interface RouteStep {
 
 ## 16 KB Page Size (Android 15+)
 
-This package enforces full compliance with Android's 16 KB memory page size requirement:
+Google Play requires new apps/updates targeting Android 15+ (API 35+) to support 16 KB memory pages. This package ships several prerequisites by default, but the actual Mapbox `-ndk27` binary opt-in requires explicit configuration — see below for why.
 
+**Already enabled by default, no configuration needed:**
 - **NDK 27** (`27.0.12077973`) — first NDK version with full 16 KB support
 - **`jniLibs.useLegacyPackaging = false`** — prevents `.so` compression, enables proper alignment
-- **64-bit ABI filters** (`arm64-v8a`, `x86_64`) — requirement applies to 64-bit only
-- **NDK27 variant substitution** — `dependencySubstitution` replaces all Mapbox Maven artifacts with their `-ndk27` equivalents across the entire dependency graph (including transitive deps from other packages)
+- **64-bit ABI filters** (`arm64-v8a`, `x86_64`) — the 16 KB requirement applies to 64-bit only
 
-See [Android 16 KB page size guide](https://developer.android.com/guide/practices/page-sizes).
+**Opt-in, NOT enabled by default — `androidUseNdk27`:**
+
+Mapbox publishes a separate `-ndk27` artifact variant of each `com.mapbox.navigationcore:*`/`com.mapbox.maps:android` dependency, compiled for 16 KB alignment — but **only starting from Navigation SDK 3.11.0** (this package defaults to `3.8.1`, which predates it; confirmed from [Mapbox's own changelog](https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)). Since switching to a nonexistent `-ndk27` artifact fails the build outright (`Could not resolve`), this is opt-in rather than default:
+
+```json
+["@jacques_gordon/expo-mapbox-navigation", {
+  "accessToken": "pk.xxx",
+  "downloadsToken": "sk.xxx",
+  "mapboxMapsVersion": "11.14.0",
+  "mapboxNavigationVersion": "3.11.0",
+  "androidUseNdk27": true
+}]
+```
+
+Requirements when enabling this:
+- Pass **both** `mapboxMapsVersion` and `mapboxNavigationVersion` explicitly — don't rely on this package's Phase 1/Phase 2 auto-calculation for a version pair you haven't verified. Mapbox's own docs note that pairing Navigation/Maps versions incorrectly is easy to get wrong for anything below Navigation 3.16.0.
+- Use a `mapboxNavigationVersion` of `3.11.0` or later (and a correspondingly compatible `mapboxMapsVersion` — check [Mapbox's Navigation SDK release notes](https://github.com/mapbox/mapbox-navigation-android/blob/main/CHANGELOG.md) for the exact tested pairing at your target version).
+
+If you enable `androidUseNdk27` with an unsupported version pair, Gradle will fail clearly with `Could not resolve com.mapbox.navigationcore:...-ndk27:...` — a hard failure, not a silent fallback, so you'll know immediately if the pairing is wrong.
+
+See [Android's 16 KB page size guide](https://developer.android.com/guide/practices/page-sizes).
 
 ---
 
 ## Changelog
+
+### 2.3.7
+- **Android: `mapboxMapsVersion`/`mapboxNavigationVersion` are now genuinely dynamic** — previously, `android/build.gradle` hardcoded `com.mapbox.navigationcore:*` at `3.8.1` and `com.mapbox.maps:android` at `11.11.0` regardless of what you passed in `app.json`; those app.json values were silently ignored for this purpose (confirmed by direct comparison against this package's very first shipped version — the hardcoding was never dynamic, in any prior version, contrary to what the iOS SPM-era `mapboxNavigationVersion` param may have implied by name).
+  - `android/build.gradle` now reads these via `safeExtGet('mapboxNavVersion', '3.8.1')` / `safeExtGet('mapboxMapsVersion', '11.11.0')` — the same standard Expo/RN convention already used there for `compileSdkVersion`/`minSdkVersion`/etc.
+  - The config plugin (`withProjectBuildGradle`) writes `ext.mapboxMapsVersion` / `ext.mapboxNavVersion` into your app's own root `android/build.gradle` at prebuild time.
+  - **Explicit request, exact behavior**: if you pass **both** `mapboxMapsVersion` and `mapboxNavigationVersion`, both are used exactly as given — no recalculation. If you pass **only** `mapboxMapsVersion`, `mapboxNavigationVersion` is auto-derived via the Phase 1/Phase 2 formula (`navMinor = mapsMinor - 3` below mapsMinor 16, aligned at/above it) — reconstructed from this package's earlier iOS version-pairing research, since Mapbox's actual release pattern was confirmed to follow this. This is a best-effort approximation (Mapbox's patch releases don't always follow it exactly) — pass both explicitly once you've verified a working pair.
+  - Both code paths tested via simulation: explicit-both, auto-calculate-from-maps-only, and the Phase 1→Phase 2 boundary (`mapsMinor` 11/15/16/20) before shipping.
+  - This does **not** by itself add 16 KB page-size support — it only makes the underlying dependency versions configurable, so you can point at a version (e.g. Navigation `3.11.0`+) that has `-ndk27` artifacts available, if you choose to use them.
+- **Android: added `androidUseNdk27` option — 16 KB page-size support now integrated into the package itself**, instead of requiring a `dependencySubstitution` block hand-written in your own app's config plugin. Confirmed from Mapbox's own changelog: *"Navigation SDK Core Framework 3.11.0-beta.1 - 04 July, 2025 — Added support for Android 16 KB page-size devices. To consume SDK compatible with NDK 27 you need to add `-ndk27` suffix to the artifact name."* This does not exist for this package's default-pinned `3.8.1`.
+  - `android/build.gradle`'s 6 Mapbox Gradle dependencies (`navigationcore:android/ui-components/tripdata/ui-maps/voice` + `maps:android`) now read a `MAPBOX_NDK27_SUFFIX` variable (via `safeExtGet('mapboxUseNdk27', false)`), appended to each artifact name.
+  - **Default is `false` — zero behavior change for existing installs.** Verified: with the flag off, the generated dependency strings are byte-identical to the previous hardcoded ones (`com.mapbox.navigationcore:android:3.8.1`, not `...-ndk27:3.8.1`).
+  - Enable via `"androidUseNdk27": true`, and pass a verified `mapboxNavigationVersion` (`>= "3.11.0"`) alongside it — this package's own Phase 1/Phase 2 auto-calculation is not reliable enough on its own for this; check Mapbox's release notes for your exact target version's tested Maps/Navigation pairing first. An unsupported pairing fails loudly (`Could not resolve`), not silently.
+  - Only `android/build.gradle` was touched — no other Android files modified (verified via `diff` against this package's original, unmodified extraction).
 
 ### 2.3.6
 - **iOS: found what looks like the ACTUAL root cause of `compiling for iOS 14.0, but module 'MapboxMaps' has a minimum deployment target of iOS 15.1`, after two earlier attempts (podspec `s.platforms`/`pod_target_xcconfig`, then `withXcodeProject` forcing the app's own project deployment target) both failed to resolve it.** Verified by directly inspecting the real downloaded binaries (not a guess):
