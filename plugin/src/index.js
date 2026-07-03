@@ -73,12 +73,36 @@ const withMapboxNavigation = (config, options = {}) => {
   // this package's iOS history). Prefer passing both explicitly once you
   // know a working pair.
   config = withProjectBuildGradle(config, (mod) => {
-    const navVersion = mapboxNavigationVersion || calculateAndroidNavVersion(mapboxMapsVersion);
+    const navVersion = mapboxNavigationVersion || calculateAndroidNavVersion(mapboxMapsVersion, androidUseNdk27);
     if (!mod.modResults.contents.includes('ext.mapboxMapsVersion')) {
-      mod.modResults.contents = mod.modResults.contents.replace(
-        /rootProject\.ext\s*{/,
-        `rootProject.ext {\n        mapboxMapsVersion = "${mapboxMapsVersion}"\n        mapboxNavVersion = "${navVersion}"\n        mapboxUseNdk27 = ${androidUseNdk27 === true}`
-      );
+      // FIX #2 (see 2.3.8/2.3.9 changelog for FIX #1, which was itself
+      // still broken): the real user-reported root android/build.gradle
+      // has NO literal `ext { ... }` block anywhere in it at all — modern
+      // Expo templates set compileSdkVersion/minSdkVersion/etc. via a
+      // custom Gradle plugin (`expo-root-project` /
+      // `com.facebook.react.rootproject`, applied near the bottom of the
+      // file) that injects them programmatically, not via a plain-text
+      // `ext { }` DSL block. So there was nothing for ANY regex
+      // (`rootProject\.ext\s*{` or `\bext\s*{`) to match — confirmed by
+      // directly inspecting a real, user-provided root build.gradle.
+      //
+      // Fix: stop trying to find-and-inject into a block that may not
+      // exist at all. Just APPEND a brand new `ext { }` block at the end
+      // of the file instead — the same robust, no-fragile-matching
+      // approach `addAndroidConfig`'s dependencySubstitution injection
+      // already uses successfully elsewhere in this same plugin (plain
+      // `+=`, confirmed working via the user's own build.gradle showing
+      // that block correctly present). Property values set via `ext { }`
+      // become available as `rootProject.ext.X` for the rest of the
+      // build regardless of where in the root script they're declared,
+      // so appending at the end works the same as inserting near the top.
+      mod.modResults.contents += `
+ext {
+    mapboxMapsVersion = "${mapboxMapsVersion}"
+    mapboxNavVersion = "${navVersion}"
+    mapboxUseNdk27 = ${androidUseNdk27 === true}
+}
+`;
       console.log(
         `[@jacques_gordon/expo-mapbox-navigation] Android: mapboxMapsVersion=${mapboxMapsVersion}, mapboxNavVersion=${navVersion}, ndk27=${androidUseNdk27 === true}` +
           (mapboxNavigationVersion ? ' (nav version explicit)' : ' (nav version auto-calculated — pass mapboxNavigationVersion to override)')
@@ -195,15 +219,50 @@ const withMapboxNavigation = (config, options = {}) => {
 // releases don't always follow it exactly. Pass `mapboxNavigationVersion`
 // explicitly once you've verified a working pair against Mapbox's release
 // notes, rather than relying on this for anything beyond a starting point.
-function calculateAndroidNavVersion(mapboxMapsVersion) {
+function calculateAndroidNavVersion(mapboxMapsVersion, requireNdk27 = false) {
   const parts = String(mapboxMapsVersion).split('.');
   const mapsMinor = parseInt(parts[1], 10);
   if (Number.isNaN(mapsMinor)) {
-    // Can't parse — fall back to this package's originally shipped, tested pairing.
-    return '3.8.1';
+    // Can't parse — fall back to a safe default. If ndk27 is required,
+    // '3.8.1' (this package's originally shipped pairing) would fail to
+    // resolve as "-ndk27" (doesn't exist below 3.11.0), so fall back to
+    // '3.11.0' — the lowest version where -ndk27 artifacts exist at all —
+    // instead in that case.
+    return requireNdk27 ? '3.11.0' : '3.8.1';
   }
-  const navMinor = mapsMinor <= 15 ? mapsMinor - 3 : mapsMinor;
+  let navMinor = mapsMinor <= 15 ? mapsMinor - 3 : mapsMinor;
+  // -ndk27 artifacts only exist for Navigation SDK >= 3.11.0 (confirmed
+  // from Mapbox's own changelog). If androidUseNdk27 is enabled and the
+  // Phase 1/Phase 2 formula would otherwise derive a version below that
+  // (e.g. mapboxMapsVersion "11.11.0" → navMinor 8, i.e. "3.8.0" — this
+  // package's own historical default pairing), floor it at 11 instead of
+  // producing a version guaranteed to fail with "Could not resolve
+  // com.mapbox.navigationcore:...-ndk27:...". This is only a safety floor
+  // for the AUTO-CALCULATED case — passing mapboxNavigationVersion
+  // explicitly always takes priority over this function entirely (see
+  // withProjectBuildGradle below).
+  if (requireNdk27 && navMinor < 11) {
+    navMinor = 11;
+  }
   return `3.${navMinor}.0`;
+}
+
+// Mapbox Maps SDK and Common SDK follow a SYNCHRONIZED versioning scheme —
+// only the major version differs (11.x.y for Maps, 24.x.y for Common),
+// minor and patch are always identical. Confirmed against Mapbox's own
+// compatibility table (11.14.0→24.14.0, 11.14.2→24.14.2, 11.14.8→24.14.8,
+// etc. — every entry checked, no exceptions found). Replaces a previously
+// hardcoded '24.11.3', which was already slightly wrong even for the
+// default mapboxMapsVersion ('11.11.0' → should be '24.11.0', not
+// '24.11.3') — this was a real bug, not just a missing convenience.
+function calculateMapboxCommonVersion(mapboxMapsVersion) {
+  const parts = String(mapboxMapsVersion).split('.');
+  if (parts[0] !== '11' || parts.length < 2) {
+    // Can't confidently compute — fall back to this package's originally
+    // shipped value rather than guessing wrong.
+    return '24.11.3';
+  }
+  return ['24', ...parts.slice(1)].join('.');
 }
 
 function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
@@ -228,9 +287,21 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
   `;
   }
 
+  // ── 16 KB page size — Maps/Common (unconditional) ─────────────────────────
+  // This substitution runs on EVERY prebuild, regardless of the
+  // `androidUseNdk27` option (that option only governs the SEPARATE
+  // com.mapbox.navigationcore:* substitution in this package's own
+  // android/build.gradle — different Mapbox artifact group, different
+  // mechanism, intentionally independent). Kept unconditional here since
+  // this behavior already existed and apps may already be relying on it.
+  //
+  // MAPS_VER: dynamic (mapboxMapsVersion option, default '11.11.0').
+  // COMMON_VER: now also dynamic — see calculateMapboxCommonVersion above.
+  // Previously hardcoded to '24.11.3', which didn't even correctly match
+  // the default Maps version (should've been '24.11.0').
   if (!mod.modResults.contents.includes('dependencySubstitution')) {
     const MAPS_VER = mapboxMapsVersion || '11.11.0';
-    const COMMON_VER = '24.11.3';
+    const COMMON_VER = calculateMapboxCommonVersion(MAPS_VER);
     mod.modResults.contents += `
       configurations.all {
         resolutionStrategy {

@@ -226,16 +226,20 @@ interface RouteStep {
 
 ## 16 KB Page Size (Android 15+)
 
-Google Play requires new apps/updates targeting Android 15+ (API 35+) to support 16 KB memory pages. This package ships several prerequisites by default, but the actual Mapbox `-ndk27` binary opt-in requires explicit configuration — see below for why.
+Google Play requires new apps/updates targeting Android 15+ (API 35+) to support 16 KB memory pages. This package addresses this via **two independent mechanisms**, covering two different Mapbox artifact groups — worth understanding both, since they're gated differently.
 
 **Already enabled by default, no configuration needed:**
 - **NDK 27** (`27.0.12077973`) — first NDK version with full 16 KB support
 - **`jniLibs.useLegacyPackaging = false`** — prevents `.so` compression, enables proper alignment
 - **64-bit ABI filters** (`arm64-v8a`, `x86_64`) — the 16 KB requirement applies to 64-bit only
 
-**Opt-in, NOT enabled by default — `androidUseNdk27`:**
+**Mechanism 1 — `com.mapbox.maps:*`/`com.mapbox.common:*` (`Maps`/`plugin`/`module`/`extension` groups): always on, no flag.**
 
-Mapbox publishes a separate `-ndk27` artifact variant of each `com.mapbox.navigationcore:*`/`com.mapbox.maps:android` dependency, compiled for 16 KB alignment — but **only starting from Navigation SDK 3.11.0** (this package defaults to `3.8.1`, which predates it; confirmed from [Mapbox's own changelog](https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)). Since switching to a nonexistent `-ndk27` artifact fails the build outright (`Could not resolve`), this is opt-in rather than default:
+The config plugin's `addAndroidConfig` unconditionally substitutes these to their `-ndk27` variants via `resolutionStrategy.dependencySubstitution` (17 modules). `MAPS_VER` comes from `mapboxMapsVersion` (default `"11.11.0"`); `COMMON_VER` is auto-derived from it (Mapbox's synchronized versioning: `11.x.y` ↔ `24.x.y`, same minor/patch — verified against Mapbox's own compatibility table). This has been on since before `androidUseNdk27` existed and isn't gated by it — it runs every time regardless.
+
+**Mechanism 2 — `com.mapbox.navigationcore:*`: opt-in — `androidUseNdk27`.**
+
+Mapbox publishes a separate `-ndk27` artifact variant of each `com.mapbox.navigationcore:*` dependency (the one this package itself declares in `android/build.gradle`) — but **only starting from Navigation SDK 3.11.0** (this package defaults to `3.8.1`, which predates it; confirmed from [Mapbox's own changelog](https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)). Since switching to a nonexistent `-ndk27` artifact fails the build outright (`Could not resolve`), this one is opt-in rather than default:
 
 ```json
 ["@jacques_gordon/expo-mapbox-navigation", {
@@ -253,11 +257,25 @@ Requirements when enabling this:
 
 If you enable `androidUseNdk27` with an unsupported version pair, Gradle will fail clearly with `Could not resolve com.mapbox.navigationcore:...-ndk27:...` — a hard failure, not a silent fallback, so you'll know immediately if the pairing is wrong.
 
+**In short**: leaving everything at defaults gets you Mechanism 1 automatically (Maps/Common covered). Google Play flagging only `libnavigator-android.so` specifically means Mechanism 2 is what you still need — set `androidUseNdk27: true` with a verified `>= 3.11.0` pairing.
+
 See [Android's 16 KB page size guide](https://developer.android.com/guide/practices/page-sizes).
 
 ---
 
 ## Changelog
+
+### 2.3.8
+- **Android: second fix to the same injection bug — the first fix (matching `ext {`) still didn't work, because a real user-provided root `android/build.gradle` has NO literal `ext { }` block anywhere in it at all.** Modern Expo templates set `compileSdkVersion`/`minSdkVersion`/etc. via a custom Gradle plugin (`expo-root-project` / `com.facebook.react.rootproject`, applied via `apply plugin:`) that injects these values programmatically — not via a plain-text `ext { }` DSL block. Confirmed by directly inspecting a real, user-provided file. Neither of the two regexes tried (`rootProject\.ext\s*{`, then `\bext\s*{`) had anything to match. Replaced the whole approach: instead of finding-and-injecting into a block that may not exist, `withProjectBuildGradle` now **appends** a brand new `ext { }` block at the end of the file — the same robust, no-fragile-matching approach `addAndroidConfig`'s `dependencySubstitution` injection already uses successfully elsewhere in this same plugin. Tested against the user's actual real root `build.gradle` content this time (not a guessed/reconstructed structure) — confirmed `mapboxMapsVersion`/`mapboxNavVersion`/`mapboxUseNdk27` all correctly appear in the generated file.
+- **Android: critical fix — `mapboxMapsVersion`/`mapboxNavigationVersion`/`androidUseNdk27` were never actually being written to the app's root `android/build.gradle`, despite the console log claiming success.** `withProjectBuildGradle` searched for the literal text `rootProject.ext {` — which does not exist in Expo/RN-generated root `build.gradle` files. They use a plain `ext { }` block nested inside `buildscript { }` (the same block that already holds `compileSdkVersion`/`minSdkVersion`/etc.). `.replace()` with a non-matching regex silently returns the string unchanged in JavaScript — no error — so the `console.log` (which ran unconditionally afterward) kept printing the correctly *calculated* values even though nothing was ever written to the file. This meant `android/build.gradle`'s `safeExtGet(...)` calls always fell back to their defaults (`mapboxUseNdk27=false` in particular) no matter what was configured in `app.json` — the actual root cause of `androidUseNdk27: true` appearing to have no effect on Google Play's 16 KB page-size check for `libnavigator-android.so`, even when the build log looked correct.
+  - Fixed the regex to match `ext {` (word-bounded, avoiding accidental matches inside longer identifiers).
+  - Tested against an actually-representative Expo-generated root `build.gradle` structure this time (`buildscript { ext { ... } }`) — the earlier, oversimplified test mock used earlier in 2.3.8's testing never exercised this code path realistically, which is exactly why this bug wasn't caught sooner.
+  - Added a runtime warning (`— WARNING: no \`ext {\` block found in root android/build.gradle, values NOT injected!`) that now prints if the injection ever fails again for any reason (e.g. a future Expo template change) — this class of bug will no longer fail silently.
+- **Android: fixed a hardcoded `COMMON_VER = '24.11.3'` inside `addAndroidConfig`** (the config plugin's own, previously-unaudited `dependencySubstitution` block for `com.mapbox.maps:*`/`com.mapbox.common:*` — separate from, and unconditional unlike, the `androidUseNdk27`-gated `com.mapbox.navigationcore:*` substitution added in 2.3.7's `android/build.gradle`). This block runs on every prebuild regardless of `androidUseNdk27`, and was already partially dynamic (`MAPS_VER` read `mapboxMapsVersion` correctly) — but `COMMON_VER` was static, and was already slightly wrong even for the default Maps version (`11.11.0` should pair with Common `24.11.0`, not the hardcoded `24.11.3`).
+  - Added `calculateMapboxCommonVersion()`, using Mapbox's confirmed synchronized-versioning scheme (Maps `11.x.y` ↔ Common `24.x.y`, identical minor/patch — verified against Mapbox's own compatibility table, every entry checked).
+  - Both `MAPS_VER` and `COMMON_VER` are now fully dynamic from `mapboxMapsVersion`, tested end-to-end (functional plugin simulation confirms `mapboxMapsVersion: "11.14.0"` produces `common-ndk27:24.14.0` in the generated `build.gradle`).
+  - **This package now has two independent 16 KB mechanisms** — worth understanding clearly: this one (Maps/Common, always on) and 2.3.7's `androidUseNdk27` (Navigation Core, opt-in). They target different Mapbox artifact groups and don't conflict, but both need a correct, verified version pair to work — see [16 KB Page Size](#16-kb-page-size-android-15).
+- **Android: `androidUseNdk27` now auto-floors the calculated Navigation version at `3.11.0`** when no explicit `mapboxNavigationVersion` is passed. Previously, enabling `androidUseNdk27: true` with only the default `mapboxMapsVersion` (`"11.11.0"`) would auto-calculate `mapboxNavigationVersion` as `"3.8.0"` via the Phase 1/Phase 2 formula (correct for the non-ndk27 case, but `-ndk27` artifacts don't exist below `3.11.0`) — a guaranteed `Could not resolve com.mapbox.navigationcore:...-ndk27:3.8.0` build failure. `calculateAndroidNavVersion()` now takes the `androidUseNdk27` flag and raises the derived version to `3.11.0` in that specific case. Passing `mapboxNavigationVersion` explicitly still always takes priority over this — the floor only applies to the auto-calculated fallback. Tested: `androidUseNdk27: false` behavior is byte-identical to before (no regression); `androidUseNdk27: true` with default `mapboxMapsVersion` now yields `"3.11.0"` instead of the doomed `"3.8.0"`; an explicit `mapboxNavigationVersion` (e.g. `"3.15.0"`) is still honored exactly, with no flooring applied.
 
 ### 2.3.7
 - **Android: `mapboxMapsVersion`/`mapboxNavigationVersion` are now genuinely dynamic** — previously, `android/build.gradle` hardcoded `com.mapbox.navigationcore:*` at `3.8.1` and `com.mapbox.maps:android` at `11.11.0` regardless of what you passed in `app.json`; those app.json values were silently ignored for this purpose (confirmed by direct comparison against this package's very first shipped version — the hardcoding was never dynamic, in any prior version, contrary to what the iOS SPM-era `mapboxNavigationVersion` param may have implied by name).
