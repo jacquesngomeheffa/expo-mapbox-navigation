@@ -835,11 +835,24 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val shouldBeNight = hour !in 6..20
         if (shouldBeNight == isNightMode) return
         isNightMode = shouldBeNight
-        // Keep the maneuver banner's background color in sync with day/night —
-        // previously this function only swapped the map style; the banner
-        // color was never wired to day/night at all, regardless of which of
-        // maneuverBackgroundColorDay/maneuverBackgroundColorNight was set.
-        rebuildManeuverView()
+        // REVERTED (confirmed regression, reported directly): this used to
+        // also call rebuildManeuverView() here, to switch the banner over to
+        // maneuverBackgroundColorNight when night mode kicks in. That
+        // rebuild-on-day/night-switch behavior did not exist before 3.0.0 —
+        // before that release, this function only ever reloaded the map
+        // style and never touched the maneuver view at all. Confirmed
+        // (directly reported, comparing against 2.3.9's known-good behavior)
+        // that adding it caused the banner to stop displaying ENTIRELY
+        // during night mode — a regression, and a worse outcome than the
+        // original problem (the banner just not changing color). Removed
+        // outright rather than attempting another unconfirmed guess at
+        // fixing the interaction — restoring known-stable pre-3.0.0 behavior
+        // takes priority over the not-yet-working maneuverBackgroundColorNight
+        // feature. The banner now keeps whatever background it already had
+        // through a day/night transition, exactly like 2.3.9. Setting
+        // maneuverBackgroundColorNight explicitly via its own prop setter is
+        // unaffected by this revert — only the AUTOMATIC switch tied to the
+        // time-based day/night check was removed.
         mapView.mapboxMap.loadStyle(
             if (shouldBeNight) NavigationStyles.NAVIGATION_NIGHT_STYLE else NavigationStyles.NAVIGATION_DAY_STYLE
         ) { style ->
@@ -1038,8 +1051,23 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     private fun createManeuverView(): MapboxManeuverView {
         val maneuverOptionsBuilder = ManeuverViewOptions.Builder()
-        resolveManeuverBackgroundColor()?.let { hex ->
-            parseColorSafe(hex)?.let { maneuverOptionsBuilder.maneuverBackgroundColor(it) }
+        val resolvedColor = resolveManeuverBackgroundColor()
+        // DIAGNOSTIC (added while investigating a persistent report that this
+        // color has no visible effect): confirms, via logcat, whether the
+        // correct value is actually reaching this point at all. If this log
+        // shows the CORRECT hex value every time yet the banner still shows
+        // no color change, that would point to Mapbox's own SDK rendering
+        // not respecting ManeuverViewOptions.maneuverBackgroundColor the way
+        // its own documentation describes — a deeper issue this package
+        // cannot fix by changing how it calls that same, confirmed-correct
+        // API. If instead this logs null or a stale value, that confirms a
+        // real data-flow bug on our side, which would be immediately
+        // actionable. Search logcat for "ManeuverColorDebug".
+        Log.d(TAG, "ManeuverColorDebug: resolvedColor=$resolvedColor isNightMode=$isNightMode maneuverBackgroundColorDay=$maneuverBackgroundColorDay maneuverBackgroundColorNight=$maneuverBackgroundColorNight")
+        resolvedColor?.let { hex ->
+            val parsed = parseColorSafe(hex)
+            Log.d(TAG, "ManeuverColorDebug: parsed color for \"$hex\" = $parsed (null means parseColorSafe rejected it)")
+            parsed?.let { maneuverOptionsBuilder.maneuverBackgroundColor(it) }
         }
         maneuverTurnIconColor?.let { hex ->
             parseColorSafe(hex)?.let { maneuverOptionsBuilder.turnIconManeuver(it) }
@@ -1060,8 +1088,16 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // buildUI() will pick up the current prop values when it runs) and safe
     // to call repeatedly (idempotent).
     private fun rebuildManeuverView() {
-        val old = maneuverView ?: return // buildUI() hasn't run yet — it will use current values when it does
-        val parent = old.parent as? FrameLayout ?: return
+        val old = maneuverView
+        if (old == null) {
+            Log.d(TAG, "ManeuverColorDebug: rebuildManeuverView() called before buildUI() has run — no-op, will use current values when it does")
+            return
+        }
+        val parent = old.parent as? FrameLayout
+        if (parent == null) {
+            Log.d(TAG, "ManeuverColorDebug: rebuildManeuverView() aborted — maneuverView's parent is not a FrameLayout (${old.parent?.javaClass?.name})")
+            return
+        }
         val index = parent.indexOfChild(old)
         val layoutParams = old.layoutParams
         val wasVisible = old.visibility
@@ -1070,10 +1106,15 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         parent.addView(fresh as View, index, layoutParams)
         fresh.visibility = wasVisible
         maneuverView = fresh
+        Log.d(TAG, "ManeuverColorDebug: rebuildManeuverView() completed successfully, view swapped")
     }
 
     fun setManeuverBackgroundColorDay(c: String?) {
-        if (c == maneuverBackgroundColorDay) return
+        Log.d(TAG, "ManeuverColorDebug: setManeuverBackgroundColorDay called with \"$c\" (current field value: \"$maneuverBackgroundColorDay\")")
+        if (c == maneuverBackgroundColorDay) {
+            Log.d(TAG, "ManeuverColorDebug: setManeuverBackgroundColorDay — value unchanged, skipping rebuild")
+            return
+        }
         maneuverBackgroundColorDay = c
         rebuildManeuverView()
     }
@@ -1408,11 +1449,23 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        speechApi.cancel()
-        voiceInstructionsPlayer.shutdown()
-        maneuverApi.cancel()
-        routeLineApi.cancel()
-        routeLineView.cancel()
+        // FIX: every one of these is a `lateinit var`, only actually
+        // assigned inside initAPIs()/setupNavigation() (called from init{}).
+        // If this view gets detached before that setup has fully completed
+        // — a hot-reload/fast-refresh remount in development, or Android
+        // tearing down the Activity abnormally after some OTHER crash
+        // elsewhere (e.g. mid-setup) — calling .cancel()/.shutdown() on an
+        // uninitialized lateinit property throws
+        // UninitializedPropertyAccessException, crashing the app a SECOND
+        // time during cleanup itself, potentially masking whatever the
+        // original problem was. Each call is now guarded with Kotlin's
+        // standard ::property.isInitialized check — a no-op if setup never
+        // got that far, instead of a crash.
+        if (::speechApi.isInitialized) speechApi.cancel()
+        if (::voiceInstructionsPlayer.isInitialized) voiceInstructionsPlayer.shutdown()
+        if (::maneuverApi.isInitialized) maneuverApi.cancel()
+        if (::routeLineApi.isInitialized) routeLineApi.cancel()
+        if (::routeLineView.isInitialized) routeLineView.cancel()
         mapboxNavigation?.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
         mapboxNavigation?.stopTripSession()
         MapboxNavigationProvider.destroy()
