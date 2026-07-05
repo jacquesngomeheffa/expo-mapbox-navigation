@@ -378,6 +378,64 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuve
       // Ignore — resDir may not exist at plugin resolution time
     }
   }
+
+  // NEW: generate a styles.xml defining MapboxCustomManeuverStyle, ONLY
+  // when a maneuver background color is actually configured (either via
+  // maneuverBackgroundColorDay or an explicit androidColorOverrides entry
+  // — resolvedColorOverrides already reflects the correct priority between
+  // those two from the sync logic above).
+  //
+  // WHY THIS EXISTS: real-device testing with full diagnostic logging
+  // (see 3.1.3 changelog) CONFIRMED the native code correctly receives
+  // maneuverBackgroundColorDay, correctly parses it, correctly builds
+  // ManeuverViewOptions with it, and correctly swaps in a freshly-built
+  // MapboxManeuverView using it — every step logged and verified. Despite
+  // all of that executing exactly as it should, the color still didn't
+  // visibly change. That rules out a bug in how we call
+  // ManeuverViewOptions — the API itself does exist and does what its own
+  // documentation says — and points instead to Mapbox's own SDK not
+  // visually honoring ManeuverViewOptions.maneuverBackgroundColor the way
+  // that documentation implies, at least not in this pinned SDK version.
+  // Mapbox's docs separately describe a DIFFERENT, XML-style-attribute-
+  // based mechanism for this same thing:
+  //   <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
+  //     <item name="maneuverViewBackgroundColor">...</item>
+  //   </style>
+  // — this generates that style, referencing the SAME
+  // mapbox_main_maneuver_background_color resource already written above
+  // (reusing the existing sync logic rather than introducing a second,
+  // separate color source). The native side applies it via
+  // ContextThemeWrapper when constructing MapboxManeuverView — a
+  // universal, always-safe Android technique for applying a style to a
+  // programmatically-created view, which works regardless of that view's
+  // specific constructor overloads (unlike guessing at an alternate
+  // MapboxManeuverView constructor signature, which risks a compile
+  // failure if wrong). This runs ALONGSIDE the existing
+  // ManeuverViewOptions-based approach, not instead of it — belt and
+  // suspenders, since we don't have certainty about which one (if either)
+  // Mapbox's rendering actually respects for the visible background
+  // specifically.
+  if (resolvedColorOverrides.mapbox_main_maneuver_background_color) {
+    const stylesDir = path.join(
+      mod.modRequest?.platformProjectRoot || '',
+      'app', 'src', 'main', 'res', 'values'
+    );
+    try {
+      fs.mkdirSync(stylesDir, { recursive: true });
+      const stylesXmlContent = `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
+        <item name="maneuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
+        <item name="subManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
+        <item name="upcomingManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
+    </style>
+</resources>
+`;
+      fs.writeFileSync(path.join(stylesDir, 'mapbox_maneuver_style.xml'), stylesXmlContent);
+    } catch (e) {
+      // Ignore — resDir may not exist at plugin resolution time
+    }
+  }
 }
 
 function addAndroidPermissions(mod, accessToken) {

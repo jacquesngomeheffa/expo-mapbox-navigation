@@ -286,6 +286,13 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 3.1.4
+**Definitive progress on the maneuver color investigation, from a clean logcat trace (crash fixed, buffer cleared before testing).**
+
+- **Confirmed via full diagnostic trace: the native code path for `maneuverBackgroundColorDay` is 100% correct.** The setter receives the right value, `parseColorSafe` correctly parses it to a valid color int, `ManeuverViewOptions.maneuverBackgroundColor` is correctly set with it, and `rebuildManeuverView()` successfully swaps in the freshly-configured view — every step logged and verified against a real device trace. This rules out a data-flow bug in this package's own code entirely — the confirmed-correct API call simply doesn't visibly change the banner's background in this SDK version, despite Mapbox's own documentation describing `ManeuverViewOptions.maneuverBackgroundColor` as controlling exactly that.
+- **Added a second, independent mechanism, applied alongside the existing one (not instead of it):** Mapbox's docs separately describe an XML-style-attribute-based approach (`<style parent="MapboxStyleManeuverView"><item name="maneuverViewBackgroundColor">...</item></style>`) for the same visual property. The config plugin now generates this style (`MapboxCustomManeuverStyle`) whenever a maneuver background color is configured, referencing the same `mapbox_main_maneuver_background_color` resource already written for the `androidColorOverrides` sync added in 3.1.2 (one color source, not a second competing one). The native side applies it via `ContextThemeWrapper` — a universal, always-safe Android technique for applying a style to a programmatically-constructed view, chosen specifically to avoid guessing at an alternate `MapboxManeuverView` constructor signature that could fail to compile if wrong. A new diagnostic log (`"MapboxCustomManeuverStyle lookup returned resId=..."`) confirms whether this style is actually found and applied at runtime.
+- Confirmed (directly reported) that the 3.1.3 night-mode regression fix resolved the issue — the banner displays correctly during night mode again.
+
 ### 3.1.3
 **Critical crash fix, a confirmed regression reverted, and diagnostic logging added — from a third round of real device testing plus a captured (if initially confusing) logcat trace.**
 
