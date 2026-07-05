@@ -3,6 +3,8 @@ package expo.modules.mapboxnavigation
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -13,6 +15,8 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import androidx.core.content.ContextCompat
+import java.io.File
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -27,6 +31,7 @@ import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ImageHolder
 import com.mapbox.maps.MapView
 import com.mapbox.maps.plugin.LocationPuck2D
+import com.mapbox.maps.plugin.LocationPuck3D
 import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.locationcomponent.location
@@ -136,6 +141,20 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var isMuted = false
     private var isOverviewMode = false
     private var firstLocationReceived = false
+    // Guards applyPuckSettings() against running before
+    // mapView.location.setLocationProvider() has been called — that call
+    // happens inside setupNavigation()'s ASYNC mapboxMap.loadStyle(...)
+    // callback (style loading is not instant), not synchronously during
+    // init{}. If a puck-related prop setter fires before that callback has
+    // run (a real possibility — Expo delivers props right after native
+    // view creation, independently of when the map style finishes
+    // loading), calling mapView.location.updateSettings{} that early would
+    // race ahead of setLocationProvider on the same plugin instance. The
+    // setter-triggered calls below skip re-applying until this is true;
+    // the one-time initial call inside the loadStyle callback always runs
+    // regardless and will already reflect whatever the current prop values
+    // are by the time it fires.
+    private var navigationSetupComplete = false
 
     // ── Pixel density ─────────────────────────────────────────────────────────
     private val dp = context.resources.displayMetrics.density
@@ -179,6 +198,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // Maneuver banner colors — verified against ManeuverViewOptions public API
     // (maneuverBackgroundColor, turnIconManeuver are real documented properties)
     private var maneuverBackgroundColorDay: String? = null
+    private var maneuverBackgroundColorNight: String? = null
     private var maneuverTurnIconColor: String? = null
     // ETA bottom bar colors — fully custom view, safe to color freely
     private var etaBarBackgroundColor: String? = null
@@ -186,6 +206,26 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // Custom icon button colors (mute, overview, recenter) — our own bitmaps
     private var iconButtonColor: String? = null
     private var iconButtonMutedColor: String? = null
+    // Location puck (the arrow/icon showing the user's position and heading
+    // on the map itself — distinct from maneuverTurnIconColor, which colors
+    // the turn-direction icon inside the instruction banner, not the map).
+    private var navigationPuckColor: String? = null
+    // Speed limit panel position — one of "bottomLeft" (default, matches
+    // the original hardcoded position), "bottomRight", "topLeft", "topRight".
+    private var speedLimitPosition: String = "bottomLeft"
+    // Local image path (file:// URI or absolute path) to fully replace the
+    // default 2D puck icon. Takes precedence over navigationPuckColor —
+    // color tinting is never applied to a custom image (avoids any risk of
+    // that operation failing/crashing on an arbitrary user-supplied image).
+    private var navigationPuckImagePath: String? = null
+    // Local path (file:// URI, absolute path, or "asset://name.glb" for a
+    // file bundled in Android's own assets/ folder) to a .glb/.gltf 3D
+    // model, replacing the 2D puck entirely with a LocationPuck3D. Takes
+    // precedence over both navigationPuckImagePath and navigationPuckColor
+    // when set and valid — if the model fails to load for any reason, falls
+    // back to the 2D puck (image or color, per the rules above) rather than
+    // leaving the map without any puck at all, or crashing.
+    private var navigationPuck3DModelPath: String? = null
 
     init {
         buildUI()
@@ -326,28 +366,30 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
         // ── ManeuverView — top ─────────────────────────────────────────────────
         // Colors are customizable via maneuverBackgroundColorDay,
-        // maneuverTurnIconColor, and laneGuidanceTurnIconColor props using the
-        // SDK's official ManeuverViewOptions.Builder — confirmed public API
+        // maneuverBackgroundColorNight, maneuverTurnIconColor, and
+        // laneGuidanceTurnIconColor props using the SDK's official
+        // ManeuverViewOptions.Builder — confirmed public API
         // (maneuverBackgroundColor, turnIconManeuver, laneGuidanceTurnIconManeuver
         // are all real documented properties of ManeuverViewOptions).
-        val maneuverOptionsBuilder = ManeuverViewOptions.Builder()
-        maneuverBackgroundColorDay?.let {
-            try { maneuverOptionsBuilder.maneuverBackgroundColor(Color.parseColor(it)) } catch (e: Exception) {}
-        }
-        maneuverTurnIconColor?.let {
-            try { maneuverOptionsBuilder.turnIconManeuver(Color.parseColor(it)) } catch (e: Exception) {}
-        }
-        val mv = MapboxManeuverView(context, null, 0, maneuverOptionsBuilder.build())
+        //
+        // FIX (see setManeuverBackgroundColorDay/Night/TurnIconColor below):
+        // this used to build ManeuverViewOptions inline, right here, using
+        // whatever maneuverBackgroundColorDay/maneuverTurnIconColor held AT
+        // THIS EXACT MOMENT — but buildUI() runs from init{}, which executes
+        // before Expo/React Native has delivered ANY props to this view (props
+        // always arrive via setter calls made AFTER the native view instance
+        // already exists). So these were always still null here, and the
+        // color never actually took effect, no matter what was set from JS.
+        // createManeuverView() is now also called (to REBUILD, not just
+        // build) from each color prop's setter and from
+        // checkAndSwitchDayNight() whenever day/night actually flips, so the
+        // correct color is always applied once it's actually known/changes.
+        val mv = createManeuverView()
         root.addView(mv as View, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).also { it.gravity = Gravity.TOP })
         mv.visibility = View.INVISIBLE
-        // Feature: tap the instruction banner to see the full list of upcoming
-        // turn-by-turn steps. We emit the data via event so the RN/JS layer can
-        // render a bottom sheet or modal using its own native UI components —
-        // consistent with how all other navigation events are surfaced.
-        mv.setOnClickListener { emitFullRouteSteps() }
         maneuverView = mv
 
         // ── Side buttons — RIGHT side, just below maneuver banner ─────────────
@@ -395,15 +437,26 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // component renders both the posted speed limit sign AND the current
         // vehicle speed side-by-side, which needs flexible width
         val siv = MapboxSpeedInfoView(context)
+        // FIX: the ETA bar below has an explicit elevation (8dp) and is
+        // added to the layout AFTER this view — in Android, both of those
+        // independently favor the ETA bar drawing ON TOP when their bounds
+        // overlap. speedInfoView had no elevation of its own (defaulting to
+        // 0), so if the ETA bar's actual rendered height (WRAP_CONTENT,
+        // varies with its text content) ever extends slightly further up
+        // than the 88dp bottom margin below assumes, the speed limit panel
+        // could end up fully or partially hidden behind it — even though
+        // its visibility and rendered content are otherwise both correct.
+        // Giving it a higher elevation guarantees it always draws on top,
+        // regardless of any such overlap, without changing any position or
+        // margin values (zero visual change in the non-overlapping case).
+        siv.elevation = 12 * dp
         root.addView(siv as View, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also {
-            it.gravity = Gravity.BOTTOM or Gravity.START
-            it.setMargins((12 * dp).toInt(), 0, 0, (88 * dp).toInt())
-        })
+        ))
         siv.visibility = View.GONE
         speedInfoView = siv
+        applySpeedLimitPosition()
 
         // ── ETA bottom bar ─────────────────────────────────────────────────────
         val resolvedEtaBg = try { Color.parseColor(etaBarBackgroundColor ?: "#1E2433") } catch (e: Exception) { Color.parseColor("#1E2433") }
@@ -558,19 +611,10 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             )
 
             // Navigation arrow puck
-            mapView.location.apply {
-                setLocationProvider(navigationLocationProvider)
-                updateSettings {
-                    locationPuck = LocationPuck2D(
-                        bearingImage = ImageHolder.from(
-                            com.mapbox.navigation.R.drawable.mapbox_navigation_puck_icon
-                        )
-                    )
-                    puckBearingEnabled = true
-                    enabled = true
-                }
-                puckBearing = PuckBearing.COURSE
-            }
+            mapView.location.setLocationProvider(navigationLocationProvider)
+            navigationSetupComplete = true
+            applyPuckSettings()
+            mapView.location.puckBearing = PuckBearing.COURSE
 
             registerObservers()
         }
@@ -767,6 +811,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val shouldBeNight = hour !in 6..20
         if (shouldBeNight == isNightMode) return
         isNightMode = shouldBeNight
+        // Keep the maneuver banner's background color in sync with day/night —
+        // previously this function only swapped the map style; the banner
+        // color was never wired to day/night at all, regardless of which of
+        // maneuverBackgroundColorDay/maneuverBackgroundColorNight was set.
+        rebuildManeuverView()
         mapView.mapboxMap.loadStyle(
             if (shouldBeNight) NavigationStyles.NAVIGATION_NIGHT_STYLE else NavigationStyles.NAVIGATION_DAY_STYLE
         ) { style ->
@@ -934,17 +983,307 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Maneuver view creation/rebuild
+    //
+    // FIX for maneuverBackgroundColorDay/Night and maneuverTurnIconColor never
+    // visibly applying: buildUI() runs in init{}, before Expo/RN has delivered
+    // ANY props (props always arrive via setter calls made AFTER the native
+    // view instance already exists). The color props are therefore always
+    // still null the one time ManeuverViewOptions was previously built,
+    // inline, in buildUI() — no matter what was set from JS. A prior fix
+    // attempt tried calling `maneuverView?.setBackgroundColor(...)` from the
+    // setter instead, but that colors the plain Android View background of
+    // the outer MapboxManeuverView container — a different visual layer from
+    // the SDK's own internal "maneuver background" panel that
+    // ManeuverViewOptions.maneuverBackgroundColor actually controls, which
+    // Mapbox draws on top of it — so visually nothing changed.
+    //
+    // The only way to actually apply new ManeuverViewOptions is to construct
+    // a new MapboxManeuverView with them (ManeuverViewOptions is a
+    // construction-time-only configuration, not something that can be
+    // updated on a live view — confirmed against the public API surface).
+    // So: color prop setters and checkAndSwitchDayNight() (which now also
+    // affects this, since maneuverBackgroundColorNight needs to take over
+    // once night mode is entered) all call rebuildManeuverView(), which
+    // swaps in a freshly-configured view at the exact same position.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun resolveManeuverBackgroundColor(): String? =
+        if (isNightMode) (maneuverBackgroundColorNight ?: maneuverBackgroundColorDay)
+        else maneuverBackgroundColorDay
+
+    private fun createManeuverView(): MapboxManeuverView {
+        val maneuverOptionsBuilder = ManeuverViewOptions.Builder()
+        resolveManeuverBackgroundColor()?.let {
+            try { maneuverOptionsBuilder.maneuverBackgroundColor(Color.parseColor(it)) } catch (e: Exception) {}
+        }
+        maneuverTurnIconColor?.let {
+            try { maneuverOptionsBuilder.turnIconManeuver(Color.parseColor(it)) } catch (e: Exception) {}
+        }
+        val mv = MapboxManeuverView(context, null, 0, maneuverOptionsBuilder.build())
+        // Feature: tap the instruction banner to see the full list of upcoming
+        // turn-by-turn steps. We emit the data via event so the RN/JS layer can
+        // render a bottom sheet or modal using its own native UI components —
+        // consistent with how all other navigation events are surfaced.
+        mv.setOnClickListener { emitFullRouteSteps() }
+        return mv
+    }
+
+    // Swaps the current maneuverView for a freshly-built one (with up-to-date
+    // ManeuverViewOptions), preserving its exact position, layout params, and
+    // visibility in the view hierarchy — a no-op visually beyond the actual
+    // color change. Safe to call before buildUI() has run (does nothing yet,
+    // buildUI() will pick up the current prop values when it runs) and safe
+    // to call repeatedly (idempotent).
+    private fun rebuildManeuverView() {
+        val old = maneuverView ?: return // buildUI() hasn't run yet — it will use current values when it does
+        val parent = old.parent as? FrameLayout ?: return
+        val index = parent.indexOfChild(old)
+        val layoutParams = old.layoutParams
+        val wasVisible = old.visibility
+        parent.removeView(old)
+        val fresh = createManeuverView()
+        parent.addView(fresh as View, index, layoutParams)
+        fresh.visibility = wasVisible
+        maneuverView = fresh
+    }
+
     fun setManeuverBackgroundColorDay(c: String?) {
+        if (c == maneuverBackgroundColorDay) return
         maneuverBackgroundColorDay = c
-        // ManeuverView is constructed with options in buildUI() which runs before
-        // props are received — we cannot rebuild it, but the color can be applied
-        // by updating the ManeuverView background tint directly on the view itself.
-        c?.let { hex ->
-            try { maneuverView?.setBackgroundColor(Color.parseColor(hex)) } catch (e: Exception) {}
+        rebuildManeuverView()
+    }
+
+    fun setManeuverBackgroundColorNight(c: String?) {
+        if (c == maneuverBackgroundColorNight) return
+        maneuverBackgroundColorNight = c
+        rebuildManeuverView()
+    }
+
+    fun setManeuverTurnIconColor(c: String?) {
+        if (c == maneuverTurnIconColor) return
+        maneuverTurnIconColor = c
+        rebuildManeuverView()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Location puck (the icon showing the user's position/heading on the map)
+    //
+    // Unlike ManeuverViewOptions, LocationComponentPlugin's updateSettings {}
+    // can be called again on the SAME already-created plugin instance at any
+    // time — no view reconstruction needed here, just re-apply the settings.
+    // mapView itself is a class-level property created immediately (not
+    // inside init{}/buildUI()), so mapView.location is always safe to touch,
+    // even before setupNavigation() has run.
+    //
+    // Default (navigationPuckColor == null) uses Mapbox's own stock
+    // mapbox_navigation_puck_icon drawable completely unmodified — no
+    // regression versus before this prop existed.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun tintedDrawableToBitmap(resId: Int, colorHex: String): Bitmap? {
+        return try {
+            val drawable = ContextCompat.getDrawable(context, resId)?.mutate() ?: return null
+            drawable.setTint(Color.parseColor(colorHex))
+            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1
+            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "navigationPuckColor: failed to tint default icon: ${e.message}")
+            null
         }
     }
 
-    fun setManeuverTurnIconColor(c: String?) { maneuverTurnIconColor = c }
+    // Resolves a file:// URI or plain absolute path down to a filesystem
+    // path, and loads it as a Bitmap. Returns null (never throws) on any
+    // failure — missing file, unreadable, corrupted/unsupported image data,
+    // permission error, etc. BitmapFactory.decodeFile itself already
+    // returns null rather than throwing for most decode failures, but the
+    // whole thing is wrapped regardless for full safety (e.g. malformed URI
+    // parsing can throw).
+    private fun loadBitmapFromPath(path: String): Bitmap? {
+        return try {
+            val resolvedPath = if (path.startsWith("file://")) {
+                Uri.parse(path).path ?: return null
+            } else {
+                path
+            }
+            val file = File(resolvedPath)
+            if (!file.exists() || !file.canRead()) {
+                Log.e(TAG, "navigationPuckImagePath: file not found or unreadable: $resolvedPath")
+                return null
+            }
+            BitmapFactory.decodeFile(resolvedPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "navigationPuckImagePath: failed to load image: ${e.message}")
+            null
+        }
+    }
+
+    // Resolves the 2D puck image, in priority order:
+    //   1. navigationPuckImagePath (custom image, used AS-IS — never tinted)
+    //   2. navigationPuckColor (tints Mapbox's own default icon)
+    //   3. Mapbox's own default icon, completely unmodified
+    // Any failure at a given priority level (bad path, decode failure,
+    // invalid color string) falls through to the next level rather than
+    // leaving the puck without an image or crashing.
+    private fun resolveBearingImageHolder(): ImageHolder {
+        val defaultResId = com.mapbox.navigation.R.drawable.mapbox_navigation_puck_icon
+
+        navigationPuckImagePath?.let { path ->
+            loadBitmapFromPath(path)?.let { bitmap -> return ImageHolder.from(bitmap) }
+        }
+
+        navigationPuckColor?.let { colorHex ->
+            tintedDrawableToBitmap(defaultResId, colorHex)?.let { bitmap -> return ImageHolder.from(bitmap) }
+        }
+
+        return ImageHolder.from(defaultResId)
+    }
+
+    // Attempts to build a LocationPuck3D from navigationPuck3DModelPath.
+    // Returns null (never throws) if the path is a local file:// / absolute
+    // path that doesn't actually exist on disk. "asset://" paths (Android's
+    // own bundled assets/ folder) and http(s):// URLs are passed through
+    // as-is to Mapbox's own modelUri — we can't cheaply pre-validate those
+    // without a filesystem check or a network request, so those are left to
+    // Mapbox's own loading; if Mapbox itself fails to load the model, per
+    // its own documented/observed behavior this does not crash — the puck
+    // simply doesn't render, at which point the recovery below in
+    // applyPuckSettings() (falling back to the 2D puck if 3D produces no
+    // visible result) is a best-effort mitigation, not a hard guarantee.
+    private fun build3DPuck(path: String): LocationPuck3D? {
+        return try {
+            if (path.startsWith("file://") || (!path.contains("://"))) {
+                val resolvedPath = if (path.startsWith("file://")) Uri.parse(path).path ?: return null else path
+                if (!File(resolvedPath).exists()) {
+                    Log.e(TAG, "navigationPuck3DModelPath: file not found: $resolvedPath")
+                    return null
+                }
+            }
+            LocationPuck3D(modelUri = path)
+        } catch (e: Exception) {
+            Log.e(TAG, "navigationPuck3DModelPath: failed to build 3D puck: ${e.message}")
+            null
+        }
+    }
+
+    // Applies the current puck configuration to the already-live
+    // LocationComponentPlugin (mapView.location) — no view reconstruction
+    // needed, unlike the maneuver banner. Safe to call at any time, even
+    // before setupNavigation() has run (mapView itself is a class-level
+    // property created immediately, not inside init{}).
+    //
+    // Precedence, per explicit design: 3D model (if set and valid) wins
+    // outright over anything 2D — a 3D puck and a 2D image/color are
+    // mutually exclusive, never combined. Wrapped in try/catch as a final
+    // safety net around the actual SDK call itself, regardless of how
+    // carefully the inputs were already validated above.
+    private fun applyPuckSettings() {
+        val puck3DPath = navigationPuck3DModelPath
+        if (puck3DPath != null) {
+            val puck3D = build3DPuck(puck3DPath)
+            if (puck3D != null) {
+                try {
+                    mapView.location.updateSettings {
+                        locationPuck = puck3D
+                        puckBearingEnabled = true
+                        enabled = true
+                    }
+                    return
+                } catch (e: Exception) {
+                    Log.e(TAG, "navigationPuck3DModelPath: SDK rejected 3D puck, falling back to 2D: ${e.message}")
+                    // fall through to 2D below
+                }
+            }
+        }
+
+        try {
+            mapView.location.updateSettings {
+                locationPuck = LocationPuck2D(bearingImage = resolveBearingImageHolder())
+                puckBearingEnabled = true
+                enabled = true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "applyPuckSettings: failed to apply 2D puck settings: ${e.message}")
+        }
+    }
+
+    fun setNavigationPuckColor(c: String?) {
+        if (c == navigationPuckColor) return
+        navigationPuckColor = c
+        if (navigationSetupComplete) applyPuckSettings()
+    }
+
+    fun setNavigationPuckImagePath(p: String?) {
+        if (p == navigationPuckImagePath) return
+        navigationPuckImagePath = p
+        if (navigationSetupComplete) applyPuckSettings()
+    }
+
+    fun setNavigationPuck3DModelPath(p: String?) {
+        if (p == navigationPuck3DModelPath) return
+        navigationPuck3DModelPath = p
+        if (navigationSetupComplete) applyPuckSettings()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Speed limit panel position
+    //
+    // "bottomLeft" (default) matches the original hardcoded position exactly
+    // — 12dp/88dp margins, unchanged from before this prop existed, so
+    // there's no visual change for anyone not setting this prop.
+    //
+    // "topRight" deliberately uses a wider right margin than "topLeft"'s
+    // left margin — the side buttons (mute/overview/recenter) occupy the
+    // top-right area already (see sideCol above, same 188dp top clearance),
+    // so "topRight" pushes further left to sit clear of that button column
+    // rather than overlapping it. This is an approximation based on the
+    // buttons' own known size (56dp + margins), not a guarantee for every
+    // possible screen size — "topLeft" or a bottom position avoid this
+    // concern entirely, since nothing else occupies those areas.
+    //
+    // Layout params are updated in place on the existing live view
+    // (layoutParams + requestLayout()) — no view reconstruction needed,
+    // unlike the maneuver banner. Safe to call before buildUI() has run
+    // (speedInfoView is still null then; buildUI() applies the current
+    // value when it creates the view) and safe to call repeatedly.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun applySpeedLimitPosition() {
+        val siv = speedInfoView ?: return
+        val params = (siv.layoutParams as? FrameLayout.LayoutParams) ?: return
+        when (speedLimitPosition) {
+            "bottomRight" -> {
+                params.gravity = Gravity.BOTTOM or Gravity.END
+                params.setMargins(0, 0, (12 * dp).toInt(), (88 * dp).toInt())
+            }
+            "topLeft" -> {
+                params.gravity = Gravity.TOP or Gravity.START
+                params.setMargins((12 * dp).toInt(), (188 * dp).toInt(), 0, 0)
+            }
+            "topRight" -> {
+                params.gravity = Gravity.TOP or Gravity.END
+                // Wider right margin to clear the side button column (see note above).
+                params.setMargins(0, (188 * dp).toInt(), (80 * dp).toInt(), 0)
+            }
+            else -> { // "bottomLeft" (default) — original position, unchanged
+                params.gravity = Gravity.BOTTOM or Gravity.START
+                params.setMargins((12 * dp).toInt(), 0, 0, (88 * dp).toInt())
+            }
+        }
+        siv.layoutParams = params
+        siv.requestLayout()
+    }
+
+    fun setSpeedLimitPosition(p: String?) {
+        val resolved = p ?: "bottomLeft"
+        if (resolved == speedLimitPosition) return
+        speedLimitPosition = resolved
+        applySpeedLimitPosition()
+    }
 
     fun setEtaBarBackgroundColor(c: String?) {
         etaBarBackgroundColor = c

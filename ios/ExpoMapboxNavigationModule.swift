@@ -62,8 +62,20 @@ public class ExpoMapboxNavigationModule: Module {
       Prop("maneuverBackgroundColorDay") { (view: ExpoMapboxNavigationView, v: String?) in
         view.setManeuverBackgroundColorDay(v)
       }
+      Prop("maneuverBackgroundColorNight") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setManeuverBackgroundColorNight(v)
+      }
       Prop("maneuverTurnIconColor") { (view: ExpoMapboxNavigationView, v: String?) in
         view.setManeuverTurnIconColor(v)
+      }
+      Prop("navigationPuckColor") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setNavigationPuckColor(v)
+      }
+      Prop("navigationPuckImagePath") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setNavigationPuckImagePath(v)
+      }
+      Prop("navigationPuck3DModelPath") { (view: ExpoMapboxNavigationView, v: String?) in
+        view.setNavigationPuck3DModelPath(v)
       }
       Prop("etaBarBackgroundColor") { (view: ExpoMapboxNavigationView, v: String?) in
         view.setEtaBarBackgroundColor(v)

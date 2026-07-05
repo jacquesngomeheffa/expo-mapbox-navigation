@@ -5,6 +5,117 @@ import CoreLocation
 // re-exported by MapboxNavigationCore in Navigation SDK v3.
 import MapboxNavigationCore
 import MapboxNavigationUIKit
+import MapboxMaps
+
+// Parses a "#RRGGBB" or "#AARRGGBB" (with or without leading "#") hex string
+// into a UIColor. Returns nil (never throws/crashes) for any invalid input —
+// mirrors the try/catch-wrapped Color.parseColor(...) pattern used on
+// Android for every color prop.
+private func mapboxColor(fromHex hex: String) -> UIColor? {
+    var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+    hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+    var rgb: UInt64 = 0
+    guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
+    switch hexSanitized.count {
+    case 6:
+        return UIColor(
+            red:   CGFloat((rgb & 0xFF0000) >> 16) / 255.0,
+            green: CGFloat((rgb & 0x00FF00) >> 8)  / 255.0,
+            blue:  CGFloat(rgb & 0x0000FF) / 255.0,
+            alpha: 1.0
+        )
+    case 8:
+        return UIColor(
+            red:   CGFloat((rgb & 0xFF000000) >> 24) / 255.0,
+            green: CGFloat((rgb & 0x00FF0000) >> 16) / 255.0,
+            blue:  CGFloat((rgb & 0x0000FF00) >> 8)  / 255.0,
+            alpha: CGFloat(rgb & 0x000000FF) / 255.0
+        )
+    default:
+        return nil
+    }
+}
+
+// Resolves a "file://" URI, a plain absolute path, or a remote http(s)://
+// URL string to a URL — used for both the custom puck image and the 3D
+// model path. Returns nil (never throws) if a local path doesn't actually
+// exist on disk; remote URLs are passed through as-is (can't cheaply
+// pre-validate those without a network request).
+private func resolveLocalOrRemoteURL(_ path: String) -> URL? {
+    if path.hasPrefix("http://") || path.hasPrefix("https://") {
+        return URL(string: path)
+    }
+    if path.hasPrefix("file://") {
+        guard let url = URL(string: path) else { return nil }
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+    return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+}
+
+// Loads a local image file safely — returns nil (never throws) on any
+// failure (missing file, unreadable, corrupted/unsupported format).
+// UIImage(contentsOfFile:) itself already returns nil rather than throwing
+// for most decode failures, matching BitmapFactory.decodeFile's behavior
+// on Android; the FileManager existence check below is an extra safety
+// net before even attempting the decode.
+private func loadUIImage(fromPath path: String) -> UIImage? {
+    let resolvedPath: String
+    if path.hasPrefix("file://") {
+        guard let url = URL(string: path) else { return nil }
+        resolvedPath = url.path
+    } else {
+        resolvedPath = path
+    }
+    guard FileManager.default.fileExists(atPath: resolvedPath) else { return nil }
+    return UIImage(contentsOfFile: resolvedPath)
+}
+
+// MARK: - Custom day/night styles (maneuver banner background color)
+//
+// InstructionsBannerView is the confirmed v3 class name for the maneuver
+// instructions banner (see the official "User interface | Navigation SDK
+// v3 | iOS" guide, which uses this exact class in its own UIAppearance
+// example). Styling must be applied inside Style.apply() (confirmed
+// pattern from Mapbox's own "Maps for navigation" v3 guide, which shows
+// the identical StandardDayStyle/StandardNightStyle subclassing approach
+// used here). If neither maneuverBackgroundColorDay/Night is set, apply()
+// only calls super.apply() — Mapbox's own default appearance, unchanged.
+//
+// NOTE: unlike Android (where the maneuver view can be rebuilt live at any
+// time), these styles are only read once, when presentNavigationViewController()
+// constructs a new NavigationViewController — NavigationOptions.styles is a
+// construction-time configuration. Changing these colors while navigation
+// is already active takes effect on the next route (the next time
+// presentNavigationViewController() runs), not instantly. This is a real,
+// architecture-driven difference from Android's live-updating behavior,
+// not an oversight.
+private final class ExpoManeuverDayStyle: StandardDayStyle {
+    var maneuverBackgroundColor: UIColor?
+    required init() {
+        super.init()
+        styleType = .day
+    }
+    override func apply() {
+        super.apply()
+        guard let color = maneuverBackgroundColor else { return }
+        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .phone)).backgroundColor = color
+        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .pad)).backgroundColor = color
+    }
+}
+
+private final class ExpoManeuverNightStyle: StandardNightStyle {
+    var maneuverBackgroundColor: UIColor?
+    required init() {
+        super.init()
+        styleType = .night
+    }
+    override func apply() {
+        super.apply()
+        guard let color = maneuverBackgroundColor else { return }
+        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .phone)).backgroundColor = color
+        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .pad)).backgroundColor = color
+    }
+}
 
 public class ExpoMapboxNavigationView: ExpoView {
 
@@ -47,11 +158,20 @@ public class ExpoMapboxNavigationView: ExpoView {
     // On iOS the NavigationViewController drop-in handles all UI natively,
     // so we store these and apply what we can via its public API.
     private var maneuverBackgroundColorDay: String?
+    private var maneuverBackgroundColorNight: String?
     private var maneuverTurnIconColor:      String?
     private var etaBarBackgroundColor:      String?
     private var etaTextColor:               String?
     private var iconButtonColor:            String?
     private var iconButtonMutedColor:       String?
+    // Location puck (the icon showing position/heading on the map — distinct
+    // from maneuverTurnIconColor, which is inside the instruction banner).
+    // Precedence, matching Android exactly: 3D model > custom image (never
+    // tinted) > color tint (of a system symbol, not Mapbox's own internal
+    // default asset — see resolvePuckConfiguration() for why) > default.
+    private var navigationPuckColor:         String?
+    private var navigationPuckImagePath:     String?
+    private var navigationPuck3DModelPath:   String?
 
     // MARK: - Init
     public required init(appContext: AppContext? = nil) {
@@ -129,10 +249,21 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         tearDownNavigationViewController()
 
+        // Custom day/night styles for the maneuver banner background color.
+        // Read HERE, at construction time — see the note on
+        // ExpoManeuverDayStyle/ExpoManeuverNightStyle above for why this
+        // can't be updated live on an already-presented NavigationViewController
+        // the way Android's maneuver view can.
+        let dayStyle = ExpoManeuverDayStyle()
+        dayStyle.maneuverBackgroundColor = maneuverBackgroundColorDay.flatMap { mapboxColor(fromHex: $0) }
+        let nightStyle = ExpoManeuverNightStyle()
+        nightStyle.maneuverBackgroundColor = maneuverBackgroundColorNight.flatMap { mapboxColor(fromHex: $0) }
+
         let navigationOptions = NavigationOptions(
             mapboxNavigation: mapboxNavigation,
             voiceController:  provider.routeVoiceController,
-            eventsManager:    provider.eventsManager()
+            eventsManager:    provider.eventsManager(),
+            styles: [dayStyle, nightStyle]
         )
 
         let vc = NavigationViewController(
@@ -167,6 +298,12 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         self.navigationViewController = vc
         isOverviewMode = false
+
+        // Apply the current puck configuration now that navigationMapView
+        // exists — picks up whatever navigationPuckColor/ImagePath/
+        // 3DModelPath were already set (via props received before this
+        // route was fetched).
+        applyPuckSettings()
     }
 
     // MARK: - Banner tap handler (parity with Android mv.setOnClickListener)
@@ -255,12 +392,88 @@ public class ExpoMapboxNavigationView: ExpoView {
     // Color props — stored for reference; NavigationViewController applies its own
     // theme automatically. Custom color support via NavigationViewController's
     // StyleManager or subclassing can be added in future iterations.
-    func setManeuverBackgroundColorDay(_ c: String?) { maneuverBackgroundColorDay = c }
+    func setManeuverBackgroundColorDay(_ c: String?)   { maneuverBackgroundColorDay = c }
+    func setManeuverBackgroundColorNight(_ c: String?) { maneuverBackgroundColorNight = c }
     func setManeuverTurnIconColor(_ c: String?)      { maneuverTurnIconColor = c }
     func setEtaBarBackgroundColor(_ c: String?)      { etaBarBackgroundColor = c }
     func setEtaTextColor(_ c: String?)               { etaTextColor = c }
     func setIconButtonColor(_ c: String?)            { iconButtonColor = c }
     func setIconButtonMutedColor(_ c: String?)       { iconButtonMutedColor = c }
+
+    // MARK: - Location puck (parity with Android navigationPuckColor/
+    // navigationPuckImagePath/navigationPuck3DModelPath)
+    //
+    // NavigationMapView.puckType is a confirmed, official v3 public API
+    // (see "Maps for navigation | Navigation SDK v3 | iOS" guide:
+    // `navigationMapView.puckType = .puck3D(.navigationDefault)`), backed
+    // by MapboxMaps' Puck2DConfiguration/Puck3DConfiguration structs (see
+    // Mapbox's own "Simulate navigation"/localized SDK guides for the
+    // confirmed init signatures used below). Unlike the maneuver banner
+    // styles above, puckType is a plain mutable property on an existing
+    // NavigationMapView — no reconstruction needed, and it CAN be updated
+    // live while navigation is already active.
+    //
+    // Precedence, matching Android's implementation exactly: 3D model (if
+    // set and valid) > custom 2D image (never tinted, even if a color is
+    // also set — avoids any risk of a tint operation on an arbitrary
+    // user-supplied image) > color tint > Mapbox's own default icon.
+    //
+    // NOTE on navigationPuckColor specifically: unlike Android (where
+    // Mapbox's own default puck drawable resource name is a confirmed,
+    // public identifier we can tint directly), there is no equivalent
+    // confirmed public asset name for iOS's own built-in puck image in the
+    // SDK's public API surface. Tinting an unknown/unconfirmed internal
+    // asset would risk referencing something that doesn't exist. Instead,
+    // color-only customization uses a standard system symbol
+    // ("location.north.circle.fill", present on every iOS version this
+    // package supports) as the tintable base — this achieves the same
+    // *intent* (a colored puck) via a guaranteed-safe building block,
+    // though its exact shape won't match Mapbox's own default icon.
+    private func applyPuckSettings() {
+        guard let vc = navigationViewController else { return }
+        let mapView = vc.navigationView.navigationMapView
+
+        if let modelPath = navigationPuck3DModelPath,
+           let url = resolveLocalOrRemoteURL(modelPath) {
+            let model = Model(uri: url, orientation: [0, 0, 0])
+            mapView.puckType = .puck3D(Puck3DConfiguration(model: model))
+            return
+        }
+
+        if let imagePath = navigationPuckImagePath,
+           let image = loadUIImage(fromPath: imagePath) {
+            mapView.puckType = .puck2D(Puck2DConfiguration(bearingImage: image))
+            return
+        }
+
+        if let colorHex = navigationPuckColor,
+           let color = mapboxColor(fromHex: colorHex),
+           let symbolImage = UIImage(systemName: "location.north.circle.fill")?
+               .withTintColor(color, renderingMode: .alwaysOriginal) {
+            mapView.puckType = .puck2D(Puck2DConfiguration(bearingImage: symbolImage))
+            return
+        }
+
+        mapView.puckType = .puck2D(Puck2DConfiguration())
+    }
+
+    func setNavigationPuckColor(_ c: String?) {
+        guard c != navigationPuckColor else { return }
+        navigationPuckColor = c
+        applyPuckSettings()
+    }
+
+    func setNavigationPuckImagePath(_ p: String?) {
+        guard p != navigationPuckImagePath else { return }
+        navigationPuckImagePath = p
+        applyPuckSettings()
+    }
+
+    func setNavigationPuck3DModelPath(_ p: String?) {
+        guard p != navigationPuck3DModelPath else { return }
+        navigationPuck3DModelPath = p
+        applyPuckSettings()
+    }
 
     // MARK: - Lifecycle
     public override func removeFromSuperview() {
