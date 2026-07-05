@@ -155,7 +155,7 @@ All color props are optional — defaults are applied when omitted.
 
 | Prop | Default | Description |
 |------|---------|-------------|
-| `maneuverBackgroundColorDay` | Mapbox default | Background of the turn-by-turn instruction banner (day/light mode). Uses `ManeuverViewOptions.maneuverBackgroundColor` (official Mapbox SDK API). |
+| `maneuverBackgroundColorDay` | Mapbox default | Background of the turn-by-turn instruction banner (day/light mode). Uses `ManeuverViewOptions.maneuverBackgroundColor` (official Mapbox SDK API). **Android: see [priority vs. `androidColorOverrides`](#mapbox-native-colors-android-via-plugin) below if you also use that option.** |
 | `maneuverBackgroundColorNight` | Mapbox default | Same, for night mode — the component switches automatically based on time of day (6am–8pm = day). |
 | `maneuverTurnIconColor` | Mapbox default | Color of the turn-direction icon inside the instruction banner. Uses `ManeuverViewOptions.turnIconManeuver`. |
 | `navigationPuckColor` | Mapbox default | Tints Mapbox's own default location puck icon (the arrow showing your position/heading on the map — distinct from `maneuverTurnIconColor`, which is inside the banner, not on the map). Ignored if `navigationPuckImagePath` or `navigationPuck3DModelPath` is set. |
@@ -203,6 +203,14 @@ Override Mapbox's built-in resource colors (route line, etc.) via `androidColorO
   }
 }]
 ```
+
+**Priority between `androidColorOverrides.mapbox_main_maneuver_background_color` and the `maneuverBackgroundColorDay` prop.** These are two independent mechanisms that both affect the maneuver banner's background — `androidColorOverrides` is a build-time Android resource override (baked into the APK/AAB at `expo prebuild`), while `maneuverBackgroundColorDay` is a runtime `ManeuverViewOptions` API call. Setting both to *different* values means only one visibly wins, which looks like the other one "isn't working." As of 3.1.2, this package resolves it with a clear, fixed priority:
+
+1. **`androidColorOverrides.mapbox_main_maneuver_background_color`, if you set it explicitly** — always wins, exactly as you set it.
+2. **Otherwise, `maneuverBackgroundColorDay`, if set** — automatically written into the same underlying resource for you. You don't need to set both; setting only `maneuverBackgroundColorDay` is enough.
+3. **Otherwise, Mapbox's own default.**
+
+In short: if you're only using one of the two, just use `maneuverBackgroundColorDay` — it's kept in sync automatically. Reach for `androidColorOverrides.mapbox_main_maneuver_background_color` directly only if you specifically need to pin an exact value regardless of what any prop says (e.g. a design system constant that shouldn't be app-configurable).
 
 ---
 
@@ -277,6 +285,15 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 3.1.2
+**Fixes from a second round of real Android device testing.**
+
+- **Fixed: `maneuverBackgroundColorDay` appeared to have no effect when `androidColorOverrides.mapbox_main_maneuver_background_color` was also set.** These are two independent mechanisms controlling the same visual element — confirmed `mapbox_main_maneuver_background_color` is a real, intentional resource-override key documented since this package's origin project, a build-time Android resource override, separate from `maneuverBackgroundColorDay`'s runtime `ManeuverViewOptions` call. Fixed priority (explicit `androidColorOverrides` wins if set; otherwise `maneuverBackgroundColorDay` is automatically synced into the same resource; otherwise Mapbox's default) — see the new "Priority" section under Mapbox Native Colors in the README.
+  - Found and fixed a real bug in the fix itself while testing: `maneuverBackgroundColorDay` was never actually destructured from the plugin's own `options` parameter, causing a `ReferenceError` the moment this new sync logic tried to read it. This config plugin file had never previously needed to read this prop (it's normally only consumed as a native view prop, never by the build-time config plugin) — caught by the functional test written for this exact change before shipping it, not by a user report.
+- **Added a `.glb` magic-number validation for `navigationPuck3DModelPath`**, after a confirmed real crash report (no crash log available). Checks the first 4 bytes of a local file match the required "glTF" signature (per the glTF 2.0 binary format spec) before ever handing it to Mapbox's 3D renderer — rejects obviously-invalid files outright. **Honest limitation**: if the actual crash is a native/GPU-side rendering failure (plausible — such failures often aren't raised as a catchable JVM exception, and may happen asynchronously on a different thread than the one that requested the puck change), this validation reduces but cannot fully guarantee elimination of the risk. A real crash log would allow a more targeted fix; recommended if this persists.
+- **Fixed (likely): the ETA bar not appearing at all, unrelated to any color prop.** Traced this using new evidence — the maneuver banner was confirmed to display correctly with real-time updates during testing, which rules out "navigation never actually started" as a shared cause with the speed limit panel (a theory from the previous release). That evidence pointed specifically at `showEta` (added in 3.1.1): its native `Prop` declaration used a non-nullable Kotlin `Boolean`. If Expo Modules' behavior for an *omitted* optional boolean prop is to invoke the setter with Kotlin's own default (`false`) rather than not calling it at all, this would silently force the ETA bar hidden immediately after view creation for anyone not explicitly passing `showEta={true}` — independent of route/navigation state, matching the exact symptom. Changed to a nullable `Boolean?`, with `null` now explicitly treated as "not set, keep the default (`true`)" — removes the ambiguity regardless of Expo's exact behavior here, rather than relying on it.
+- **Speed limit panel still not visible: no new bug found this round.** Re-traced `speedInfoApi`/`speedInfoView`'s initialization and rendering path with the new "navigation is confirmed active" evidence in hand — found no additional issue beyond what 3.0.0 already fixed (the elevation/z-order fix) and already-documented (the existing diagnostic log for Mapbox `maxspeed` data unavailability). If this persists, the most useful next step is checking `adb logcat` for `"Speed info unavailable for this location/route segment"` specifically, to distinguish a data-availability issue (outside this package's control) from something else neither of us has spotted yet.
 
 ### 3.1.1
 **Fixes from real Android device testing: several color props reported as "not working" were actually being silently dropped by a hex-parsing bug, one prop was missing from the published TypeScript types entirely, and a stale compiled output would have shipped the old types regardless of the `src/index.tsx` fix.**

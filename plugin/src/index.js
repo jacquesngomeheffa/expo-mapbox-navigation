@@ -30,6 +30,14 @@ const withMapboxNavigation = (config, options = {}) => {
     // "16 KB Page Size" in the README before enabling this.
     androidUseNdk27 = false,
     androidColorOverrides = {},
+    // Read here specifically to sync into androidColorOverrides' generated
+    // XML resource (mapbox_main_maneuver_background_color) — see
+    // addAndroidConfig() below for why. Every other color prop
+    // (maneuverBackgroundColorNight, maneuverTurnIconColor, etaBar*, etc.)
+    // is passed directly as a view prop to native (via src/index.tsx's
+    // `{...props}` spread) and never needs to be read by this config
+    // plugin at all — this one is a deliberate exception.
+    maneuverBackgroundColorDay,
   } = options;
 
   if (!accessToken) {
@@ -48,7 +56,7 @@ const withMapboxNavigation = (config, options = {}) => {
 
   // ── Android ───────────────────────────────────────────────────────────────
   config = withAppBuildGradle(config, (mod) => {
-    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides);
+    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay);
     return mod;
   });
 
@@ -265,7 +273,7 @@ function calculateMapboxCommonVersion(mapboxMapsVersion) {
   return ['24', ...parts.slice(1)].join('.');
 }
 
-function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
+function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay) {
   if (!mod.modResults.contents.includes('abiFilters')) {
     mod.modResults.contents = mod.modResults.contents.replace(
       /defaultConfig {([\s\S]*?)}/,
@@ -331,14 +339,37 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides) {
   }
 
   // Android color overrides for Mapbox resource colors (route line, banner, etc.)
-  if (Object.keys(androidColorOverrides).length > 0) {
+  //
+  // FIX: `maneuverBackgroundColorDay` (this package's own prop, applied at
+  // RUNTIME via ManeuverViewOptions) and `androidColorOverrides.
+  // mapbox_main_maneuver_background_color` (a real, intentional mechanism
+  // documented in this package's own upstream/origin project — a BUILD-TIME
+  // Android resource override) both target the same visual element, via two
+  // completely independent mechanisms. If an app sets both to DIFFERENT
+  // values, whichever one Mapbox's SDK actually resolves first wins
+  // silently, making the OTHER one appear broken — exactly the symptom
+  // reported. Since `mapbox_main_maneuver_background_color` is the
+  // resource name this specific fork's ORIGIN project already documents
+  // and other apps may already rely on, we sync `maneuverBackgroundColorDay`
+  // INTO it automatically here — UNLESS the app has already explicitly set
+  // that exact key itself in androidColorOverrides, in which case their
+  // explicit value is respected instead (never silently overridden).
+  const resolvedColorOverrides = { ...androidColorOverrides };
+  if (
+    maneuverBackgroundColorDay &&
+    !Object.prototype.hasOwnProperty.call(resolvedColorOverrides, 'mapbox_main_maneuver_background_color')
+  ) {
+    resolvedColorOverrides.mapbox_main_maneuver_background_color = maneuverBackgroundColorDay;
+  }
+
+  if (Object.keys(resolvedColorOverrides).length > 0) {
     const resDir = path.join(
       mod.modRequest?.platformProjectRoot || '',
       'app', 'src', 'main', 'res', 'values'
     );
     try {
       fs.mkdirSync(resDir, { recursive: true });
-      const colorEntries = Object.entries(androidColorOverrides)
+      const colorEntries = Object.entries(resolvedColorOverrides)
         .map(([name, value]) => `    <color name="${name}">${value}</color>`)
         .join('\n');
       const xmlContent = `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n${colorEntries}\n</resources>\n`;

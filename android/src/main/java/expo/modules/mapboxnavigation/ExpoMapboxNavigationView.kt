@@ -1180,6 +1180,37 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // simply doesn't render, at which point the recovery below in
     // applyPuckSettings() (falling back to the 2D puck if 3D produces no
     // visible result) is a best-effort mitigation, not a hard guarantee.
+    // Validates that a local file genuinely starts with the .glb binary
+    // format's required magic number (the ASCII bytes "glTF", 0x67 0x6C
+    // 0x54 0x46 — per the official glTF 2.0 binary file format
+    // specification's 12-byte header) BEFORE ever handing it to Mapbox's
+    // renderer. Added after a reported crash with navigationPuck3DModelPath
+    // — a malformed/non-glb file reaching the native 3D rendering pipeline
+    // is a plausible cause of a crash that a Kotlin try/catch cannot
+    // reliably catch (native/GPU-side rendering failures for a corrupt
+    // asset are not necessarily raised as a catchable JVM exception, and
+    // may happen asynchronously on a different thread than the one that
+    // requested the puck configuration change). This is a cheap, fast
+    // sanity check that rejects OBVIOUSLY invalid files outright; it does
+    // not guarantee every possible malformed-but-magic-number-valid file
+    // is safe, since fully validating a glTF/GLB file's internal
+    // structure is a much larger undertaking than this check performs.
+    private fun isValidGlbFile(path: String): Boolean {
+        return try {
+            val header = ByteArray(4)
+            java.io.FileInputStream(path).use { stream ->
+                val read = stream.read(header)
+                if (read != 4) return false
+            }
+            // "glTF" in ASCII: 0x67 0x6C 0x54 0x46
+            header[0] == 0x67.toByte() && header[1] == 0x6C.toByte() &&
+                header[2] == 0x54.toByte() && header[3] == 0x46.toByte()
+        } catch (e: Exception) {
+            Log.e(TAG, "navigationPuck3DModelPath: failed to validate .glb header: ${e.message}")
+            false
+        }
+    }
+
     private fun build3DPuck(path: String): LocationPuck3D? {
         return try {
             if (path.startsWith("file://") || (!path.contains("://"))) {
@@ -1188,7 +1219,14 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     Log.e(TAG, "navigationPuck3DModelPath: file not found: $resolvedPath")
                     return null
                 }
+                if (!isValidGlbFile(resolvedPath)) {
+                    Log.e(TAG, "navigationPuck3DModelPath: file does not have a valid .glb header, refusing to use it: $resolvedPath")
+                    return null
+                }
             }
+            // Remote (http/https) URLs can't be cheaply pre-validated this
+            // way without downloading them first — passed through as-is to
+            // Mapbox's own loading, same as before.
             LocationPuck3D(modelUri = path)
         } catch (e: Exception) {
             Log.e(TAG, "navigationPuck3DModelPath: failed to build 3D puck: ${e.message}")
@@ -1310,13 +1348,26 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         applySpeedLimitPosition()
     }
 
-    fun setShowEta(show: Boolean) {
-        showEta = show
+    fun setShowEta(show: Boolean?) {
+        // FIX: was previously a non-nullable `Boolean` parameter — if Expo
+        // Modules' behavior for an OMITTED optional boolean prop is to call
+        // this setter with Kotlin's own default (false) rather than simply
+        // not calling it at all, this would have silently forced showEta to
+        // false immediately after view creation for anyone not explicitly
+        // passing showEta={true} — a real, plausible explanation for the
+        // ETA bar disappearing entirely, unrelated to route/navigation state
+        // (confirmed separately: the maneuver banner works correctly with
+        // real-time updates, so navigation genuinely is active — ruling out
+        // "no route" as the cause). Treating null explicitly as "use the
+        // default" removes this ambiguity regardless of Expo's exact
+        // behavior here.
+        val resolved = show ?: true
+        showEta = resolved
         // If navigation is already active (maneuverView currently visible),
         // apply the change immediately rather than waiting for the next
         // showUI() call (e.g. the next route change).
         if (maneuverView?.visibility == View.VISIBLE) {
-            etaBar?.visibility = if (show) View.VISIBLE else View.INVISIBLE
+            etaBar?.visibility = if (resolved) View.VISIBLE else View.INVISIBLE
         }
     }
 
