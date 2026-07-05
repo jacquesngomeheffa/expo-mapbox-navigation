@@ -89,6 +89,25 @@ import java.util.Locale
 
 private const val TAG = "ExpoMapboxNavigation"
 
+// Parses a hex color string safely, tolerating a missing leading "#" —
+// Android's own Color.parseColor() REQUIRES the "#" and throws
+// IllegalArgumentException without it, which every call site already
+// wraps in try/catch — meaning a hex string passed from JS without a
+// leading "#" (e.g. "1E2433" instead of "#1E2433") was silently failing
+// and falling back to whatever default applied, with no visible error.
+// Used for every color prop that comes from JS/props (maneuver colors,
+// puck color, ETA bar colors, icon button colors) — not for this
+// package's own hardcoded, already-correctly-formatted default values.
+private fun parseColorSafe(hex: String): Int? {
+    val normalized = if (hex.startsWith("#")) hex else "#$hex"
+    return try {
+        Color.parseColor(normalized)
+    } catch (e: Exception) {
+        Log.e(TAG, "Invalid color string: \"$hex\" (${e.message})")
+        null
+    }
+}
+
 class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     ExpoView(context, appContext) {
 
@@ -202,6 +221,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var maneuverTurnIconColor: String? = null
     // ETA bottom bar colors — fully custom view, safe to color freely
     private var etaBarBackgroundColor: String? = null
+    // Explicit visibility control for the ETA/duration/distance bar.
+    // Default true (matches existing automatic show/hide behavior driven by
+    // showUI()/hideUI() — no regression for anyone not setting this). When
+    // explicitly set to false, the ETA bar stays hidden even after
+    // showUI() would otherwise reveal it.
+    private var showEta: Boolean = true
     private var etaTextColor: String? = null
     // Custom icon button colors (mute, overview, recenter) — our own bitmaps
     private var iconButtonColor: String? = null
@@ -245,9 +270,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val c = Canvas(bmp)
         val s = size.toFloat()
         val defaultColor = if (muted) "#5F6368" else "#1A73E8"
-        val color = try {
-            Color.parseColor(if (muted) (iconButtonMutedColor ?: defaultColor) else (iconButtonColor ?: defaultColor))
-        } catch (e: Exception) { Color.parseColor(defaultColor) }
+        val userColor = if (muted) iconButtonMutedColor else iconButtonColor
+        val color = userColor?.let { parseColorSafe(it) } ?: Color.parseColor(defaultColor)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.FILL
@@ -291,7 +315,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val c = Canvas(bmp)
         val s = size.toFloat()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = try { Color.parseColor(iconButtonColor ?: "#1A73E8") } catch (e: Exception) { Color.parseColor("#1A73E8") }
+            color = iconButtonColor?.let { parseColorSafe(it) } ?: Color.parseColor("#1A73E8")
         }
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = s * 0.07f
@@ -320,7 +344,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val c = Canvas(bmp)
         val s = size.toFloat()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = try { Color.parseColor(iconButtonColor ?: "#1A73E8") } catch (e: Exception) { Color.parseColor("#1A73E8") }
+            color = iconButtonColor?.let { parseColorSafe(it) } ?: Color.parseColor("#1A73E8")
             style = Paint.Style.FILL
         }
         val arrow = Path().apply {
@@ -459,8 +483,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         applySpeedLimitPosition()
 
         // ── ETA bottom bar ─────────────────────────────────────────────────────
-        val resolvedEtaBg = try { Color.parseColor(etaBarBackgroundColor ?: "#1E2433") } catch (e: Exception) { Color.parseColor("#1E2433") }
-        val resolvedEtaText = try { Color.parseColor(etaTextColor ?: "#FFFFFF") } catch (e: Exception) { Color.WHITE }
+        val resolvedEtaBg = etaBarBackgroundColor?.let { parseColorSafe(it) } ?: Color.parseColor("#1E2433")
+        val resolvedEtaText = etaTextColor?.let { parseColorSafe(it) } ?: Color.WHITE
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(resolvedEtaBg)
@@ -897,7 +921,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     private fun showUI() {
         maneuverView?.visibility = View.VISIBLE
-        etaBar?.visibility = View.VISIBLE
+        etaBar?.visibility = if (showEta) View.VISIBLE else View.INVISIBLE
         sideButtons?.visibility = View.VISIBLE
     }
 
@@ -1014,11 +1038,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     private fun createManeuverView(): MapboxManeuverView {
         val maneuverOptionsBuilder = ManeuverViewOptions.Builder()
-        resolveManeuverBackgroundColor()?.let {
-            try { maneuverOptionsBuilder.maneuverBackgroundColor(Color.parseColor(it)) } catch (e: Exception) {}
+        resolveManeuverBackgroundColor()?.let { hex ->
+            parseColorSafe(hex)?.let { maneuverOptionsBuilder.maneuverBackgroundColor(it) }
         }
-        maneuverTurnIconColor?.let {
-            try { maneuverOptionsBuilder.turnIconManeuver(Color.parseColor(it)) } catch (e: Exception) {}
+        maneuverTurnIconColor?.let { hex ->
+            parseColorSafe(hex)?.let { maneuverOptionsBuilder.turnIconManeuver(it) }
         }
         val mv = MapboxManeuverView(context, null, 0, maneuverOptionsBuilder.build())
         // Feature: tap the instruction banner to see the full list of upcoming
@@ -1082,8 +1106,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // ─────────────────────────────────────────────────────────────────────────
     private fun tintedDrawableToBitmap(resId: Int, colorHex: String): Bitmap? {
         return try {
+            val color = parseColorSafe(colorHex) ?: return null
             val drawable = ContextCompat.getDrawable(context, resId)?.mutate() ?: return null
-            drawable.setTint(Color.parseColor(colorHex))
+            drawable.setTint(color)
             val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1
             val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -1285,21 +1310,30 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         applySpeedLimitPosition()
     }
 
+    fun setShowEta(show: Boolean) {
+        showEta = show
+        // If navigation is already active (maneuverView currently visible),
+        // apply the change immediately rather than waiting for the next
+        // showUI() call (e.g. the next route change).
+        if (maneuverView?.visibility == View.VISIBLE) {
+            etaBar?.visibility = if (show) View.VISIBLE else View.INVISIBLE
+        }
+    }
+
     fun setEtaBarBackgroundColor(c: String?) {
         etaBarBackgroundColor = c
         c?.let { hex ->
-            try { etaBar?.setBackgroundColor(Color.parseColor(hex)) } catch (e: Exception) {}
+            parseColorSafe(hex)?.let { etaBar?.setBackgroundColor(it) }
         }
     }
 
     fun setEtaTextColor(c: String?) {
         etaTextColor = c
         c?.let { hex ->
-            try {
-                val color = Color.parseColor(hex)
+            parseColorSafe(hex)?.let { color ->
                 tvEtaTime?.setTextColor(color)
                 tvDuration?.setTextColor(color)
-            } catch (e: Exception) {}
+            }
         }
     }
 

@@ -66,11 +66,26 @@ export interface MapboxNavigationViewProps {
     customRasterAboveLayerId?: string;
     /**
      * Background color of the turn-by-turn instruction banner, as a hex string
-     * (e.g. "#1A73E8"). Uses the SDK's official ManeuverViewOptions API.
+     * (e.g. "#1A73E8" or "1A73E8" — the "#" is optional). Uses the SDK's
+     * official ManeuverViewOptions API. Day/light-mode variant — the
+     * component automatically switches to `maneuverBackgroundColorNight`
+     * between 8pm and 6am local time (Android) or via the system's day/night
+     * style switching (iOS).
      */
     maneuverBackgroundColorDay?: string;
-    /** Color of the turn arrow icon inside the instruction banner. */
+    /**
+     * Same as `maneuverBackgroundColorDay`, applied during night mode.
+     * On iOS this is only re-read the next time a route is presented, not
+     * instantly — see the iOS Color Customization note in the README.
+     */
+    maneuverBackgroundColorNight?: string;
+    /** Color of the turn arrow icon inside the instruction banner. Android only — not yet implemented on iOS (see README). */
     maneuverTurnIconColor?: string;
+    /**
+     * Whether the ETA/duration/distance bar is shown once navigation starts.
+     * Defaults to true.
+     */
+    showEta?: boolean;
     /** Background color of the bottom ETA/duration/distance bar. */
     etaBarBackgroundColor?: string;
     /** Text color used for the ETA time and duration in the bottom bar. */
@@ -79,6 +94,39 @@ export interface MapboxNavigationViewProps {
     iconButtonColor?: string;
     /** Color of the mute icon when voice guidance is muted. */
     iconButtonMutedColor?: string;
+    /**
+     * Tints the default location puck icon (the arrow/marker showing your
+     * position and heading on the map — distinct from `maneuverTurnIconColor`,
+     * which is inside the instruction banner). Ignored if
+     * `navigationPuckImagePath` or `navigationPuck3DModelPath` is set.
+     * On iOS, tints a system symbol rather than Mapbox's own default icon
+     * shape (no confirmed public API for that exact asset on iOS).
+     */
+    navigationPuckColor?: string;
+    /**
+     * Replaces the puck icon with a local image (a `file://` URI or absolute
+     * path — resolve bundled assets via `expo-asset` first). Never tinted,
+     * even if `navigationPuckColor` is also set. Falls back to the color/
+     * default icon if the file can't be loaded. Takes priority over
+     * `navigationPuckColor`.
+     */
+    navigationPuckImagePath?: string;
+    /**
+     * Replaces the 2D puck with a 3D model (`.glb`/`.gltf`) — a local path,
+     * `asset://name.glb` (Android bundled assets), or a full URL (both
+     * platforms). Takes priority over both puck props above. Falls back to
+     * the 2D puck if the model fails to load.
+     */
+    navigationPuck3DModelPath?: string;
+    /**
+     * Position of the speed limit panel. Defaults to "bottomLeft" (matches
+     * the original, pre-existing position — no change unless set).
+     * Android only — not yet implemented on iOS. "topRight" uses a wider
+     * margin to clear the mute/overview/recenter buttons already occupying
+     * that corner; verify visually on your target devices before relying on
+     * it.
+     */
+    speedLimitPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight';
     onRouteProgressChanged?: (event: {
         nativeEvent: RouteProgressEvent;
     }) => void;

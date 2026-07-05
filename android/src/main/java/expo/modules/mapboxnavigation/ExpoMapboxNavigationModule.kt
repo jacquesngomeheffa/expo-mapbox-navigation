@@ -80,6 +80,9 @@ class ExpoMapboxNavigationModule : Module() {
             Prop("speedLimitPosition") { view: ExpoMapboxNavigationView, position: String? ->
                 view.setSpeedLimitPosition(position)
             }
+            Prop("showEta") { view: ExpoMapboxNavigationView, show: Boolean ->
+                view.setShowEta(show)
+            }
             Prop("etaBarBackgroundColor") { view: ExpoMapboxNavigationView, color: String? ->
                 view.setEtaBarBackgroundColor(color)
             }
