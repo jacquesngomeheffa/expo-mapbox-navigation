@@ -31,13 +31,14 @@ const withMapboxNavigation = (config, options = {}) => {
     androidUseNdk27 = false,
     androidColorOverrides = {},
     // Read here specifically to sync into androidColorOverrides' generated
-    // XML resource (mapbox_main_maneuver_background_color) — see
-    // addAndroidConfig() below for why. Every other color prop
-    // (maneuverBackgroundColorNight, maneuverTurnIconColor, etaBar*, etc.)
-    // is passed directly as a view prop to native (via src/index.tsx's
+    // XML resources (mapbox_main_maneuver_background_color, in both a
+    // values/ and values-night/ variant — see addAndroidConfig() below).
+    // Every other color prop (maneuverTurnIconColor, etaBar*, etc.) is
+    // passed directly as a view prop to native (via src/index.tsx's
     // `{...props}` spread) and never needs to be read by this config
-    // plugin at all — this one is a deliberate exception.
+    // plugin at all — these two are a deliberate exception.
     maneuverBackgroundColorDay,
+    maneuverBackgroundColorNight,
   } = options;
 
   if (!accessToken) {
@@ -56,7 +57,7 @@ const withMapboxNavigation = (config, options = {}) => {
 
   // ── Android ───────────────────────────────────────────────────────────────
   config = withAppBuildGradle(config, (mod) => {
-    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay);
+    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight);
     return mod;
   });
 
@@ -273,7 +274,7 @@ function calculateMapboxCommonVersion(mapboxMapsVersion) {
   return ['24', ...parts.slice(1)].join('.');
 }
 
-function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay) {
+function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight) {
   if (!mod.modResults.contents.includes('abiFilters')) {
     mod.modResults.contents = mod.modResults.contents.replace(
       /defaultConfig {([\s\S]*?)}/,
@@ -354,75 +355,75 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuve
   // INTO it automatically here — UNLESS the app has already explicitly set
   // that exact key itself in androidColorOverrides, in which case their
   // explicit value is respected instead (never silently overridden).
-  const resolvedColorOverrides = { ...androidColorOverrides };
+  //
+  // FIX (3.1.5): both the color resource AND the style below are now
+  // generated TWICE — once in res/values/ (day) and once in
+  // res/values-night/ (night), using Android's own standard resource
+  // qualifier system. Root cause, confirmed directly on a real device:
+  // Mapbox ships its own values-night/ qualified resources for
+  // MapboxStyleManeuverView, which Android automatically selects over this
+  // package's own PREVIOUSLY non-qualified (values/ only) style whenever
+  // the system is in dark mode — regardless of what either color mechanism
+  // sets programmatically. Providing our own values-night/ variant, using
+  // the exact same resource names, lets Android's own resource merging
+  // correctly prefer THIS package's override over Mapbox's default in
+  // dark mode too, the same way it already did in light mode.
+  //
+  // Night resource priority mirrors the native ManeuverView's own fallback
+  // logic exactly (resolveManeuverBackgroundColor() in
+  // ExpoMapboxNavigationView.kt): explicit androidColorOverrides value (if
+  // set — applies to both day and night, since androidColorOverrides has
+  // no separate night-specific key of its own) > maneuverBackgroundColorNight
+  // > maneuverBackgroundColorDay (fallback) > nothing written.
+  const dayColorOverrides = { ...androidColorOverrides };
   if (
     maneuverBackgroundColorDay &&
-    !Object.prototype.hasOwnProperty.call(resolvedColorOverrides, 'mapbox_main_maneuver_background_color')
+    !Object.prototype.hasOwnProperty.call(dayColorOverrides, 'mapbox_main_maneuver_background_color')
   ) {
-    resolvedColorOverrides.mapbox_main_maneuver_background_color = maneuverBackgroundColorDay;
+    dayColorOverrides.mapbox_main_maneuver_background_color = maneuverBackgroundColorDay;
   }
 
-  if (Object.keys(resolvedColorOverrides).length > 0) {
-    const resDir = path.join(
+  const nightColorOverrides = { ...androidColorOverrides };
+  if (!Object.prototype.hasOwnProperty.call(nightColorOverrides, 'mapbox_main_maneuver_background_color')) {
+    const nightValue = maneuverBackgroundColorNight || maneuverBackgroundColorDay;
+    if (nightValue) {
+      nightColorOverrides.mapbox_main_maneuver_background_color = nightValue;
+    }
+  }
+
+  function writeValuesFile(qualifier, fileName, contents) {
+    if (!contents) return;
+    const dir = path.join(
       mod.modRequest?.platformProjectRoot || '',
-      'app', 'src', 'main', 'res', 'values'
+      'app', 'src', 'main', 'res', qualifier
     );
     try {
-      fs.mkdirSync(resDir, { recursive: true });
-      const colorEntries = Object.entries(resolvedColorOverrides)
-        .map(([name, value]) => `    <color name="${name}">${value}</color>`)
-        .join('\n');
-      const xmlContent = `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n${colorEntries}\n</resources>\n`;
-      fs.writeFileSync(path.join(resDir, 'mapbox_color_overrides.xml'), xmlContent);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, fileName), contents);
     } catch (e) {
       // Ignore — resDir may not exist at plugin resolution time
     }
   }
 
-  // NEW: generate a styles.xml defining MapboxCustomManeuverStyle, ONLY
-  // when a maneuver background color is actually configured (either via
-  // maneuverBackgroundColorDay or an explicit androidColorOverrides entry
-  // — resolvedColorOverrides already reflects the correct priority between
-  // those two from the sync logic above).
-  //
-  // WHY THIS EXISTS: real-device testing with full diagnostic logging
-  // (see 3.1.3 changelog) CONFIRMED the native code correctly receives
-  // maneuverBackgroundColorDay, correctly parses it, correctly builds
-  // ManeuverViewOptions with it, and correctly swaps in a freshly-built
-  // MapboxManeuverView using it — every step logged and verified. Despite
-  // all of that executing exactly as it should, the color still didn't
-  // visibly change. That rules out a bug in how we call
-  // ManeuverViewOptions — the API itself does exist and does what its own
-  // documentation says — and points instead to Mapbox's own SDK not
-  // visually honoring ManeuverViewOptions.maneuverBackgroundColor the way
-  // that documentation implies, at least not in this pinned SDK version.
-  // Mapbox's docs separately describe a DIFFERENT, XML-style-attribute-
-  // based mechanism for this same thing:
-  //   <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
-  //     <item name="maneuverViewBackgroundColor">...</item>
-  //   </style>
-  // — this generates that style, referencing the SAME
-  // mapbox_main_maneuver_background_color resource already written above
-  // (reusing the existing sync logic rather than introducing a second,
-  // separate color source). The native side applies it via
-  // ContextThemeWrapper when constructing MapboxManeuverView — a
-  // universal, always-safe Android technique for applying a style to a
-  // programmatically-created view, which works regardless of that view's
-  // specific constructor overloads (unlike guessing at an alternate
-  // MapboxManeuverView constructor signature, which risks a compile
-  // failure if wrong). This runs ALONGSIDE the existing
-  // ManeuverViewOptions-based approach, not instead of it — belt and
-  // suspenders, since we don't have certainty about which one (if either)
-  // Mapbox's rendering actually respects for the visible background
-  // specifically.
-  if (resolvedColorOverrides.mapbox_main_maneuver_background_color) {
-    const stylesDir = path.join(
-      mod.modRequest?.platformProjectRoot || '',
-      'app', 'src', 'main', 'res', 'values'
-    );
-    try {
-      fs.mkdirSync(stylesDir, { recursive: true });
-      const stylesXmlContent = `<?xml version="1.0" encoding="utf-8"?>
+  function colorOverridesXml(overrides) {
+    if (Object.keys(overrides).length === 0) return null;
+    const colorEntries = Object.entries(overrides)
+      .map(([name, value]) => `    <color name="${name}">${value}</color>`)
+      .join('\n');
+    return `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n${colorEntries}\n</resources>\n`;
+  }
+
+  writeValuesFile('values', 'mapbox_color_overrides.xml', colorOverridesXml(dayColorOverrides));
+  writeValuesFile('values-night', 'mapbox_color_overrides.xml', colorOverridesXml(nightColorOverrides));
+
+  // Generate MapboxCustomManeuverStyle (see 3.1.4 changelog for the full
+  // reasoning behind this XML-style-attribute-based mechanism, applied via
+  // ContextThemeWrapper on the native side, alongside — not instead of —
+  // the ManeuverViewOptions-based approach). Same day/night duplication as
+  // the color resources above, and for the exact same reason.
+  function maneuverStyleXml(overrides) {
+    if (!overrides.mapbox_main_maneuver_background_color) return null;
+    return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
         <item name="maneuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
@@ -431,11 +432,10 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuve
     </style>
 </resources>
 `;
-      fs.writeFileSync(path.join(stylesDir, 'mapbox_maneuver_style.xml'), stylesXmlContent);
-    } catch (e) {
-      // Ignore — resDir may not exist at plugin resolution time
-    }
   }
+
+  writeValuesFile('values', 'mapbox_maneuver_style.xml', maneuverStyleXml(dayColorOverrides));
+  writeValuesFile('values-night', 'mapbox_maneuver_style.xml', maneuverStyleXml(nightColorOverrides));
 }
 
 function addAndroidPermissions(mod, accessToken) {

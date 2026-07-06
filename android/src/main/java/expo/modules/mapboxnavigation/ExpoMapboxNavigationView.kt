@@ -16,6 +16,8 @@ import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.view.ContextThemeWrapper
 import java.io.File
 import android.util.Log
@@ -133,6 +135,19 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var tvEtaTime: TextView? = null
     private var tvDuration: TextView? = null
     private var tvDistance: TextView? = null
+    // Latest system bar insets (status bar / navigation bar), kept in sync via
+    // the WindowInsets listener set up in buildUI(). Read by
+    // applySpeedLimitPosition() and the ETA bar's own margin calculation —
+    // real devices reserve real screen space for the navigation bar
+    // (3-button or gesture), which the emulator's own default configuration
+    // doesn't always reproduce, meaning bottom/top-anchored overlay elements
+    // positioned without accounting for this can end up rendered fully or
+    // partially UNDER the system bar on real hardware despite being
+    // genuinely marked visible — invisible in practice, not in code. Also
+    // relevant regardless of any specific device: edge-to-edge display is
+    // becoming mandatory (not optional) starting Android 15+.
+    private var lastSystemBarInsets: androidx.core.graphics.Insets = androidx.core.graphics.Insets.NONE
+
     private var etaBar: LinearLayout? = null
     private var btnMuteView: ImageView? = null
     private var btnOverviewView: ImageView? = null
@@ -537,6 +552,33 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         root.addView(tpv as View, FrameLayout.LayoutParams(1, 1))
         tpv.visibility = View.GONE
         tripProgressView = tpv
+
+        // FIX: neither the ETA bar nor the speed limit panel previously
+        // accounted for the system navigation bar (3-button or gesture) at
+        // all — confirmed missing, and confirmed to matter: reported
+        // working correctly in an emulator (whose default nav bar
+        // configuration reserves little/no bottom space) but the ETA bar
+        // not appearing on real hardware, which does reserve real space
+        // there. Without this, bottom-anchored elements can render fully or
+        // partially UNDER the system bar — genuinely marked visible in
+        // code, but not visible on screen. This listener keeps
+        // lastSystemBarInsets current and re-applies both elements'
+        // position whenever insets change (rotation, nav bar
+        // show/hide, etc.) — also relevant independent of any specific
+        // device, since edge-to-edge display is becoming mandatory rather
+        // than optional starting Android 15+.
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            lastSystemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            etaBar?.let { bar ->
+                (bar.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                    lp.bottomMargin = lastSystemBarInsets.bottom
+                    bar.layoutParams = lp
+                }
+            }
+            applySpeedLimitPosition()
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
 
         addView(root)
     }
@@ -1289,11 +1331,23 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     Log.e(TAG, "navigationPuck3DModelPath: file does not have a valid .glb header, refusing to use it: $resolvedPath")
                     return null
                 }
+                Log.d(TAG, "navigationPuck3DModelPath: .glb header validated OK, file size=${File(resolvedPath).length()} bytes: $resolvedPath")
             }
             // Remote (http/https) URLs can't be cheaply pre-validated this
             // way without downloading them first — passed through as-is to
             // Mapbox's own loading, same as before.
-            LocationPuck3D(modelUri = path)
+            val puck = LocationPuck3D(modelUri = path)
+            // DIAGNOSTIC (reported crash, no log ever appears before it —
+            // consistent with a native/GPU-side rendering failure that
+            // bypasses Kotlin exception handling entirely, most likely
+            // during the actual camera zoom/render pass rather than at
+            // configuration time here). This log confirms the Kotlin side
+            // successfully got this far; if the crash still shows no
+            // Kotlin-level trace at all after this, that's further
+            // evidence the failure is happening later, natively, outside
+            // what any try/catch here can intercept.
+            Log.d(TAG, "navigationPuck3DModelPath: LocationPuck3D object constructed successfully, handing off to Mapbox")
+            puck
         } catch (e: Exception) {
             Log.e(TAG, "navigationPuck3DModelPath: failed to build 3D puck: ${e.message}")
             null
@@ -1384,23 +1438,29 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private fun applySpeedLimitPosition() {
         val siv = speedInfoView ?: return
         val params = (siv.layoutParams as? FrameLayout.LayoutParams) ?: return
+        // Real-device fix: add the system navigation/status bar inset on
+        // top of each position's existing clearance, so this panel isn't
+        // rendered under the system bar on real hardware — see the
+        // WindowInsets listener set up in buildUI() for the full context.
+        val bottomInset = lastSystemBarInsets.bottom
+        val topInset = lastSystemBarInsets.top
         when (speedLimitPosition) {
             "bottomRight" -> {
                 params.gravity = Gravity.BOTTOM or Gravity.END
-                params.setMargins(0, 0, (12 * dp).toInt(), (88 * dp).toInt())
+                params.setMargins(0, 0, (12 * dp).toInt(), (88 * dp).toInt() + bottomInset)
             }
             "topLeft" -> {
                 params.gravity = Gravity.TOP or Gravity.START
-                params.setMargins((12 * dp).toInt(), (188 * dp).toInt(), 0, 0)
+                params.setMargins((12 * dp).toInt(), (188 * dp).toInt() + topInset, 0, 0)
             }
             "topRight" -> {
                 params.gravity = Gravity.TOP or Gravity.END
                 // Wider right margin to clear the side button column (see note above).
-                params.setMargins(0, (188 * dp).toInt(), (80 * dp).toInt(), 0)
+                params.setMargins(0, (188 * dp).toInt() + topInset, (80 * dp).toInt(), 0)
             }
             else -> { // "bottomLeft" (default) — original position, unchanged
                 params.gravity = Gravity.BOTTOM or Gravity.START
-                params.setMargins((12 * dp).toInt(), 0, 0, (88 * dp).toInt())
+                params.setMargins((12 * dp).toInt(), 0, 0, (88 * dp).toInt() + bottomInset)
             }
         }
         siv.layoutParams = params
