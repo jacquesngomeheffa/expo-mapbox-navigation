@@ -1,0 +1,18 @@
+// This file is generated and will be overwritten automatically.
+
+#import <Foundation/Foundation.h>
+
+// NOLINTNEXTLINE(modernize-use-using)
+typedef NS_ENUM(NSInteger, MBNNFunctionalRoadClass)
+{
+    MBNNFunctionalRoadClassMotorway,
+    MBNNFunctionalRoadClassTrunk,
+    MBNNFunctionalRoadClassPrimary,
+    MBNNFunctionalRoadClassSecondary,
+    MBNNFunctionalRoadClassTertiary,
+    MBNNFunctionalRoadClassUnclassified,
+    MBNNFunctionalRoadClassResidential,
+    MBNNFunctionalRoadClassServiceOther
+} NS_SWIFT_NAME(FunctionalRoadClass);
+
+NSString* MBNNFunctionalRoadClassToString(MBNNFunctionalRoadClass functional_road_class);

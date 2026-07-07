@@ -15,14 +15,9 @@ __attribute__((visibility ("default")))
 // This class provides custom init which should be called
 + (nonnull instancetype)new NS_UNAVAILABLE;
 
-- (nonnull instancetype)initWithRoute:(nonnull id<MBNNRouteInterface>)route
-                         alternatives:(nonnull NSArray<MBNNRouteAlternative *> *)alternatives;
 
 /** Updated route. */
 @property (nonatomic, readonly, nonnull) id<MBNNRouteInterface> route;
-
-/** Alternative routes with recalculated `duration` info according to the new annotations. */
-@property (nonatomic, readonly, nonnull, copy) NSArray<MBNNRouteAlternative *> *alternatives;
 
 
 @end

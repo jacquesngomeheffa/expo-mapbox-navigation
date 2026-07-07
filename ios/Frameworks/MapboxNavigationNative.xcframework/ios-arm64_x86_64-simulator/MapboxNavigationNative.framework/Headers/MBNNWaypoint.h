@@ -21,13 +21,6 @@ __attribute__((visibility ("default")))
 // This class provides custom init which should be called
 + (nonnull instancetype)new NS_UNAVAILABLE;
 
-- (nonnull instancetype)initWithName:(nonnull NSString *)name
-                            location:(CLLocationCoordinate2D)location
-                            distance:(nullable NSNumber *)distance
-                            metadata:(nullable NSString *)metadata
-                              target:(nullable MBXCoordinate2D *)target
-                                type:(MBNNWaypointType)type
-                            timeZone:(nullable MBNNTimeZone *)timeZone;
 
 /**
  *  Field name as is from direction's response.
@@ -53,9 +46,6 @@ __attribute__((visibility ("default")))
  *  EvChargingServer and EvChangingUser types're calculated based on `metadata` field.
  */
 @property (nonatomic, readonly) MBNNWaypointType type;
-
-/** Time zone info */
-@property (nonatomic, readonly, nullable) MBNNTimeZone *timeZone;
 
 
 - (BOOL)isEqualToWaypoint:(nonnull MBNNWaypoint *)other;

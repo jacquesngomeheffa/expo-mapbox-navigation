@@ -2,11 +2,10 @@
 
 #import <Foundation/Foundation.h>
 #import <MapboxNavigationNative/MBNNForceRerouteCallback_Internal.h>
-#import <MapboxNavigationNative/MBNNForceRerouteReason.h>
+#import <MapboxNavigationNative/MBNNForceRerouteReason_Internal.h>
 
 NS_SWIFT_NAME(RerouteDetectorInterface)
 @protocol MBNNRerouteDetectorInterface
-/**  Force reroute with the reason provided. Reroute result is notified to observers. */
 - (void)forceRerouteForReason:(MBNNForceRerouteReason)reason;
 - (void)forceRerouteForReason:(MBNNForceRerouteReason)reason
                      callback:(nonnull MBNNForceRerouteCallback)callback;

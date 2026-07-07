@@ -17,17 +17,20 @@ __attribute__((visibility ("default")))
 
 - (nonnull instancetype)initWithEnergyConsumptionCurve:(nonnull NSArray<MBNNCurveElement *> *)energyConsumptionCurve
                                   auxiliaryConsumption:(nullable NSNumber *)auxiliaryConsumption
-                                 evPreConditioningTime:(nullable NSNumber *)evPreConditioningTime;
+                                 evPreConditioningTime:(nullable NSNumber *)evPreConditioningTime
+                          evUnconditionedChargingCurve:(nonnull NSArray<MBNNCurveElement *> *)evUnconditionedChargingCurve;
 
 - (nonnull instancetype)initWithEvInitialCharge:(uint32_t)evInitialCharge
                          energyConsumptionCurve:(nonnull NSArray<MBNNCurveElement *> *)energyConsumptionCurve
                            auxiliaryConsumption:(nullable NSNumber *)auxiliaryConsumption
-                          evPreConditioningTime:(nullable NSNumber *)evPreConditioningTime;
+                          evPreConditioningTime:(nullable NSNumber *)evPreConditioningTime
+                   evUnconditionedChargingCurve:(nonnull NSArray<MBNNCurveElement *> *)evUnconditionedChargingCurve;
 
 @property (nonatomic, readonly) uint32_t evInitialCharge;
 @property (nonatomic, readonly, nonnull, copy) NSArray<MBNNCurveElement *> *energyConsumptionCurve;
 @property (nonatomic, readonly, nullable) NSNumber *auxiliaryConsumption;
 @property (nonatomic, readonly, nullable) NSNumber *evPreConditioningTime;
+@property (nonatomic, readonly, nonnull, copy) NSArray<MBNNCurveElement *> *evUnconditionedChargingCurve;
 
 - (BOOL)isEqualToEvStateData:(nonnull MBNNEvStateData *)other;
 

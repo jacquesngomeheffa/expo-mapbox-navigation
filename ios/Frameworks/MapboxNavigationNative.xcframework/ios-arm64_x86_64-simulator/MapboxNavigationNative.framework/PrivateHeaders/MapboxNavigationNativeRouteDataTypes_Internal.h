@@ -1,0 +1,18 @@
+// This file is generated and will be overwritten automatically.
+
+#import "MBNNRDTRdWaypointType_Internal.h"
+#import "MBNNRDTRdManeuverType_Internal.h"
+#import "MBNNRDTRdManeuverModifier_Internal.h"
+#import "MBNNRDTRdLaneIndication_Internal.h"
+#import "MBNNRDTRdRoadClass_Internal.h"
+#import "MBNNRDTRdDrivingSide_Internal.h"
+#import "MBNNRDTRdCongestionLevel_Internal.h"
+#import "MBNNRDTRdSpeedUnits_Internal.h"
+#import "MBNNRDTRdRoadShield_Internal.h"
+#import "MBNNRDTRdManeuver_Internal.h"
+#import "MBNNRDTRdLane_Internal.h"
+#import "MBNNRDTRdIntersection_Internal.h"
+#import "MBNNRDTRdVoiceInstruction_Internal.h"
+#import "MBNNRDTRdSpeedLimitAnnotation_Internal.h"
+#import "MBNNRDTRdLegClosure_Internal.h"
+#import "MBNNRDTRdWaypoint_Internal.h"

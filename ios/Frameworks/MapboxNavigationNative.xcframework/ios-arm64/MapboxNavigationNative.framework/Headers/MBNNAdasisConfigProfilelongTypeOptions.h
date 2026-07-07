@@ -2,13 +2,11 @@
 
 #import <Foundation/Foundation.h>
 
-@class MBNNAdasisConfigProfilelongTrafficSignOptions;
+@class MBNNAdasisConfigCustomTrafficEvents;
+@class MBNNAdasisConfigLonLat;
+@class MBNNAdasisConfigProfilelongTrafficSigns;
 
-/**
- * PROFILE LONG message options
- * lonLat - if true, longitude and latitude types will be generated
- * trafficSign - for each of supported straffic signs: if true, the Traffic Sign type will be generated
- */
+/** PROFILE LONG message options */
 NS_SWIFT_NAME(AdasisConfigProfilelongTypeOptions)
 __attribute__((visibility ("default")))
 @interface MBNNAdasisConfigProfilelongTypeOptions : NSObject
@@ -19,13 +17,13 @@ __attribute__((visibility ("default")))
 // This class provides custom init which should be called
 + (nonnull instancetype)new NS_UNAVAILABLE;
 
-- (nonnull instancetype)initWithTrafficSign:(nonnull MBNNAdasisConfigProfilelongTrafficSignOptions *)trafficSign;
+- (nonnull instancetype)initWithLonLat:(nonnull MBNNAdasisConfigLonLat *)lonLat
+                          trafficSigns:(nonnull MBNNAdasisConfigProfilelongTrafficSigns *)trafficSigns
+                          customEvents:(nonnull MBNNAdasisConfigCustomTrafficEvents *)customEvents;
 
-- (nonnull instancetype)initWithLonLat:(BOOL)lonLat
-                           trafficSign:(nonnull MBNNAdasisConfigProfilelongTrafficSignOptions *)trafficSign;
-
-@property (nonatomic, readonly) BOOL lonLat;
-@property (nonatomic, readonly, nonnull) MBNNAdasisConfigProfilelongTrafficSignOptions *trafficSign;
+@property (nonatomic, readonly, nonnull) MBNNAdasisConfigLonLat *lonLat;
+@property (nonatomic, readonly, nonnull) MBNNAdasisConfigProfilelongTrafficSigns *trafficSigns;
+@property (nonatomic, readonly, nonnull) MBNNAdasisConfigCustomTrafficEvents *customEvents;
 
 - (BOOL)isEqualToAdasisConfigProfilelongTypeOptions:(nonnull MBNNAdasisConfigProfilelongTypeOptions *)other;
 

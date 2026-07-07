@@ -1,0 +1,63 @@
+// This file is generated and will be overwritten automatically.
+
+#import <Foundation/Foundation.h>
+
+// NOLINTNEXTLINE(modernize-use-using)
+typedef NS_ENUM(NSInteger, MBNNWeatherDetail)
+{
+    MBNNWeatherDetailClear = 0,
+    MBNNWeatherDetailCloudy = 1,
+    MBNNWeatherDetailFewClouds = 2,
+    MBNNWeatherDetailPartlyCloudy = 3,
+    MBNNWeatherDetailOvercast = 4,
+    MBNNWeatherDetailWindy = 5,
+    MBNNWeatherDetailCalm = 6,
+    MBNNWeatherDetailLightBreeze = 7,
+    MBNNWeatherDetailGentleBreeze = 8,
+    MBNNWeatherDetailFreshBreeze = 9,
+    MBNNWeatherDetailStrongBreeze = 10,
+    MBNNWeatherDetailHighWind = 11,
+    MBNNWeatherDetailGale = 12,
+    MBNNWeatherDetailStrongGale = 13,
+    MBNNWeatherDetailStorm = 14,
+    MBNNWeatherDetailViolentStorm = 15,
+    MBNNWeatherDetailHurricane = 16,
+    MBNNWeatherDetailTornado = 17,
+    MBNNWeatherDetailTropicalStorm = 18,
+    MBNNWeatherDetailShowerRain = 19,
+    MBNNWeatherDetailHeavyShowerRain = 20,
+    MBNNWeatherDetailThundershower = 21,
+    MBNNWeatherDetailHeavyThunderstorm = 22,
+    MBNNWeatherDetailHail = 23,
+    MBNNWeatherDetailLightRain = 24,
+    MBNNWeatherDetailModerateRain = 25,
+    MBNNWeatherDetailHeavyRain = 26,
+    MBNNWeatherDetailExtremeRain = 27,
+    MBNNWeatherDetailDrizzleRain = 28,
+    MBNNWeatherDetailRainStorm = 29,
+    MBNNWeatherDetailHeavyStorm = 30,
+    MBNNWeatherDetailSevereStorm = 31,
+    MBNNWeatherDetailFreezingRain = 32,
+    MBNNWeatherDetailLightSnow = 33,
+    MBNNWeatherDetailModerateSnow = 34,
+    MBNNWeatherDetailHeavySnow = 35,
+    MBNNWeatherDetailSnowstorm = 36,
+    MBNNWeatherDetailSleet = 37,
+    MBNNWeatherDetailRainAndSnow = 38,
+    MBNNWeatherDetailShowerSnow = 39,
+    MBNNWeatherDetailSnowFlurry = 40,
+    MBNNWeatherDetailMist = 41,
+    MBNNWeatherDetailFoggy = 42,
+    MBNNWeatherDetailHaze = 43,
+    MBNNWeatherDetailSand = 44,
+    MBNNWeatherDetailDust = 45,
+    MBNNWeatherDetailDuststorm = 46,
+    MBNNWeatherDetailSandstorm = 47,
+    MBNNWeatherDetailHot = 48,
+    MBNNWeatherDetailCold = 49,
+    MBNNWeatherDetailIceParticles = 50,
+    MBNNWeatherDetailIceNeedle = 51,
+    MBNNWeatherDetailUnknown = 127
+} NS_SWIFT_NAME(WeatherDetail);
+
+NSString* MBNNWeatherDetailToString(MBNNWeatherDetail weather_detail);
