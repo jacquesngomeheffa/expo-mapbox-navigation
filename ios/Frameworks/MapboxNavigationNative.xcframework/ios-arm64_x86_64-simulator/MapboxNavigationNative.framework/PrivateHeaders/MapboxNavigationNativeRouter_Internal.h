@@ -1,6 +1,17 @@
 // This file is generated and will be overwritten automatically.
 
+#import "MBNNRoutingMode_Internal.h"
+#import "MBNNRouterErrorType_Internal.h"
+#import "MBNNRouterType_Internal.h"
+#import "MBNNGetRouteReason_Internal.h"
+#import "MBNNGetRouteOrigin_Internal.h"
+#import "MBNNRoutingProfile_Internal.h"
+#import "MBNNRouterError_Internal.h"
+#import "MBNNGetRouteOptions_Internal.h"
+#import "MBNNRouteRefreshOptions_Internal.h"
+#import "MBNNGetRouteSignature_Internal.h"
+#import "MBNNRoutingProfileConverter_Internal.h"
+#import "MBNNRouterFactory_Internal.h"
 #import "MBNNRouterInterface_Internal.h"
 #import "MBNNRouterDataRefCallback_Internal.h"
 #import "MBNNRouterRefreshCallback_Internal.h"
-#import "MBNNRouterFactory_Internal.h"

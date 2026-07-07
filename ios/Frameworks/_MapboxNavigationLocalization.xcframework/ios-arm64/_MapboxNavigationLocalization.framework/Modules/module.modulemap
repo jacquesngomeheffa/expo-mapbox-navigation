@@ -1,0 +1,5 @@
+framework module _MapboxNavigationLocalization {
+    header "_MapboxNavigationLocalization-Swift.h"
+    export *
+    link framework "_MapboxNavigationHelpers"
+}

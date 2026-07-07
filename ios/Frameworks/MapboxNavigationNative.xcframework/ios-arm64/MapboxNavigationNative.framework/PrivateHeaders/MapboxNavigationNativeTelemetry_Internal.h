@@ -1,4 +1,15 @@
 // This file is generated and will be overwritten automatically.
 
+#import "MBNNOuterDeviceAction_Internal.h"
+#import "MBNNAudioType_Internal.h"
+#import "MBNNApplicationState_Internal.h"
+#import "MBNNStep_Internal.h"
+#import "MBNNUserFeedbackMetadata_Internal.h"
+#import "MBNNAppMetadata_Internal.h"
+#import "MBNNEventsMetadata_Internal.h"
+#import "MBNNScreenshotFormat_Internal.h"
+#import "MBNNUserFeedback_Internal.h"
+#import "MBNNUserFeedbackHandle_Internal.h"
+#import "MBNNEventsMetadataInterface_Internal.h"
 #import "MBNNTelemetry_Internal.h"
 #import "MBNNUserFeedbackCallback_Internal.h"

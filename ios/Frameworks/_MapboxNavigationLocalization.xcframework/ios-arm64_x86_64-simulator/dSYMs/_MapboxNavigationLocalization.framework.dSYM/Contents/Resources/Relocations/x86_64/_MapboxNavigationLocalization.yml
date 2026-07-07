@@ -1,0 +1,18 @@
+---
+triple:          'x86_64-apple-darwin'
+binary-path:     '/Users/distiller/code/projects/mapbox-navigation-ios-internal/mapbox-navigation-ios/.build/scipio/DerivedData/Products/Release-iphonesimulator/_MapboxNavigationLocalization.framework/_MapboxNavigationLocalization'
+relocations:
+  - { offset: 0x341BD, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvgZ', symObjAddr: 0x0, symBinAddr: 0x1890, symSize: 0x50 }
+  - { offset: 0x341DF, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV07_customC6Bundle33_5B8F5DE3654354E69836BEA95C85E818LL01_aB7Helpers6LockedCySo8NSBundleCSgSo6NSLockCGvpZ', symObjAddr: 0x2BB0, symBinAddr: 0x4300, symSize: 0x0 }
+  - { offset: 0x341F8, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV19nonExistentKeyValue33_5B8F5DE3654354E69836BEA95C85E818LLSSvpZ.0', symObjAddr: 0x2BC0, symBinAddr: 0x4310, symSize: 0x0 }
+  - { offset: 0x34203, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV19nonExistentKeyValue33_5B8F5DE3654354E69836BEA95C85E818LLSSvpZ.1', symObjAddr: 0x2BC8, symBinAddr: 0x4318, symSize: 0x0 }
+  - { offset: 0x342B0, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV07_customC6Bundle33_5B8F5DE3654354E69836BEA95C85E818LL_WZ', symObjAddr: 0x170, symBinAddr: 0x1A00, symSize: 0x40 }
+  - { offset: 0x342C9, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV19nonExistentKeyValue33_5B8F5DE3654354E69836BEA95C85E818LL_WZ', symObjAddr: 0x1B0, symBinAddr: 0x1A40, symSize: 0x40 }
+  - { offset: 0x34306, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerVMa', symObjAddr: 0x370, symBinAddr: 0x1C00, symSize: 0x10 }
+  - { offset: 0x34319, size: 0x8, addend: 0x0, symName: ___swift_instantiateConcreteTypeFromMangledName, symObjAddr: 0x380, symBinAddr: 0x1C10, symSize: 0x36 }
+  - { offset: 0x343D5, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvgZ', symObjAddr: 0x0, symBinAddr: 0x1890, symSize: 0x50 }
+  - { offset: 0x34404, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvsZ', symObjAddr: 0x50, symBinAddr: 0x18E0, symSize: 0x60 }
+  - { offset: 0x34450, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvMZ', symObjAddr: 0xB0, symBinAddr: 0x1940, symSize: 0x50 }
+  - { offset: 0x344E4, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvMZ.resume.0', symObjAddr: 0x100, symBinAddr: 0x1990, symSize: 0x70 }
+  - { offset: 0x3455C, size: 0x8, addend: 0x0, symName: '_$s29_MapboxNavigationLocalization0C7ManagerV15localizedString_9tableName13defaultBundle5value7commentS2S_SSSgSo8NSBundleCS2StFZ', symObjAddr: 0x1F0, symBinAddr: 0x1A80, symSize: 0x180 }
+...

@@ -11,8 +11,9 @@
  * enableRetransmission - if true, retransmission will be enabled (package will be amended with messages from previous cycles)
  * retransmissionMeters - after passing this distance, messages will not be retransmitted
  * treeTrailingLength - the trailing length of the path tree, relatively to the map-matched position, in the adasis provider
- * enableUpdates - send messages with update flag
- * sortMessagesByMppAndDist - sort all messages by distance, first sent MPP
+ * updatesEnabled - send messages with update flag
+ * createPathOnOffsetOverflow - use the same path on offset overflow instead of creating a new path
+ * setRouteIsReset - reset EHP on route change instead of triggering the update workflow
  */
 NS_SWIFT_NAME(AdasisConfigDataSending)
 __attribute__((visibility ("default")))
@@ -33,8 +34,9 @@ __attribute__((visibility ("default")))
                               enableRetransmission:(BOOL)enableRetransmission
                               retransmissionMeters:(uint32_t)retransmissionMeters
                                 treeTrailingLength:(uint32_t)treeTrailingLength
-                                     enableUpdates:(BOOL)enableUpdates
-                          sortMessagesByMppAndDist:(BOOL)sortMessagesByMppAndDist;
+                                    updatesEnabled:(BOOL)updatesEnabled
+                      continuePathOnOffsetOverflow:(BOOL)continuePathOnOffsetOverflow
+                                   setRouteIsReset:(BOOL)setRouteIsReset;
 
 @property (nonatomic, readonly) MBNNMessageBinaryFormat outputBinaryFormat;
 @property (nonatomic, readonly) uint32_t messageIntervalMs;
@@ -43,8 +45,9 @@ __attribute__((visibility ("default")))
 @property (nonatomic, readonly) BOOL enableRetransmission;
 @property (nonatomic, readonly) uint32_t retransmissionMeters;
 @property (nonatomic, readonly) uint32_t treeTrailingLength;
-@property (nonatomic, readonly) BOOL enableUpdates;
-@property (nonatomic, readonly) BOOL sortMessagesByMppAndDist;
+@property (nonatomic, readonly) BOOL updatesEnabled;
+@property (nonatomic, readonly) BOOL continuePathOnOffsetOverflow;
+@property (nonatomic, readonly) BOOL setRouteIsReset;
 
 - (BOOL)isEqualToAdasisConfigDataSending:(nonnull MBNNAdasisConfigDataSending *)other;
 

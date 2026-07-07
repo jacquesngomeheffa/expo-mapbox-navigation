@@ -1,7 +1,6 @@
 // swift-interface-format-version: 1.0
-// swift-compiler-version: Apple Swift version 5.9.2 (swiftlang-5.9.2.2.56 clang-1500.1.0.2.5)
-// swift-module-flags: -target arm64-apple-ios15.1 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -module-name MapboxMaps
-// swift-module-flags-ignorable: -enable-bare-slash-regex
+// swift-compiler-version: Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.10 clang-1600.0.30.1)
+// swift-module-flags: -target arm64-apple-ios15.1 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-bare-slash-regex -module-name MapboxMaps
 import CoreFoundation.CFCGTypes
 import CoreImage.CIFilterBuiltins
 import CoreLocation.CLLocation
@@ -16,7 +15,7 @@ import Dispatch
 import Foundation
 import MapboxCommon.MBXCoordinate2D
 @_exported import MapboxCommon
-@_exported import MapboxCoreMaps
+@_exported @_spi(Marshalling) @_spi(Internal) import MapboxCoreMaps
 @_exported import MapboxMaps
 import Metal
 import MetalKit
@@ -58,6 +57,7 @@ extension MapboxMaps.Exp {
     public static let array: MapboxMaps.Exp.Operator
     public static let asin: MapboxMaps.Exp.Operator
     public static let at: MapboxMaps.Exp.Operator
+    public static let atInterpolated: MapboxMaps.Exp.Operator
     public static let atan: MapboxMaps.Exp.Operator
     public static let boolean: MapboxMaps.Exp.Operator
     public static let switchCase: MapboxMaps.Exp.Operator
@@ -114,6 +114,7 @@ extension MapboxMaps.Exp {
     public static let sin: MapboxMaps.Exp.Operator
     public static let skyRadialProgress: MapboxMaps.Exp.Operator
     public static let slice: MapboxMaps.Exp.Operator
+    public static let split: MapboxMaps.Exp.Operator
     public static let sqrt: MapboxMaps.Exp.Operator
     public static let step: MapboxMaps.Exp.Operator
     public static let string: MapboxMaps.Exp.Operator
@@ -128,6 +129,7 @@ extension MapboxMaps.Exp {
     public static let upcase: MapboxMaps.Exp.Operator
     public static let varExpression: MapboxMaps.Exp.Operator
     public static let within: MapboxMaps.Exp.Operator
+    @_spi(Experimental) public static let worldview: MapboxMaps.Exp.Operator
     public static let zoom: MapboxMaps.Exp.Operator
     public static let linear: MapboxMaps.Exp.Operator
     public static let exponential: MapboxMaps.Exp.Operator
@@ -142,6 +144,7 @@ public struct AmbientLight : Swift.Codable, MapboxMaps.StyleEncodable, Swift.Equ
   public let type: MapboxMaps.LightType
   public var color: MapboxMaps.Value<MapboxMaps.StyleColor>?
   public var colorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) public var colorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var intensity: MapboxMaps.Value<Swift.Double>?
   public var intensityTransition: MapboxMaps.StyleTransition?
   public init(id: Swift.String = UUID().uuidString)
@@ -154,6 +157,8 @@ extension MapboxMaps.AmbientLight {
   public func color(_ color: UIKit.UIColor) -> MapboxMaps.AmbientLight
   public func colorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.AmbientLight
   public func color(_ expression: MapboxMaps.Exp) -> MapboxMaps.AmbientLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.AmbientLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.AmbientLight
   public func intensity(_ constant: Swift.Double) -> MapboxMaps.AmbientLight
   public func intensityTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.AmbientLight
   public func intensity(_ expression: MapboxMaps.Exp) -> MapboxMaps.AmbientLight
@@ -228,7 +233,9 @@ extension MapboxMaps.PointAnnotation {
   public struct Image : Swift.Hashable, Swift.Sendable {
     public var image: UIKit.UIImage
     public var name: Swift.String
+    public var sdf: Swift.Bool
     public init(image: UIKit.UIImage, name: Swift.String)
+    public init(image: UIKit.UIImage, name: Swift.String, sdf: Swift.Bool)
     public func hash(into hasher: inout Swift.Hasher)
     public static func == (a: MapboxMaps.PointAnnotation.Image, b: MapboxMaps.PointAnnotation.Image) -> Swift.Bool
     public var hashValue: Swift.Int {
@@ -249,10 +256,10 @@ public protocol AnnotationInteractionDelegate : AnyObject {
   final public var annotationManagersById: [Swift.String : any MapboxMaps.AnnotationManager] {
     get
   }
-  final public func makePointAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxMaps.LayerPosition? = nil, clusterOptions: MapboxMaps.ClusterOptions? = nil, onClusterTap: ((MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void)? = nil, onClusterLongPress: ((MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void)? = nil) -> MapboxMaps.PointAnnotationManager
-  final public func makePolygonAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxMaps.LayerPosition? = nil) -> MapboxMaps.PolygonAnnotationManager
-  final public func makePolylineAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxMaps.LayerPosition? = nil) -> MapboxMaps.PolylineAnnotationManager
-  final public func makeCircleAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxMaps.LayerPosition? = nil) -> MapboxMaps.CircleAnnotationManager
+  final public func makePointAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxCoreMaps.LayerPosition? = nil, clusterOptions: MapboxMaps.ClusterOptions? = nil, onClusterTap: ((MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void)? = nil, onClusterLongPress: ((MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void)? = nil) -> MapboxMaps.PointAnnotationManager
+  final public func makePolygonAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxCoreMaps.LayerPosition? = nil) -> MapboxMaps.PolygonAnnotationManager
+  final public func makePolylineAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxCoreMaps.LayerPosition? = nil) -> MapboxMaps.PolylineAnnotationManager
+  final public func makeCircleAnnotationManager(id: Swift.String = String(UUID().uuidString.prefix(5)), layerPosition: MapboxCoreMaps.LayerPosition? = nil) -> MapboxMaps.CircleAnnotationManager
   final public func removeAnnotationManager(withId id: Swift.String)
   @objc deinit
 }
@@ -531,6 +538,14 @@ extension MapboxMaps.BackgroundLayer : MapboxMaps.MapStyleContent {
   @objc final public func cancel()
   @objc deinit
 }
+@_spi(Internal) public struct MapboxMapsMetadata : Swift.Codable {
+  @_spi(Internal) public var version: Swift.String
+  @_spi(Internal) public func encode(to encoder: any Swift.Encoder) throws
+  @_spi(Internal) public init(from decoder: any Swift.Decoder) throws
+}
+extension Foundation.Bundle {
+  @_spi(Internal) public static var mapboxMapsMetadata: MapboxMaps.MapboxMapsMetadata
+}
 @_hasMissingDesignatedInitializers final public class CameraAnimationsManager {
   final public var cameraAnimators: [any MapboxMaps.CameraAnimator] {
     get
@@ -746,6 +761,7 @@ public struct CircleAnnotationGroup<Data, ID> where Data : Swift.RandomAccessCol
   public init(_ data: Data, id: Swift.KeyPath<Data.Element, ID>, content: @escaping (Data.Element) -> MapboxMaps.CircleAnnotation)
   public init(_ data: Data, content: @escaping (Data.Element) -> MapboxMaps.CircleAnnotation) where ID == Data.Element.ID, Data.Element : Swift.Identifiable
   public init(@MapboxMaps.ArrayBuilder<MapboxMaps.CircleAnnotation> content: @escaping () -> [MapboxMaps.CircleAnnotation?]) where Data == [(Swift.Int, MapboxMaps.CircleAnnotation)], ID == Swift.Int
+  @_spi(Experimental) @_documentation(visibility: public) public func circleElevationReference(_ newValue: MapboxMaps.CircleElevationReference) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
   public func circleSortKey(_ newValue: Swift.Double) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
   public func circleBlurTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
   public func circleBlur(_ newValue: Swift.Double) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
@@ -776,8 +792,8 @@ public struct CircleAnnotationGroup<Data, ID> where Data : Swift.RandomAccessCol
   public func slot(_ newValue: Swift.String) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
   public func slot(_ newValue: MapboxMaps.Slot?) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
   public func layerId(_ layerId: Swift.String) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
+  public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
+  public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.CircleAnnotationGroup<Data, ID>
 }
 extension MapboxMaps.CircleAnnotationGroup : MapboxMaps.MapContent {
   public typealias Body = Swift.Never
@@ -806,6 +822,10 @@ extension MapboxMaps.CircleAnnotationGroup : MapboxMaps.MapContent {
   }
   @available(*, deprecated, message: "Use tapHandler property of Annotation")
   weak public var delegate: (any MapboxMaps.AnnotationInteractionDelegate)? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var circleElevationReference: MapboxMaps.CircleElevationReference? {
     get
     set
   }
@@ -921,6 +941,7 @@ public struct CircleLayer : MapboxMaps.Layer, Swift.Equatable {
   public var minZoom: Swift.Double?
   public var maxZoom: Swift.Double?
   public var visibility: MapboxMaps.Value<MapboxMaps.Visibility>
+  @_spi(Experimental) @_documentation(visibility: public) public var circleElevationReference: MapboxMaps.Value<MapboxMaps.CircleElevationReference>?
   public var circleSortKey: MapboxMaps.Value<Swift.Double>?
   public var circleBlur: MapboxMaps.Value<Swift.Double>?
   public var circleBlurTransition: MapboxMaps.StyleTransition?
@@ -957,6 +978,8 @@ extension MapboxMaps.CircleLayer {
   public func slot(_ newValue: MapboxMaps.Slot?) -> MapboxMaps.CircleLayer
   public func minZoom(_ newValue: Swift.Double) -> MapboxMaps.CircleLayer
   public func maxZoom(_ newValue: Swift.Double) -> MapboxMaps.CircleLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func circleElevationReference(_ constant: MapboxMaps.CircleElevationReference) -> MapboxMaps.CircleLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func circleElevationReference(_ expression: MapboxMaps.Exp) -> MapboxMaps.CircleLayer
   public func circleSortKey(_ constant: Swift.Double) -> MapboxMaps.CircleLayer
   public func circleSortKey(_ expression: MapboxMaps.Exp) -> MapboxMaps.CircleLayer
   public func circleBlur(_ constant: Swift.Double) -> MapboxMaps.CircleLayer
@@ -1051,7 +1074,8 @@ public struct ClusterOptions : Swift.Equatable, Swift.Sendable {
 }
 @_spi(Experimental) @available(iOS 13.0, *)
 extension MapboxMaps.ColorTheme : MapboxMaps.MapStyleContent {
-  @_spi(Experimental) public typealias Body = Swift.Never
+  @_spi(Experimental) @available(iOS 13.0, *)
+  public typealias Body = Swift.Never
 }
 public class CompassDirectionFormatter {
   public enum Style : Swift.Hashable, Swift.Sendable {
@@ -1160,7 +1184,7 @@ extension MapboxMaps.CustomGeometrySource {
   @_spi(Experimental) public func renderer(_ newValue: any MapboxCoreMaps.CustomLayerHost) -> MapboxMaps.CustomLayer
 }
 @_spi(Experimental) extension MapboxMaps.CustomLayer : MapboxMaps.MapStyleContent {
-  @_spi(Experimental) @_documentation(visibility: public) public func position(_ position: MapboxMaps.LayerPosition) -> MapboxMaps.LayerAtPosition<MapboxMaps.CustomLayer>
+  @_spi(Experimental) @_documentation(visibility: public) public func position(_ position: MapboxCoreMaps.LayerPosition) -> MapboxMaps.LayerAtPosition<MapboxMaps.CustomLayer>
   @_spi(Experimental) public typealias Body = Swift.Never
 }
 @_spi(Experimental) @_documentation(visibility: public) public struct CustomRasterSource : MapboxMaps.Source, Swift.Equatable {
@@ -1203,6 +1227,7 @@ public struct DirectionalLight : Swift.Codable, MapboxMaps.StyleEncodable, Swift
   public var castShadows: MapboxMaps.Value<Swift.Bool>?
   public var color: MapboxMaps.Value<MapboxMaps.StyleColor>?
   public var colorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) public var colorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var direction: MapboxMaps.Value<[Swift.Double]>?
   public var directionTransition: MapboxMaps.StyleTransition?
   public var intensity: MapboxMaps.Value<Swift.Double>?
@@ -1221,6 +1246,8 @@ extension MapboxMaps.DirectionalLight {
   public func color(_ color: UIKit.UIColor) -> MapboxMaps.DirectionalLight
   public func colorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.DirectionalLight
   public func color(_ expression: MapboxMaps.Exp) -> MapboxMaps.DirectionalLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.DirectionalLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.DirectionalLight
   public func direction(azimuthal: Swift.Double, polar: Swift.Double) -> MapboxMaps.DirectionalLight
   public func directionTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.DirectionalLight
   public func direction(_ expression: MapboxMaps.Exp) -> MapboxMaps.DirectionalLight
@@ -1410,57 +1437,57 @@ extension MapboxCoreMaps.FeatureExtensionValue {
     get
   }
 }
-@_spi(Experimental) @_documentation(visibility: public) public struct FeatureState<T> : Swift.Equatable, MapboxMaps.MapContent where T : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) @_documentation(visibility: public) public init(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, id: MapboxMaps.FeaturesetFeatureId, state: T.State)
-  @_spi(Experimental) @_documentation(visibility: public) public init(_ feature: T, _ state: T.State)
-  @_spi(Experimental) public static func == (a: MapboxMaps.FeatureState<T>, b: MapboxMaps.FeatureState<T>) -> Swift.Bool
-  @_spi(Experimental) public typealias Body = Swift.Never
+public struct FeatureState<T> : Swift.Equatable, MapboxMaps.MapContent where T : MapboxMaps.FeaturesetFeatureType {
+  public init(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, id: MapboxMaps.FeaturesetFeatureId, state: T.State)
+  public init(_ feature: T, _ state: T.State)
+  public static func == (a: MapboxMaps.FeatureState<T>, b: MapboxMaps.FeatureState<T>) -> Swift.Bool
+  public typealias Body = Swift.Never
 }
-@_spi(Experimental) @_documentation(visibility: public) public struct FeaturesetDescriptor<FeatureType> : Swift.Equatable where FeatureType : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) @_documentation(visibility: public) public let featuresetId: Swift.String?
-  @_spi(Experimental) @_documentation(visibility: public) public let importId: Swift.String?
-  @_spi(Experimental) @_documentation(visibility: public) public let layerId: Swift.String?
-  @_spi(Experimental) public func converted<U>() -> MapboxMaps.FeaturesetDescriptor<U> where U : MapboxMaps.FeaturesetFeatureType
-  @_spi(Experimental) public static func == (a: MapboxMaps.FeaturesetDescriptor<FeatureType>, b: MapboxMaps.FeaturesetDescriptor<FeatureType>) -> Swift.Bool
+public struct FeaturesetDescriptor<FeatureType> : Swift.Equatable where FeatureType : MapboxMaps.FeaturesetFeatureType {
+  public let featuresetId: Swift.String?
+  public let importId: Swift.String?
+  public let layerId: Swift.String?
+  public func converted<U>() -> MapboxMaps.FeaturesetDescriptor<U> where U : MapboxMaps.FeaturesetFeatureType
+  public static func == (a: MapboxMaps.FeaturesetDescriptor<FeatureType>, b: MapboxMaps.FeaturesetDescriptor<FeatureType>) -> Swift.Bool
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.FeaturesetFeature {
-  @_spi(Experimental) @_documentation(visibility: public) public static func featureset(_ id: Swift.String, importId: Swift.String? = "basemap") -> MapboxMaps.FeaturesetDescriptor<FeatureType>
-  @_spi(Experimental) @_documentation(visibility: public) public static func layer(_ layerId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
+extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.FeaturesetFeature {
+  public static func featureset(_ id: Swift.String, importId: Swift.String? = "basemap") -> MapboxMaps.FeaturesetDescriptor<FeatureType>
+  public static func layer(_ layerId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
 }
-@_spi(Experimental) @_documentation(visibility: public) public protocol FeaturesetFeatureType {
+public protocol FeaturesetFeatureType {
   associatedtype State : Swift.Decodable, Swift.Encodable, Swift.Equatable
   associatedtype StateKey : Swift.CustomStringConvertible
-  @_spi(Experimental) @_documentation(visibility: public) var id: MapboxMaps.FeaturesetFeatureId? { get }
-  @_spi(Experimental) @_documentation(visibility: public) var featureset: MapboxMaps.FeaturesetDescriptor<Self> { get }
-  @_spi(Experimental) @_documentation(visibility: public) var state: Self.State { get }
-  @_spi(Experimental) @_documentation(visibility: public) var geometry: MapboxMaps.Geometry { get }
-  @_spi(Experimental) @_documentation(visibility: public) var properties: Turf.JSONObject { get }
-  @_spi(Experimental) @_documentation(visibility: public) init?(from: MapboxMaps.FeaturesetFeature)
+  var id: MapboxMaps.FeaturesetFeatureId? { get }
+  var featureset: MapboxMaps.FeaturesetDescriptor<Self> { get }
+  var state: Self.State { get }
+  var geometry: MapboxMaps.Geometry { get }
+  var properties: Turf.JSONObject { get }
+  init?(from: MapboxMaps.FeaturesetFeature)
 }
-@_spi(Experimental) @_documentation(visibility: public) final public class FeaturesetFeature : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) public typealias State = Turf.JSONObject
-  @_spi(Experimental) public typealias StateKey = Swift.String
-  @_spi(Experimental) @_documentation(visibility: public) final public let id: MapboxMaps.FeaturesetFeatureId?
-  @_spi(Experimental) @_documentation(visibility: public) final public let featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>
-  @_spi(Experimental) @_documentation(visibility: public) final public var geometry: MapboxMaps.Geometry {
-    @_spi(Experimental) get
+final public class FeaturesetFeature : MapboxMaps.FeaturesetFeatureType {
+  public typealias State = Turf.JSONObject
+  public typealias StateKey = Swift.String
+  final public let id: MapboxMaps.FeaturesetFeatureId?
+  final public let featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>
+  final public var geometry: MapboxMaps.Geometry {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var properties: Turf.JSONObject {
-    @_spi(Experimental) get
+  final public var properties: Turf.JSONObject {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public let state: Turf.JSONObject
-  @_spi(Experimental) @_documentation(visibility: public) public init(id: MapboxMaps.FeaturesetFeatureId?, featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>, geoJsonFeature: MapboxMaps.Feature, state: MapboxMaps.FeaturesetFeature.State)
-  @_spi(Experimental) @_documentation(visibility: public) convenience required public init?(from other: MapboxMaps.FeaturesetFeature)
-  @_spi(Experimental) @objc deinit
+  final public let state: Turf.JSONObject
+  public init(id: MapboxMaps.FeaturesetFeatureId?, featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>, geoJsonFeature: MapboxMaps.Feature, state: MapboxMaps.FeaturesetFeature.State)
+  @_documentation(visibility: public) convenience required public init?(from other: MapboxMaps.FeaturesetFeature)
+  @objc deinit
 }
-@_spi(Experimental) @_documentation(visibility: public) public struct FeaturesetFeatureId : Swift.Hashable {
-  @_spi(Experimental) @_documentation(visibility: public) public let id: Swift.String
-  @_spi(Experimental) @_documentation(visibility: public) public let namespace: Swift.String?
-  @_spi(Experimental) @_documentation(visibility: public) public init(id: Swift.String, namespace: Swift.String? = nil)
-  @_spi(Experimental) public func hash(into hasher: inout Swift.Hasher)
-  @_spi(Experimental) public static func == (a: MapboxMaps.FeaturesetFeatureId, b: MapboxMaps.FeaturesetFeatureId) -> Swift.Bool
-  @_spi(Experimental) public var hashValue: Swift.Int {
-    @_spi(Experimental) get
+public struct FeaturesetFeatureId : Swift.Hashable {
+  @_documentation(visibility: public) public let id: Swift.String
+  @_documentation(visibility: public) public let namespace: Swift.String?
+  @_documentation(visibility: public) public init(id: Swift.String, namespace: Swift.String? = nil)
+  public func hash(into hasher: inout Swift.Hasher)
+  public static func == (a: MapboxMaps.FeaturesetFeatureId, b: MapboxMaps.FeaturesetFeatureId) -> Swift.Bool
+  public var hashValue: Swift.Int {
+    get
   }
 }
 public struct FillExtrusionLayer : MapboxMaps.Layer, Swift.Equatable {
@@ -1512,6 +1539,7 @@ public struct FillExtrusionLayer : MapboxMaps.Layer, Swift.Equatable {
   public var fillExtrusionOpacity: MapboxMaps.Value<Swift.Double>?
   public var fillExtrusionOpacityTransition: MapboxMaps.StyleTransition?
   public var fillExtrusionPattern: MapboxMaps.Value<MapboxMaps.ResolvedImage>?
+  public var fillExtrusionPatternCrossFade: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var fillExtrusionRoundedRoof: MapboxMaps.Value<Swift.Bool>?
   public var fillExtrusionTranslate: MapboxMaps.Value<[Swift.Double]>?
   public var fillExtrusionTranslateTransition: MapboxMaps.StyleTransition?
@@ -1595,6 +1623,8 @@ extension MapboxMaps.FillExtrusionLayer {
   public func fillExtrusionOpacity(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillExtrusionLayer
   public func fillExtrusionPattern(_ constant: Swift.String) -> MapboxMaps.FillExtrusionLayer
   public func fillExtrusionPattern(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillExtrusionLayer
+  public func fillExtrusionPatternCrossFade(_ constant: Swift.Double) -> MapboxMaps.FillExtrusionLayer
+  public func fillExtrusionPatternCrossFade(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillExtrusionLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillExtrusionRoundedRoof(_ constant: Swift.Bool) -> MapboxMaps.FillExtrusionLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillExtrusionRoundedRoof(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillExtrusionLayer
   public func fillExtrusionTranslate(x: Swift.Double, y: Swift.Double) -> MapboxMaps.FillExtrusionLayer
@@ -1621,9 +1651,13 @@ public struct FillLayer : MapboxMaps.Layer, Swift.Equatable {
   public var minZoom: Swift.Double?
   public var maxZoom: Swift.Double?
   public var visibility: MapboxMaps.Value<MapboxMaps.Visibility>
+  @_spi(Experimental) @_documentation(visibility: public) public var fillConstructBridgeGuardRail: MapboxMaps.Value<Swift.Bool>?
   @_spi(Experimental) @_documentation(visibility: public) public var fillElevationReference: MapboxMaps.Value<MapboxMaps.FillElevationReference>?
   public var fillSortKey: MapboxMaps.Value<Swift.Double>?
   public var fillAntialias: MapboxMaps.Value<Swift.Bool>?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColor: MapboxMaps.Value<MapboxMaps.StyleColor>?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) public var fillBridgeGuardRailColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var fillColor: MapboxMaps.Value<MapboxMaps.StyleColor>?
   public var fillColorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) public var fillColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
@@ -1635,9 +1669,13 @@ public struct FillLayer : MapboxMaps.Layer, Swift.Equatable {
   public var fillOutlineColorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) public var fillOutlineColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var fillPattern: MapboxMaps.Value<MapboxMaps.ResolvedImage>?
+  public var fillPatternCrossFade: MapboxMaps.Value<Swift.Double>?
   public var fillTranslate: MapboxMaps.Value<[Swift.Double]>?
   public var fillTranslateTransition: MapboxMaps.StyleTransition?
   public var fillTranslateAnchor: MapboxMaps.Value<MapboxMaps.FillTranslateAnchor>?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColor: MapboxMaps.Value<MapboxMaps.StyleColor>?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) public var fillTunnelStructureColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var fillZOffset: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var fillZOffsetTransition: MapboxMaps.StyleTransition?
   public init(id: Swift.String, source: Swift.String)
@@ -1652,12 +1690,20 @@ extension MapboxMaps.FillLayer {
   public func slot(_ newValue: MapboxMaps.Slot?) -> MapboxMaps.FillLayer
   public func minZoom(_ newValue: Swift.Double) -> MapboxMaps.FillLayer
   public func maxZoom(_ newValue: Swift.Double) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillConstructBridgeGuardRail(_ constant: Swift.Bool) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillConstructBridgeGuardRail(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillElevationReference(_ constant: MapboxMaps.FillElevationReference) -> MapboxMaps.FillLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillElevationReference(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillSortKey(_ constant: Swift.Double) -> MapboxMaps.FillLayer
   public func fillSortKey(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillAntialias(_ constant: Swift.Bool) -> MapboxMaps.FillLayer
   public func fillAntialias(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ constant: MapboxMaps.StyleColor) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ color: UIKit.UIColor) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillColor(_ constant: MapboxMaps.StyleColor) -> MapboxMaps.FillLayer
   public func fillColor(_ color: UIKit.UIColor) -> MapboxMaps.FillLayer
   public func fillColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FillLayer
@@ -1678,11 +1724,19 @@ extension MapboxMaps.FillLayer {
   @_spi(Experimental) @_documentation(visibility: public) public func fillOutlineColorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillPattern(_ constant: Swift.String) -> MapboxMaps.FillLayer
   public func fillPattern(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
+  public func fillPatternCrossFade(_ constant: Swift.Double) -> MapboxMaps.FillLayer
+  public func fillPatternCrossFade(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillTranslate(x: Swift.Double, y: Swift.Double) -> MapboxMaps.FillLayer
   public func fillTranslateTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FillLayer
   public func fillTranslate(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   public func fillTranslateAnchor(_ constant: MapboxMaps.FillTranslateAnchor) -> MapboxMaps.FillLayer
   public func fillTranslateAnchor(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ constant: MapboxMaps.StyleColor) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ color: UIKit.UIColor) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.FillLayer
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffset(_ constant: Swift.Double) -> MapboxMaps.FillLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffsetTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FillLayer
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffset(_ expression: MapboxMaps.Exp) -> MapboxMaps.FillLayer
@@ -1696,6 +1750,7 @@ public struct FlatLight : Swift.Codable, MapboxMaps.StyleEncodable, Swift.Equata
   public var anchor: MapboxMaps.Value<MapboxMaps.Anchor>?
   public var color: MapboxMaps.Value<MapboxMaps.StyleColor>?
   public var colorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) public var colorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var intensity: MapboxMaps.Value<Swift.Double>?
   public var intensityTransition: MapboxMaps.StyleTransition?
   public var position: MapboxMaps.Value<[Swift.Double]>?
@@ -1712,6 +1767,8 @@ extension MapboxMaps.FlatLight {
   public func color(_ color: UIKit.UIColor) -> MapboxMaps.FlatLight
   public func colorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FlatLight
   public func color(_ expression: MapboxMaps.Exp) -> MapboxMaps.FlatLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.FlatLight
+  @_spi(Experimental) @_documentation(visibility: public) public func colorUseTheme(_ expression: MapboxMaps.Exp) -> MapboxMaps.FlatLight
   public func intensity(_ constant: Swift.Double) -> MapboxMaps.FlatLight
   public func intensityTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.FlatLight
   public func intensity(_ expression: MapboxMaps.Exp) -> MapboxMaps.FlatLight
@@ -1814,8 +1871,13 @@ public struct GeoJSONSource : MapboxMaps.Source {
   public var clusterProperties: [Swift.String : MapboxMaps.Exp]?
   public var lineMetrics: Swift.Bool?
   public var generateId: Swift.Bool?
-  public var promoteId: MapboxMaps.PromoteId?
-  @_spi(Experimental) public var autoMaxZoom: Swift.Bool?
+  public var promoteId2: MapboxMaps.Value<Swift.String>?
+  @available(*, deprecated, message: "Use promoteId2 instead")
+  public var promoteId: MapboxMaps.PromoteId? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var autoMaxZoom: Swift.Bool?
   public var prefetchZoomDelta: Swift.Double?
   public var tileCacheBudget: MapboxMaps.TileCacheBudgetSize?
   public init(id: Swift.String)
@@ -1879,13 +1941,17 @@ public protocol GestureManagerDelegate : AnyObject {
   final public var longPressGestureRecognizer: UIKit.UIGestureRecognizer {
     get
   }
+  @available(*, deprecated, message: "Use TapInteraction")
   final public var onMapTap: MapboxMaps.Signal<MapboxMaps.InteractionContext> {
     get
   }
+  @available(*, deprecated, message: "Use LongPressInteraction")
   final public var onMapLongPress: MapboxMaps.Signal<MapboxMaps.InteractionContext> {
     get
   }
+  @available(*, deprecated, message: "Use TapInteraction")
   final public func onLayerTap(_ layerId: Swift.String, handler: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.AnyCancelable
+  @available(*, deprecated, message: "Use TapInteraction")
   final public func onLayerLongPress(_ layerId: Swift.String, handler: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.AnyCancelable
   weak final public var delegate: (any MapboxMaps.GestureManagerDelegate)?
   @objc deinit
@@ -1897,7 +1963,7 @@ public enum PanMode : Swift.String, Swift.Equatable, Swift.CaseIterable, Swift.S
   public init?(rawValue: Swift.String)
   public typealias AllCases = [MapboxMaps.PanMode]
   public typealias RawValue = Swift.String
-  public static var allCases: [MapboxMaps.PanMode] {
+  nonisolated public static var allCases: [MapboxMaps.PanMode] {
     get
   }
   public var rawValue: Swift.String {
@@ -1933,7 +1999,7 @@ public enum GestureType : Swift.Hashable, Swift.CaseIterable, Swift.Sendable {
   public static func == (a: MapboxMaps.GestureType, b: MapboxMaps.GestureType) -> Swift.Bool
   public func hash(into hasher: inout Swift.Hasher)
   public typealias AllCases = [MapboxMaps.GestureType]
-  public static var allCases: [MapboxMaps.GestureType] {
+  nonisolated public static var allCases: [MapboxMaps.GestureType] {
     get
   }
   public var hashValue: Swift.Int {
@@ -2114,26 +2180,26 @@ public enum ImportPosition : Swift.Equatable, Swift.Codable, Swift.Sendable {
   public func encode(to encoder: any Swift.Encoder) throws
   public init(from decoder: any Swift.Decoder) throws
 }
-@_spi(Experimental) @_documentation(visibility: public) public protocol Interaction {
-  @_spi(Internal) var impl: MapboxMaps.InteractionImpl { get }
+public protocol Interaction {
+  @_spi(Internal) var impl: MapboxMaps.InteractionImpl? { get }
 }
-@_spi(Experimental) @_documentation(visibility: public) public struct TapInteraction : MapboxMaps.Interaction {
-  @_spi(Internal) public let impl: MapboxMaps.InteractionImpl
-  @_spi(Experimental) @_documentation(visibility: public) public init(action: @escaping (MapboxMaps.InteractionContext) -> Swift.Bool)
-  @_spi(Experimental) @_documentation(visibility: public) public init<T>(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, radius: CoreFoundation.CGFloat? = nil, action: @escaping (T, MapboxMaps.InteractionContext) -> Swift.Bool) where T : MapboxMaps.FeaturesetFeatureType
+public struct TapInteraction : MapboxMaps.Interaction {
+  @_spi(Internal) public let impl: MapboxMaps.InteractionImpl?
+  public init(action: @escaping (MapboxMaps.InteractionContext) -> Swift.Bool)
+  public init<T>(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, radius: CoreFoundation.CGFloat? = nil, action: @escaping (T, MapboxMaps.InteractionContext) -> Swift.Bool) where T : MapboxMaps.FeaturesetFeatureType
 }
-@_spi(Experimental) @_documentation(visibility: public) public struct LongPressInteraction : MapboxMaps.Interaction {
-  @_spi(Internal) public let impl: MapboxMaps.InteractionImpl
-  @_spi(Experimental) @_documentation(visibility: public) public init(action: @escaping (MapboxMaps.InteractionContext) -> Swift.Bool)
-  @_spi(Experimental) @_documentation(visibility: public) public init<T>(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, radius: CoreFoundation.CGFloat? = nil, action: @escaping (T, MapboxMaps.InteractionContext) -> Swift.Bool) where T : MapboxMaps.FeaturesetFeatureType
+public struct LongPressInteraction : MapboxMaps.Interaction {
+  @_spi(Internal) public let impl: MapboxMaps.InteractionImpl?
+  public init(action: @escaping (MapboxMaps.InteractionContext) -> Swift.Bool)
+  public init<T>(_ featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, radius: CoreFoundation.CGFloat? = nil, action: @escaping (T, MapboxMaps.InteractionContext) -> Swift.Bool) where T : MapboxMaps.FeaturesetFeatureType
 }
 @_spi(Internal) public struct InteractionImpl {
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.TapInteraction : MapboxMaps.MapContent {
-  @_spi(Experimental) public typealias Body = Swift.Never
+extension MapboxMaps.TapInteraction : MapboxMaps.MapContent {
+  public typealias Body = Swift.Never
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.LongPressInteraction : MapboxMaps.MapContent {
-  @_spi(Experimental) public typealias Body = Swift.Never
+extension MapboxMaps.LongPressInteraction : MapboxMaps.MapContent {
+  public typealias Body = Swift.Never
 }
 public protocol Layer : MapboxMaps.StyleDecodable, MapboxMaps.StyleEncodable, Swift.Decodable, Swift.Encodable {
   var id: Swift.String { get set }
@@ -2150,21 +2216,12 @@ public struct LayerAtPosition<L> : MapboxMaps.MapStyleContent where L : MapboxMa
   public typealias Body = Swift.Never
 }
 extension MapboxMaps.SlotLayer {
-  public func position(_ position: MapboxMaps.LayerPosition) -> MapboxMaps.LayerAtPosition<MapboxMaps.SlotLayer>
+  public func position(_ position: MapboxCoreMaps.LayerPosition) -> MapboxMaps.LayerAtPosition<MapboxMaps.SlotLayer>
 }
 public struct LayerInfo : Swift.Sendable {
   public var id: Swift.String
   public var type: MapboxMaps.LayerType
   public init(id: Swift.String, type: MapboxMaps.LayerType)
-}
-public enum LayerPosition : Swift.Equatable, Swift.Codable, Swift.Sendable {
-  case `default`
-  case above(Swift.String)
-  case below(Swift.String)
-  case at(Swift.Int)
-  public static func == (a: MapboxMaps.LayerPosition, b: MapboxMaps.LayerPosition) -> Swift.Bool
-  public func encode(to encoder: any Swift.Encoder) throws
-  public init(from decoder: any Swift.Decoder) throws
 }
 public struct LayerType : Swift.ExpressibleByStringLiteral, Swift.RawRepresentable, Swift.Codable, Swift.Hashable, Swift.Sendable {
   public let rawValue: Swift.String
@@ -2253,6 +2310,7 @@ public struct LineLayer : MapboxMaps.Layer, Swift.Equatable {
   public var lineOpacity: MapboxMaps.Value<Swift.Double>?
   public var lineOpacityTransition: MapboxMaps.StyleTransition?
   public var linePattern: MapboxMaps.Value<MapboxMaps.ResolvedImage>?
+  public var linePatternCrossFade: MapboxMaps.Value<Swift.Double>?
   public var lineTranslate: MapboxMaps.Value<[Swift.Double]>?
   public var lineTranslateTransition: MapboxMaps.StyleTransition?
   public var lineTranslateAnchor: MapboxMaps.Value<MapboxMaps.LineTranslateAnchor>?
@@ -2338,6 +2396,8 @@ extension MapboxMaps.LineLayer {
   public func lineOpacity(_ expression: MapboxMaps.Exp) -> MapboxMaps.LineLayer
   public func linePattern(_ constant: Swift.String) -> MapboxMaps.LineLayer
   public func linePattern(_ expression: MapboxMaps.Exp) -> MapboxMaps.LineLayer
+  public func linePatternCrossFade(_ constant: Swift.Double) -> MapboxMaps.LineLayer
+  public func linePatternCrossFade(_ expression: MapboxMaps.Exp) -> MapboxMaps.LineLayer
   public func lineTranslate(x: Swift.Double, y: Swift.Double) -> MapboxMaps.LineLayer
   public func lineTranslateTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.LineLayer
   public func lineTranslate(_ expression: MapboxMaps.Exp) -> MapboxMaps.LineLayer
@@ -2558,20 +2618,20 @@ public protocol LocationPermissionsDelegate : AnyObject {
   }
 }
 extension MapboxMaps.Map {
-  public func onMapLoaded(action: @escaping (MapboxCoreMaps.MapLoaded) -> Swift.Void) -> MapboxMaps.Map
-  public func onMapLoadingError(action: @escaping (MapboxCoreMaps.MapLoadingError) -> Swift.Void) -> MapboxMaps.Map
-  public func onStyleLoaded(action: @escaping (MapboxCoreMaps.StyleLoaded) -> Swift.Void) -> MapboxMaps.Map
-  public func onStyleDataLoaded(action: @escaping (MapboxCoreMaps.StyleDataLoaded) -> Swift.Void) -> MapboxMaps.Map
-  public func onCameraChanged(action: @escaping (MapboxCoreMaps.CameraChanged) -> Swift.Void) -> MapboxMaps.Map
-  public func onMapIdle(action: @escaping (MapboxCoreMaps.MapIdle) -> Swift.Void) -> MapboxMaps.Map
-  public func onSourceAdded(action: @escaping (MapboxCoreMaps.SourceAdded) -> Swift.Void) -> MapboxMaps.Map
-  public func onSourceRemoved(action: @escaping (MapboxCoreMaps.SourceRemoved) -> Swift.Void) -> MapboxMaps.Map
-  public func onSourceDataLoaded(action: @escaping (MapboxCoreMaps.SourceDataLoaded) -> Swift.Void) -> MapboxMaps.Map
-  public func onStyleImageMissing(action: @escaping (MapboxCoreMaps.StyleImageMissing) -> Swift.Void) -> MapboxMaps.Map
-  public func onStyleImageRemoveUnused(action: @escaping (MapboxCoreMaps.StyleImageRemoveUnused) -> Swift.Void) -> MapboxMaps.Map
-  public func onRenderFrameStarted(action: @escaping (MapboxCoreMaps.RenderFrameStarted) -> Swift.Void) -> MapboxMaps.Map
-  public func onRenderFrameFinished(action: @escaping (MapboxCoreMaps.RenderFrameFinished) -> Swift.Void) -> MapboxMaps.Map
-  public func onResourceRequest(action: @escaping (MapboxCoreMaps.ResourceRequest) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onMapLoaded(action: @escaping (MapboxCoreMaps.MapLoaded) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onMapLoadingError(action: @escaping (MapboxCoreMaps.MapLoadingError) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onStyleLoaded(action: @escaping (MapboxCoreMaps.StyleLoaded) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onStyleDataLoaded(action: @escaping (MapboxCoreMaps.StyleDataLoaded) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onCameraChanged(action: @escaping (MapboxCoreMaps.CameraChanged) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onMapIdle(action: @escaping (MapboxCoreMaps.MapIdle) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onSourceAdded(action: @escaping (MapboxCoreMaps.SourceAdded) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onSourceRemoved(action: @escaping (MapboxCoreMaps.SourceRemoved) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onSourceDataLoaded(action: @escaping (MapboxCoreMaps.SourceDataLoaded) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onStyleImageMissing(action: @escaping (MapboxCoreMaps.StyleImageMissing) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onStyleImageRemoveUnused(action: @escaping (MapboxCoreMaps.StyleImageRemoveUnused) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onRenderFrameStarted(action: @escaping (MapboxCoreMaps.RenderFrameStarted) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onRenderFrameFinished(action: @escaping (MapboxCoreMaps.RenderFrameFinished) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func onResourceRequest(action: @escaping (MapboxCoreMaps.ResourceRequest) -> Swift.Void) -> MapboxMaps.Map
 }
 public struct MapGestureHandlers {
   public var onBegin: ((MapboxMaps.GestureType) -> Swift.Void)?
@@ -2580,52 +2640,57 @@ public struct MapGestureHandlers {
   public init(onBegin: ((MapboxMaps.GestureType) -> Swift.Void)? = nil, onEnd: ((MapboxMaps.GestureType, Swift.Bool) -> Swift.Void)? = nil, onEndAnimation: ((MapboxMaps.GestureType) -> Swift.Void)? = nil)
 }
 extension MapboxMaps.Map {
-  public func onMapTapGesture(perform action: @escaping (MapboxMaps.InteractionContext) -> Swift.Void) -> MapboxMaps.Map
-  public func onMapLongPressGesture(perform action: @escaping (MapboxMaps.InteractionContext) -> Swift.Void) -> MapboxMaps.Map
-  public func onLayerTapGesture(_ layerId: Swift.String, perform action: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.Map
-  public func onLayerLongPressGesture(_ layerId: Swift.String, perform action: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.Map
-  public func gestureOptions(_ options: MapboxMaps.GestureOptions) -> MapboxMaps.Map
-  public func gestureHandlers(_ handlers: MapboxMaps.MapGestureHandlers) -> MapboxMaps.Map
+  @available(*, deprecated, message: "Use TapInteraction")
+  @_Concurrency.MainActor @preconcurrency public func onMapTapGesture(perform action: @escaping (MapboxMaps.InteractionContext) -> Swift.Void) -> MapboxMaps.Map
+  @available(*, deprecated, message: "Use LongPressInteraction")
+  @_Concurrency.MainActor @preconcurrency public func onMapLongPressGesture(perform action: @escaping (MapboxMaps.InteractionContext) -> Swift.Void) -> MapboxMaps.Map
+  @available(*, deprecated, message: "Use TapInteraction")
+  @_Concurrency.MainActor @preconcurrency public func onLayerTapGesture(_ layerId: Swift.String, perform action: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.Map
+  @available(*, deprecated, message: "Use LongPressInteraction")
+  @_Concurrency.MainActor @preconcurrency public func onLayerLongPressGesture(_ layerId: Swift.String, perform action: @escaping MapboxMaps.MapLayerGestureHandler) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func gestureOptions(_ options: MapboxMaps.GestureOptions) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func gestureHandlers(_ handlers: MapboxMaps.MapGestureHandlers) -> MapboxMaps.Map
 }
 public typealias MapURLOpener = (Foundation.URL) -> Swift.Void
-public struct Map : SwiftUI.UIViewControllerRepresentable {
+@_Concurrency.MainActor @preconcurrency public struct Map : SwiftUI.UIViewControllerRepresentable {
   @available(iOSApplicationExtension, unavailable)
-  public init(viewport: SwiftUI.Binding<MapboxMaps.Viewport>, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
+  @_Concurrency.MainActor @preconcurrency public init(viewport: SwiftUICore.Binding<MapboxMaps.Viewport>, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
   @available(iOSApplicationExtension, unavailable)
-  public init(initialViewport: MapboxMaps.Viewport = .styleDefault, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
-  @_Concurrency.MainActor(unsafe) public func makeCoordinator() -> MapboxMaps.Map.Coordinator
-  @_Concurrency.MainActor(unsafe) public func makeUIViewController(context: MapboxMaps.Map.Context) -> UIKit.UIViewController
-  @_Concurrency.MainActor(unsafe) public func updateUIViewController(_ mapController: UIKit.UIViewController, context: MapboxMaps.Map.Context)
+  @_Concurrency.MainActor @preconcurrency public init(initialViewport: MapboxMaps.Viewport = .styleDefault, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
+  @_Concurrency.MainActor @preconcurrency public func makeCoordinator() -> MapboxMaps.Map.Coordinator
+  @_Concurrency.MainActor @preconcurrency public func makeUIViewController(context: MapboxMaps.Map.Context) -> UIKit.UIViewController
+  @_Concurrency.MainActor @preconcurrency public func updateUIViewController(_ mapController: UIKit.UIViewController, context: MapboxMaps.Map.Context)
   public typealias Body = Swift.Never
   public typealias UIViewControllerType = UIKit.UIViewController
 }
 extension MapboxMaps.Map {
   @available(iOSApplicationExtension, unavailable)
-  public init(viewport: SwiftUI.Binding<MapboxMaps.Viewport>)
+  @_Concurrency.MainActor @preconcurrency public init(viewport: SwiftUICore.Binding<MapboxMaps.Viewport>)
   @available(iOSApplicationExtension, unavailable)
-  public init(initialViewport: MapboxMaps.Viewport = .styleDefault)
-  public init(viewport: SwiftUI.Binding<MapboxMaps.Viewport>, urlOpener: @escaping MapboxMaps.MapURLOpener, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
-  public init(initialViewport: MapboxMaps.Viewport = .styleDefault, urlOpener: @escaping MapboxMaps.MapURLOpener, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
+  @_Concurrency.MainActor @preconcurrency public init(initialViewport: MapboxMaps.Viewport = .styleDefault)
+  @_Concurrency.MainActor @preconcurrency public init(viewport: SwiftUICore.Binding<MapboxMaps.Viewport>, urlOpener: @escaping MapboxMaps.MapURLOpener, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
+  @_Concurrency.MainActor @preconcurrency public init(initialViewport: MapboxMaps.Viewport = .styleDefault, urlOpener: @escaping MapboxMaps.MapURLOpener, @MapboxMaps.MapContentBuilder content: @escaping () -> some MapContent)
 }
 extension MapboxMaps.Map {
-  @_spi(Restricted) public func attributionMenuFilter(_ filter: @escaping (MapboxMaps.AttributionMenuItem) -> Swift.Bool) -> MapboxMaps.Map
-  public func cameraBounds(_ cameraBounds: MapboxMaps.CameraBoundsOptions) -> MapboxMaps.Map
-  public func mapStyle(_ mapStyle: MapboxMaps.MapStyle) -> MapboxMaps.Map
-  public func constrainMode(_ constrainMode: MapboxCoreMaps.ConstrainMode) -> MapboxMaps.Map
-  public func viewportMode(_ viewportMode: MapboxCoreMaps.ViewportMode) -> MapboxMaps.Map
-  public func northOrientation(_ northOrientation: MapboxCoreMaps.NorthOrientation) -> MapboxMaps.Map
-  public func ornamentOptions(_ options: MapboxMaps.OrnamentOptions) -> MapboxMaps.Map
-  public func debugOptions(_ debugOptions: MapboxMaps.MapViewDebugOptions) -> MapboxMaps.Map
-  public func opaque(_ value: Swift.Bool) -> MapboxMaps.Map
-  public func frameRate(range: Swift.ClosedRange<Swift.Float>? = nil, preferred: Swift.Float? = nil) -> MapboxMaps.Map
-  public func presentationTransactionMode(_ value: MapboxMaps.PresentationTransactionMode) -> MapboxMaps.Map
+  @_spi(Restricted) @_Concurrency.MainActor @preconcurrency public func attributionMenuFilter(_ filter: @escaping (MapboxMaps.AttributionMenuItem) -> Swift.Bool) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func cameraBounds(_ cameraBounds: MapboxMaps.CameraBoundsOptions) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func mapStyle(_ mapStyle: MapboxMaps.MapStyle) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func constrainMode(_ constrainMode: MapboxCoreMaps.ConstrainMode) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func viewportMode(_ viewportMode: MapboxCoreMaps.ViewportMode) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func northOrientation(_ northOrientation: MapboxCoreMaps.NorthOrientation) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func ornamentOptions(_ options: MapboxMaps.OrnamentOptions) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func debugOptions(_ debugOptions: MapboxMaps.MapViewDebugOptions) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func opaque(_ value: Swift.Bool) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func frameRate(range: Swift.ClosedRange<Swift.Float>? = nil, preferred: Swift.Float? = nil) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func presentationTransactionMode(_ value: MapboxMaps.PresentationTransactionMode) -> MapboxMaps.Map
   @available(*, unavailable, message: "Transaction mode is managed automatically, see presentationTransactionMode")
-  public func presentsWithTransaction(_: Swift.Bool)
-  public func transitionsToIdleUponUserInteraction(_ value: Swift.Bool) -> MapboxMaps.Map
-  public func usesSafeAreaInsetsAsPadding(_ value: Swift.Bool) -> MapboxMaps.Map
-  public func additionalSafeAreaInsets(_ insets: SwiftUI.EdgeInsets) -> MapboxMaps.Map
-  public func collectPerformanceStatistics(_ options: MapboxCoreMaps.PerformanceStatisticsOptions?, callback: @escaping (MapboxCoreMaps.PerformanceStatistics) -> Swift.Void) -> MapboxMaps.Map
-  public func additionalSafeAreaInsets(_ edges: SwiftUI.Edge.Set = .all, _ length: CoreFoundation.CGFloat) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func presentsWithTransaction(_: Swift.Bool)
+  @_Concurrency.MainActor @preconcurrency public func transitionsToIdleUponUserInteraction(_ value: Swift.Bool) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func usesSafeAreaInsetsAsPadding(_ value: Swift.Bool) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func additionalSafeAreaInsets(_ insets: SwiftUICore.EdgeInsets) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func collectPerformanceStatistics(_ options: MapboxCoreMaps.PerformanceStatisticsOptions?, callback: @escaping (MapboxCoreMaps.PerformanceStatistics) -> Swift.Void) -> MapboxMaps.Map
+  @_Concurrency.MainActor @preconcurrency public func additionalSafeAreaInsets(_ edges: SwiftUICore.Edge.Set = .all, _ length: CoreFoundation.CGFloat) -> MapboxMaps.Map
+  @_spi(Experimental) @_documentation(visibility: public) @_Concurrency.MainActor @preconcurrency public func screenCullingShape(_ shape: [CoreFoundation.CGPoint]) -> MapboxMaps.Map
 }
 extension MapboxMaps.Map {
   @_hasMissingDesignatedInitializers final public class Coordinator {
@@ -2860,11 +2925,11 @@ public struct MapProxy {
   }
   public func captureSnapshot(includeOverlays: Swift.Bool = false) -> UIKit.UIImage?
 }
-public struct MapReader<Content> : SwiftUI.View where Content : SwiftUI.View {
+@_Concurrency.MainActor @preconcurrency public struct MapReader<Content> : SwiftUICore.View where Content : SwiftUICore.View {
   public typealias ContentProvider = (MapboxMaps.MapProxy) -> Content
-  public var content: MapboxMaps.MapReader<Content>.ContentProvider
-  public init(content: @escaping MapboxMaps.MapReader<Content>.ContentProvider)
-  @_Concurrency.MainActor(unsafe) public var body: some SwiftUI.View {
+  @_Concurrency.MainActor @preconcurrency public var content: MapboxMaps.MapReader<Content>.ContentProvider
+  @_Concurrency.MainActor @preconcurrency public init(content: @escaping MapboxMaps.MapReader<Content>.ContentProvider)
+  @_Concurrency.MainActor @preconcurrency public var body: some SwiftUICore.View {
     get
   }
   public typealias Body = @_opaqueReturnTypeOf("$s10MapboxMaps9MapReaderV4bodyQrvp", 0) __<Content>
@@ -2889,7 +2954,7 @@ public struct MapSnapshotOptions : Swift.Sendable {
   public init(size: CoreFoundation.CGSize, pixelRatio: CoreFoundation.CGFloat, glyphsRasterizationOptions: MapboxCoreMaps.GlyphsRasterizationOptions = GlyphsRasterizationOptions(), showsLogo: Swift.Bool = true, showsAttribution: Swift.Bool = true)
 }
 extension MapboxMaps.MapStyle {
-  public static func standard(theme: MapboxMaps.StandardTheme? = nil, lightPreset: MapboxMaps.StandardLightPreset? = nil, font: MapboxMaps.StandardFont? = nil, showPointOfInterestLabels: Swift.Bool? = nil, showTransitLabels: Swift.Bool? = nil, showPlaceLabels: Swift.Bool? = nil, showRoadLabels: Swift.Bool? = nil, showPedestrianRoads: Swift.Bool? = nil, show3dObjects: Swift.Bool? = nil, colorMotorways: MapboxMaps.StyleColor? = nil, colorPlaceLabelHighlight: MapboxMaps.StyleColor? = nil, colorPlaceLabelSelect: MapboxMaps.StyleColor? = nil, colorRoads: MapboxMaps.StyleColor? = nil, colorTrunks: MapboxMaps.StyleColor? = nil, themeData: Swift.String? = nil) -> MapboxMaps.MapStyle
+  public static func standard(theme: MapboxMaps.StandardTheme? = nil, lightPreset: MapboxMaps.StandardLightPreset? = nil, font: MapboxMaps.StandardFont? = nil, showPointOfInterestLabels: Swift.Bool? = nil, showTransitLabels: Swift.Bool? = nil, showPlaceLabels: Swift.Bool? = nil, showRoadLabels: Swift.Bool? = nil, showPedestrianRoads: Swift.Bool? = nil, show3dObjects: Swift.Bool? = nil, colorBuildingHighlight: MapboxMaps.StyleColor? = nil, colorBuildingSelect: MapboxMaps.StyleColor? = nil, colorMotorways: MapboxMaps.StyleColor? = nil, colorPlaceLabelHighlight: MapboxMaps.StyleColor? = nil, colorPlaceLabelSelect: MapboxMaps.StyleColor? = nil, colorRoads: MapboxMaps.StyleColor? = nil, colorTrunks: MapboxMaps.StyleColor? = nil, showLandmarkIcons: Swift.Bool? = nil, themeData: Swift.String? = nil) -> MapboxMaps.MapStyle
   public static var standard: MapboxMaps.MapStyle {
     get
   }
@@ -2946,12 +3011,6 @@ public struct StandardFont : Swift.RawRepresentable, Swift.Hashable, Swift.Senda
   public static let spectral: MapboxMaps.StandardFont
   public static let ubuntu: MapboxMaps.StandardFont
   public typealias RawValue = Swift.String
-}
-extension MapboxMaps.MapStyle {
-  @_spi(Experimental) @_documentation(visibility: public) public static func standardExperimental(theme: MapboxMaps.StandardTheme? = nil, lightPreset: MapboxMaps.StandardLightPreset? = nil, font: MapboxMaps.StandardFont? = nil, showPointOfInterestLabels: Swift.Bool? = nil, showTransitLabels: Swift.Bool? = nil, showPlaceLabels: Swift.Bool? = nil, showRoadLabels: Swift.Bool? = nil, show3dObjects: Swift.Bool? = nil, buildingHighlightColor: MapboxMaps.StyleColor? = nil, buildingSelectColor: MapboxMaps.StyleColor? = nil, placeLabelHighlightColor: MapboxMaps.StyleColor? = nil, placeLabelSelectColor: MapboxMaps.StyleColor? = nil) -> MapboxMaps.MapStyle
-  @_spi(Experimental) @_documentation(visibility: public) public static var standardExperimental: MapboxMaps.MapStyle {
-    get
-  }
 }
 extension MapboxMaps.MapStyle {
   public static func standardSatellite(lightPreset: MapboxMaps.StandardLightPreset? = nil, font: MapboxMaps.StandardFont? = nil, showPointOfInterestLabels: Swift.Bool? = nil, showTransitLabels: Swift.Bool? = nil, showPlaceLabels: Swift.Bool? = nil, showRoadLabels: Swift.Bool? = nil, showRoadsAndTransit: Swift.Bool? = nil, showPedestrianRoads: Swift.Bool? = nil, colorMotorways: MapboxMaps.StyleColor? = nil, colorPlaceLabelHighlight: MapboxMaps.StyleColor? = nil, colorPlaceLabelSelect: MapboxMaps.StyleColor? = nil, colorRoads: MapboxMaps.StyleColor? = nil, colorTrunks: MapboxMaps.StyleColor? = nil) -> MapboxMaps.MapStyle
@@ -3031,90 +3090,90 @@ extension MapboxMaps.MapView {
     public static let missingImageData: MapboxMaps.MapView.SnapshotError
     public static func == (a: MapboxMaps.MapView.SnapshotError, b: MapboxMaps.MapView.SnapshotError) -> Swift.Bool
   }
-  @_Concurrency.MainActor(unsafe) public func snapshot(includeOverlays: Swift.Bool = false) throws -> UIKit.UIImage
+  @_Concurrency.MainActor @preconcurrency public func snapshot(includeOverlays: Swift.Bool = false) throws -> UIKit.UIImage
 }
-@objc @_inheritsConvenienceInitializers @_hasMissingDesignatedInitializers @_Concurrency.MainActor(unsafe) open class MapView : UIKit.UIView {
-  @_spi(Restricted) @_Concurrency.MainActor(unsafe) public var attributionMenu: MapboxMaps.AttributionMenu! {
+@objc @_inheritsConvenienceInitializers @_hasMissingDesignatedInitializers @_Concurrency.MainActor @preconcurrency open class MapView : UIKit.UIView {
+  @_spi(Restricted) @_Concurrency.MainActor @preconcurrency public var attributionMenu: MapboxMaps.AttributionMenu! {
     get
   }
-  @_Concurrency.MainActor(unsafe) @objc override dynamic open class var layerClass: Swift.AnyClass {
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic open class var layerClass: Swift.AnyClass {
     @objc get
   }
-  @_Concurrency.MainActor(unsafe) public var mapboxMap: MapboxMaps.MapboxMap! {
+  @_Concurrency.MainActor @preconcurrency public var mapboxMap: MapboxMaps.MapboxMap! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var gestures: MapboxMaps.GestureManager! {
+  @_Concurrency.MainActor @preconcurrency public var gestures: MapboxMaps.GestureManager! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var ornaments: MapboxMaps.OrnamentsManager! {
+  @_Concurrency.MainActor @preconcurrency public var ornaments: MapboxMaps.OrnamentsManager! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var camera: MapboxMaps.CameraAnimationsManager! {
+  @_Concurrency.MainActor @preconcurrency public var camera: MapboxMaps.CameraAnimationsManager! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var location: MapboxMaps.LocationManager! {
+  @_Concurrency.MainActor @preconcurrency public var location: MapboxMaps.LocationManager! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var annotations: MapboxMaps.AnnotationOrchestrator! {
+  @_Concurrency.MainActor @preconcurrency public var annotations: MapboxMaps.AnnotationOrchestrator! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var viewAnnotations: MapboxMaps.ViewAnnotationManager! {
+  @_Concurrency.MainActor @preconcurrency public var viewAnnotations: MapboxMaps.ViewAnnotationManager! {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var viewport: MapboxMaps.ViewportManager! {
+  @_Concurrency.MainActor @preconcurrency public var viewport: MapboxMaps.ViewportManager! {
     get
   }
   @available(*, deprecated, message: "Use presentationTransactionMode instead")
-  @_Concurrency.MainActor(unsafe) public var presentsWithTransaction: Swift.Bool {
+  @_Concurrency.MainActor @preconcurrency public var presentsWithTransaction: Swift.Bool {
     get
     set
   }
-  @_Concurrency.MainActor(unsafe) public var presentationTransactionMode: MapboxMaps.PresentationTransactionMode {
+  @_Concurrency.MainActor @preconcurrency public var presentationTransactionMode: MapboxMaps.PresentationTransactionMode {
     get
     set
   }
-  @_Concurrency.MainActor(unsafe) @objc override dynamic open var isOpaque: Swift.Bool {
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic open var isOpaque: Swift.Bool {
     @objc get
     @objc set
   }
   @available(iOS, deprecated: 15, message: "Use preferredFrameRateRange instead.")
-  @_Concurrency.MainActor(unsafe) public var preferredFramesPerSecond: Swift.Int {
+  @_Concurrency.MainActor @preconcurrency public var preferredFramesPerSecond: Swift.Int {
     get
     set
   }
   @available(iOS 15.0, *)
-  @_Concurrency.MainActor(unsafe) public var preferredFrameRateRange: QuartzCore.CAFrameRateRange {
+  @_Concurrency.MainActor @preconcurrency public var preferredFrameRateRange: QuartzCore.CAFrameRateRange {
     get
     set
   }
-  @_spi(Metrics) @_Concurrency.MainActor(unsafe) public var displayLinkTimestamp: CoreFoundation.CFTimeInterval? {
+  @_spi(Metrics) @_Concurrency.MainActor @preconcurrency public var displayLinkTimestamp: CoreFoundation.CFTimeInterval? {
     get
   }
-  @_spi(Metrics) @_Concurrency.MainActor(unsafe) public var displayLinkDuration: CoreFoundation.CFTimeInterval? {
+  @_spi(Metrics) @_Concurrency.MainActor @preconcurrency public var displayLinkDuration: CoreFoundation.CFTimeInterval? {
     get
   }
   @available(*, deprecated, renamed: "mapboxMap.cameraState")
-  @_Concurrency.MainActor(unsafe) public var cameraState: MapboxMaps.CameraState {
+  @_Concurrency.MainActor @preconcurrency public var cameraState: MapboxMaps.CameraState {
     get
   }
   @available(*, deprecated, renamed: "mapboxMap.anchor")
-  @_Concurrency.MainActor(unsafe) public var anchor: CoreFoundation.CGPoint {
+  @_Concurrency.MainActor @preconcurrency public var anchor: CoreFoundation.CGPoint {
     get
   }
-  @_Concurrency.MainActor(unsafe) public var debugOptions: MapboxMaps.MapViewDebugOptions {
+  @_Concurrency.MainActor @preconcurrency public var debugOptions: MapboxMaps.MapViewDebugOptions {
     get
     set
   }
   @available(iOSApplicationExtension, unavailable)
-  @_Concurrency.MainActor(unsafe) public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions())
+  @_Concurrency.MainActor @preconcurrency public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions())
   @available(iOS, unavailable, message: "Use init(frame:mapInitOptions:urlOpener:) instead")
-  @_Concurrency.MainActor(unsafe) public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions(), orientationProvider: Swift.Void, urlOpener: any MapboxMaps.AttributionURLOpener)
-  @_Concurrency.MainActor(unsafe) public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions(), urlOpener: any MapboxMaps.AttributionURLOpener)
+  @_Concurrency.MainActor @preconcurrency public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions(), orientationProvider: Swift.Void, urlOpener: any MapboxMaps.AttributionURLOpener)
+  @_Concurrency.MainActor @preconcurrency public init(frame: CoreFoundation.CGRect, mapInitOptions: MapboxMaps.MapInitOptions = MapInitOptions(), urlOpener: any MapboxMaps.AttributionURLOpener)
   @available(iOSApplicationExtension, unavailable)
-  @_Concurrency.MainActor(unsafe) @objc required dynamic public init?(coder: Foundation.NSCoder)
+  @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
   @objc deinit
-  @_Concurrency.MainActor(unsafe) @objc override dynamic open func awakeFromNib()
-  @_Concurrency.MainActor(unsafe) @objc override dynamic open func layoutSubviews()
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic open func awakeFromNib()
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic open func layoutSubviews()
   public enum ResizingAnimation {
     case automatic
     case none
@@ -3124,17 +3183,17 @@ extension MapboxMaps.MapView {
       get
     }
   }
-  @_Concurrency.MainActor(unsafe) public var resizingAnimation: MapboxMaps.MapView.ResizingAnimation {
+  @_Concurrency.MainActor @preconcurrency public var resizingAnimation: MapboxMaps.MapView.ResizingAnimation {
     get
     set
   }
-  @_spi(Metrics) @_Concurrency.MainActor(unsafe) public var metricsReporter: (any MapboxMaps.MapViewMetricsReporter)?
-  @_Concurrency.MainActor(unsafe) @objc override dynamic open func didMoveToWindow()
+  @_spi(Metrics) @_Concurrency.MainActor @preconcurrency public var metricsReporter: (any MapboxMaps.MapViewMetricsReporter)?
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic open func didMoveToWindow()
 }
 public struct MapViewAnnotation {
-  public init<Content>(coordinate: CoreLocation.CLLocationCoordinate2D, @SwiftUI.ViewBuilder content: @escaping () -> Content) where Content : SwiftUI.View
-  public init<Content>(layerId: Swift.String, featureId: Swift.String? = nil, @SwiftUI.ViewBuilder content: @escaping () -> Content) where Content : SwiftUI.View
-  public init<Content>(annotatedFeature: MapboxMaps.AnnotatedFeature, @SwiftUI.ViewBuilder content: @escaping () -> Content) where Content : SwiftUI.View
+  public init<Content>(coordinate: CoreLocation.CLLocationCoordinate2D, @SwiftUICore.ViewBuilder content: @escaping () -> Content) where Content : SwiftUICore.View
+  public init<Content>(layerId: Swift.String, featureId: Swift.String? = nil, @SwiftUICore.ViewBuilder content: @escaping () -> Content) where Content : SwiftUICore.View
+  public init<Content>(annotatedFeature: MapboxMaps.AnnotatedFeature, @SwiftUICore.ViewBuilder content: @escaping () -> Content) where Content : SwiftUICore.View
   public func allowOverlap(_ allowOverlap: Swift.Bool) -> MapboxMaps.MapViewAnnotation
   public func allowHitTesting(_ allowHitTesting: Swift.Bool) -> MapboxMaps.MapViewAnnotation
   public func allowOverlapWithPuck(_ allowOverlapWithPuck: Swift.Bool) -> MapboxMaps.MapViewAnnotation
@@ -3183,6 +3242,10 @@ public struct MapViewDebugOptions : Swift.OptionSet, Swift.Hashable, Swift.Senda
   final public var style: MapboxMaps.StyleManager {
     get
   }
+  @_spi(Internal) final public var map: MapboxCoreMaps.Map {
+    get
+    set
+  }
   @objc deinit
   final public func triggerRepaint()
   final public func loadStyle(_ styleURI: MapboxMaps.StyleURI, transition: MapboxMaps.TransitionOptions? = nil, completion: (((any Swift.Error)?) -> Swift.Void)? = nil)
@@ -3199,6 +3262,10 @@ public struct MapViewDebugOptions : Swift.OptionSet, Swift.Hashable, Swift.Senda
   final public func setTileCacheBudget(size: MapboxMaps.TileCacheBudgetSize?)
   @available(*, deprecated, message: "Use .setTileCacheBudget(size: TileCacheBudgetSize?) instead.")
   final public func setTileCacheBudget(_ tileCacheBudget: MapboxCoreMaps.TileCacheBudget?)
+  @_spi(Experimental) @_documentation(visibility: public) final public var screenCullingShape: [CoreFoundation.CGPoint] {
+    get
+    set
+  }
   final public var shouldRenderWorldCopies: Swift.Bool {
     get
     set
@@ -3271,10 +3338,10 @@ public struct MapViewDebugOptions : Swift.OptionSet, Swift.Hashable, Swift.Senda
 extension MapboxMaps.MapboxMap {
   @discardableResult
   final public func queryRenderedFeatures(with geometry: some RenderedQueryGeometryConvertible, options: MapboxCoreMaps.RenderedQueryOptions? = nil, completion: @escaping (Swift.Result<[MapboxCoreMaps.QueriedRenderedFeature], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func queryRenderedFeatures<G, T>(with geometry: G, featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, completion: @escaping (Swift.Result<[T], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where G : MapboxMaps.RenderedQueryGeometryConvertible, T : MapboxMaps.FeaturesetFeatureType
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func queryRenderedFeatures<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, completion: @escaping (Swift.Result<[T], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func queryRenderedFeatures<G, T>(with geometry: G, featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, completion: @escaping (Swift.Result<[T], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where G : MapboxMaps.RenderedQueryGeometryConvertible, T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func queryRenderedFeatures<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, filter: MapboxMaps.Exp? = nil, completion: @escaping (Swift.Result<[T], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
   @discardableResult
   final public func querySourceFeatures(for sourceId: Swift.String, options: MapboxCoreMaps.SourceQueryOptions, completion: @escaping (Swift.Result<[MapboxCoreMaps.QueriedSourceFeature], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
   @discardableResult
@@ -3343,26 +3410,26 @@ extension MapboxMaps.MapboxMap {
 @_documentation(visibility: public) extension MapboxMaps.MapboxMap {
   @discardableResult
   final public func setFeatureState(sourceId: Swift.String, sourceLayerId: Swift.String? = nil, featureId: Swift.String, state: [Swift.String : Any], callback: @escaping (Swift.Result<Foundation.NSNull, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func setFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, state: T.State, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func setFeatureState<T>(_ feature: T, state: T.State, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func setFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, state: T.State, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func setFeatureState<T>(_ feature: T, state: T.State, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
   @discardableResult
   final public func getFeatureState(sourceId: Swift.String, sourceLayerId: Swift.String? = nil, featureId: Swift.String, callback: @escaping (Swift.Result<[Swift.String : Any], any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func getFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, callback: @escaping (Swift.Result<T.State, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func getFeatureState<F>(_ feature: F, callback: @escaping (Swift.Result<F.State, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where F : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func getFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, callback: @escaping (Swift.Result<T.State, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func getFeatureState<F>(_ feature: F, callback: @escaping (Swift.Result<F.State, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable where F : MapboxMaps.FeaturesetFeatureType
   @discardableResult
   final public func removeFeatureState(sourceId: Swift.String, sourceLayerId: Swift.String? = nil, featureId: Swift.String, stateKey: Swift.String? = nil, callback: @escaping (Swift.Result<Foundation.NSNull, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func removeFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, stateKey: T.StateKey?, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func removeFeatureState<F>(_ feature: F, stateKey: F.StateKey?, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where F : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func removeFeatureState<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, featureId: MapboxMaps.FeaturesetFeatureId, stateKey: T.StateKey?, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func removeFeatureState<F>(_ feature: F, stateKey: F.StateKey?, callback: (((any Swift.Error)?) -> Swift.Void)? = nil) -> any MapboxCommon.Cancelable where F : MapboxMaps.FeaturesetFeatureType
   @discardableResult
   final public func resetFeatureStates(sourceId: Swift.String, sourceLayerId: Swift.String? = nil, callback: @escaping (Swift.Result<Foundation.NSNull, any Swift.Error>) -> Swift.Void) -> any MapboxCommon.Cancelable
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func resetFeatureStates<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, callback: (((any Swift.Error)?) -> Swift.Void)?) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
+  @discardableResult
+  final public func resetFeatureStates<T>(featureset: MapboxMaps.FeaturesetDescriptor<T>, callback: (((any Swift.Error)?) -> Swift.Void)?) -> any MapboxCommon.Cancelable where T : MapboxMaps.FeaturesetFeatureType
 }
 extension MapboxMaps.MapboxMap {
   @_spi(Experimental) @_documentation(visibility: public) final public func tileCover(for options: MapboxMaps.TileCoverOptions) -> [MapboxCoreMaps.CanonicalTileID]
@@ -3371,11 +3438,11 @@ extension MapboxMaps.MapboxMap {
   @_spi(Experimental) final public func makeRecorder() throws -> MapboxMaps.MapRecorder
 }
 extension MapboxMaps.MapboxMap {
-  @_spi(Experimental) @discardableResult
-  @_documentation(visibility: public) final public func addInteraction(_ interaction: some Interaction) -> any MapboxCommon.Cancelable
+  @discardableResult
+  final public func addInteraction(_ interaction: some Interaction) -> any MapboxCommon.Cancelable
 }
 extension MapboxMaps.MapboxMap {
-  @_spi(Internal) @_spi(Experimental) final public func dispatch(gesture: Swift.String, screenCoordinateX: Swift.Double, screenCoordinateY: Swift.Double)
+  @_spi(Internal) final public func dispatch(gesture: Swift.String, screenCoordinateX: Swift.Double, screenCoordinateY: Swift.Double)
 }
 public enum MapboxMapsOptions {
   public static var baseURL: Foundation.URL {
@@ -3709,6 +3776,15 @@ extension MapboxCoreMaps.CumulativeRenderingStatistics {
   public var vertexBytes: Swift.UInt? {
     get
   }
+  public var graphicsPrograms: Swift.UInt? {
+    get
+  }
+  public var graphicsProgramsCreationTimeMillis: Swift.Double? {
+    get
+  }
+  public var fboSwitchCount: Swift.UInt? {
+    get
+  }
 }
 public struct PointAnnotation : MapboxMaps.Annotation, Swift.Equatable {
   public var id: Swift.String {
@@ -3748,6 +3824,16 @@ public struct PointAnnotation : MapboxMaps.Annotation, Swift.Equatable {
   }
   public init(id: Swift.String = UUID().uuidString, point: Turf.Point, isSelected: Swift.Bool = false, isDraggable: Swift.Bool = false)
   public init(id: Swift.String = UUID().uuidString, coordinate: CoreLocation.CLLocationCoordinate2D, isSelected: Swift.Bool = false, isDraggable: Swift.Bool = false)
+  @available(*, deprecated, message: "Use PointAnnotationManager.iconImageCrossFadeTransition instead")
+  public var iconImageCrossFadeTransition: MapboxMaps.StyleTransition? {
+    get
+    set
+  }
+  @available(*, deprecated, message: "Use PointAnnotationManager.iconImageCrossFade instead")
+  public var iconImageCrossFade: Swift.Double? {
+    get
+    set
+  }
   public var iconAnchor: MapboxMaps.IconAnchor?
   public var iconImage: Swift.String?
   public var iconOffset: [Swift.Double]?
@@ -3779,8 +3865,6 @@ public struct PointAnnotation : MapboxMaps.Annotation, Swift.Equatable {
   public var iconHaloColor: MapboxMaps.StyleColor?
   public var iconHaloWidthTransition: MapboxMaps.StyleTransition?
   public var iconHaloWidth: Swift.Double?
-  public var iconImageCrossFadeTransition: MapboxMaps.StyleTransition?
-  public var iconImageCrossFade: Swift.Double?
   public var iconOcclusionOpacityTransition: MapboxMaps.StyleTransition?
   public var iconOcclusionOpacity: Swift.Double?
   public var iconOpacityTransition: MapboxMaps.StyleTransition?
@@ -3849,8 +3933,6 @@ extension MapboxMaps.PointAnnotation {
   public func iconHaloColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PointAnnotation
   public func iconHaloWidthTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PointAnnotation
   public func iconHaloWidth(_ newValue: Swift.Double) -> MapboxMaps.PointAnnotation
-  public func iconImageCrossFadeTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PointAnnotation
-  public func iconImageCrossFade(_ newValue: Swift.Double) -> MapboxMaps.PointAnnotation
   public func iconOcclusionOpacityTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PointAnnotation
   public func iconOcclusionOpacity(_ newValue: Swift.Double) -> MapboxMaps.PointAnnotation
   public func iconOpacityTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PointAnnotation
@@ -3877,9 +3959,16 @@ extension MapboxMaps.PointAnnotation {
   public func textOpacity(_ newValue: Swift.Double) -> MapboxMaps.PointAnnotation
   public func image(_ image: MapboxMaps.PointAnnotation.Image?) -> MapboxMaps.PointAnnotation
   public func image(named name: Swift.String) -> MapboxMaps.PointAnnotation
+  public func image(named name: Swift.String, sdf: Swift.Bool) -> MapboxMaps.PointAnnotation
 }
 extension MapboxMaps.PointAnnotation : MapboxMaps.MapContent {
   public typealias Body = Swift.Never
+}
+extension MapboxMaps.PointAnnotation {
+  @available(*, deprecated, message: "Use PointAnnotationManager.iconImageCrossFadeTransition instead")
+  public func iconImageCrossFadeTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PointAnnotation
+  @available(*, deprecated, message: "Use PointAnnotationManager.iconImageCrossFade instead")
+  public func iconImageCrossFade(_ newValue: Swift.Double) -> MapboxMaps.PointAnnotation
 }
 public struct PointAnnotationGroup<Data, ID> where Data : Swift.RandomAccessCollection, ID : Swift.Hashable {
   public init(_ data: Data, id: Swift.KeyPath<Data.Element, ID>, content: @escaping (Data.Element) -> MapboxMaps.PointAnnotation)
@@ -3985,8 +4074,8 @@ public struct PointAnnotationGroup<Data, ID> where Data : Swift.RandomAccessColl
   public func onClusterTapGesture(perform action: @escaping (MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void) -> MapboxMaps.PointAnnotationGroup<Data, ID>
   public func onClusterLongPressGesture(perform action: @escaping (MapboxMaps.AnnotationClusterGestureContext) -> Swift.Void) -> MapboxMaps.PointAnnotationGroup<Data, ID>
   public func layerId(_ layerId: Swift.String) -> MapboxMaps.PointAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PointAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PointAnnotationGroup<Data, ID>
+  public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PointAnnotationGroup<Data, ID>
+  public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PointAnnotationGroup<Data, ID>
 }
 extension MapboxMaps.PointAnnotationGroup : MapboxMaps.MapContent {
   public typealias Body = Swift.Never
@@ -4426,7 +4515,11 @@ public struct PolygonAnnotation : MapboxMaps.Annotation, Swift.Equatable {
     set
   }
   public init(id: Swift.String = UUID().uuidString, polygon: MapboxMaps.Polygon, isSelected: Swift.Bool = false, isDraggable: Swift.Bool = false)
+  @_spi(Experimental) @_documentation(visibility: public) public var fillConstructBridgeGuardRail: Swift.Bool?
   public var fillSortKey: Swift.Double?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColorUseTheme: MapboxMaps.ColorUseTheme?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColor: MapboxMaps.StyleColor?
   @_spi(Experimental) @_documentation(visibility: public) public var fillColorUseTheme: MapboxMaps.ColorUseTheme?
   public var fillColorTransition: MapboxMaps.StyleTransition?
   public var fillColor: MapboxMaps.StyleColor?
@@ -4436,6 +4529,9 @@ public struct PolygonAnnotation : MapboxMaps.Annotation, Swift.Equatable {
   public var fillOutlineColorTransition: MapboxMaps.StyleTransition?
   public var fillOutlineColor: MapboxMaps.StyleColor?
   public var fillPattern: Swift.String?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColorUseTheme: MapboxMaps.ColorUseTheme?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColorTransition: MapboxMaps.StyleTransition?
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColor: MapboxMaps.StyleColor?
   @_spi(Experimental) @_documentation(visibility: public) public var fillZOffsetTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) @_documentation(visibility: public) public var fillZOffset: Swift.Double?
   public static func == (a: MapboxMaps.PolygonAnnotation, b: MapboxMaps.PolygonAnnotation) -> Swift.Bool
@@ -4447,7 +4543,12 @@ extension MapboxMaps.PolygonAnnotation {
   public func onLongPressGesture(handler: @escaping () -> Swift.Void) -> MapboxMaps.PolygonAnnotation
 }
 extension MapboxMaps.PolygonAnnotation {
+  @_spi(Experimental) @_documentation(visibility: public) public func fillConstructBridgeGuardRail(_ newValue: Swift.Bool) -> MapboxMaps.PolygonAnnotation
   public func fillSortKey(_ newValue: Swift.Double) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotation
   public func fillColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotation
   @_spi(Experimental) @_documentation(visibility: public) public func fillColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotation
   public func fillColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotation
@@ -4459,6 +4560,10 @@ extension MapboxMaps.PolygonAnnotation {
   public func fillOutlineColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotation
   public func fillOutlineColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotation
   public func fillPattern(_ newValue: Swift.String) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotation
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotation
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffsetTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotation
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffset(_ newValue: Swift.Double) -> MapboxMaps.PolygonAnnotation
 }
@@ -4469,9 +4574,14 @@ public struct PolygonAnnotationGroup<Data, ID> where Data : Swift.RandomAccessCo
   public init(_ data: Data, id: Swift.KeyPath<Data.Element, ID>, content: @escaping (Data.Element) -> MapboxMaps.PolygonAnnotation)
   public init(_ data: Data, content: @escaping (Data.Element) -> MapboxMaps.PolygonAnnotation) where ID == Data.Element.ID, Data.Element : Swift.Identifiable
   public init(@MapboxMaps.ArrayBuilder<MapboxMaps.PolygonAnnotation> content: @escaping () -> [MapboxMaps.PolygonAnnotation?]) where Data == [(Swift.Int, MapboxMaps.PolygonAnnotation)], ID == Swift.Int
+  @_spi(Experimental) @_documentation(visibility: public) public func fillConstructBridgeGuardRail(_ newValue: Swift.Bool) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   @_spi(Experimental) @_documentation(visibility: public) public func fillElevationReference(_ newValue: MapboxMaps.FillElevationReference) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillSortKey(_ newValue: Swift.Double) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillAntialias(_ newValue: Swift.Bool) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillBridgeGuardRailColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   @_spi(Experimental) @_documentation(visibility: public) public func fillColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
@@ -4485,17 +4595,22 @@ public struct PolygonAnnotationGroup<Data, ID> where Data : Swift.RandomAccessCo
   public func fillOutlineColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillOutlineColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillPattern(_ newValue: Swift.String) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  public func fillPatternCrossFade(_ newValue: Swift.Double) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillTranslateTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillTranslate(x: Swift.Double, y: Swift.Double) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func fillTranslateAnchor(_ newValue: MapboxMaps.FillTranslateAnchor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ color: UIKit.UIColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorUseTheme(_ useTheme: MapboxMaps.ColorUseTheme) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColorTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  @_spi(Experimental) @_documentation(visibility: public) public func fillTunnelStructureColor(_ newValue: MapboxMaps.StyleColor) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffsetTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   @_spi(Experimental) @_documentation(visibility: public) public func fillZOffset(_ newValue: Swift.Double) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   @available(*, deprecated, message: "Use Slot type instead of string")
   public func slot(_ newValue: Swift.String) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func slot(_ newValue: MapboxMaps.Slot?) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
   public func layerId(_ layerId: Swift.String) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
+  public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolygonAnnotationGroup<Data, ID>
 }
 extension MapboxMaps.PolygonAnnotationGroup : MapboxMaps.MapContent {
   public typealias Body = Swift.Never
@@ -4527,6 +4642,10 @@ extension MapboxMaps.PolygonAnnotationGroup : MapboxMaps.MapContent {
     get
     set
   }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillConstructBridgeGuardRail: Swift.Bool? {
+    get
+    set
+  }
   @_spi(Experimental) @_documentation(visibility: public) public var fillElevationReference: MapboxMaps.FillElevationReference? {
     get
     set
@@ -4536,6 +4655,18 @@ extension MapboxMaps.PolygonAnnotationGroup : MapboxMaps.MapContent {
     set
   }
   public var fillAntialias: Swift.Bool? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColorUseTheme: MapboxMaps.ColorUseTheme? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColorTransition: MapboxMaps.StyleTransition? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillBridgeGuardRailColor: MapboxMaps.StyleColor? {
     get
     set
   }
@@ -4583,6 +4714,10 @@ extension MapboxMaps.PolygonAnnotationGroup : MapboxMaps.MapContent {
     get
     set
   }
+  public var fillPatternCrossFade: Swift.Double? {
+    get
+    set
+  }
   public var fillTranslateTransition: MapboxMaps.StyleTransition? {
     get
     set
@@ -4592,6 +4727,18 @@ extension MapboxMaps.PolygonAnnotationGroup : MapboxMaps.MapContent {
     set
   }
   public var fillTranslateAnchor: MapboxMaps.FillTranslateAnchor? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColorUseTheme: MapboxMaps.ColorUseTheme? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColorTransition: MapboxMaps.StyleTransition? {
+    get
+    set
+  }
+  @_spi(Experimental) @_documentation(visibility: public) public var fillTunnelStructureColor: MapboxMaps.StyleColor? {
     get
     set
   }
@@ -4745,6 +4892,7 @@ public struct PolylineAnnotationGroup<Data, ID> where Data : Swift.RandomAccessC
   public func lineOpacityTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func lineOpacity(_ newValue: Swift.Double) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func linePattern(_ newValue: Swift.String) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
+  public func linePatternCrossFade(_ newValue: Swift.Double) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func lineTranslateTransition(_ transition: MapboxMaps.StyleTransition) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func lineTranslate(x: Swift.Double, y: Swift.Double) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func lineTranslateAnchor(_ newValue: MapboxMaps.LineTranslateAnchor) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
@@ -4760,8 +4908,8 @@ public struct PolylineAnnotationGroup<Data, ID> where Data : Swift.RandomAccessC
   public func slot(_ newValue: Swift.String) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func slot(_ newValue: MapboxMaps.Slot?) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
   public func layerId(_ layerId: Swift.String) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
-  @_spi(Experimental) @_documentation(visibility: public) public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
+  public func tapRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
+  public func longPressRadius(_ radius: CoreFoundation.CGFloat? = nil) -> MapboxMaps.PolylineAnnotationGroup<Data, ID>
 }
 extension MapboxMaps.PolylineAnnotationGroup : MapboxMaps.MapContent {
   public typealias Body = Swift.Never
@@ -4925,6 +5073,10 @@ extension MapboxMaps.PolylineAnnotationGroup : MapboxMaps.MapContent {
     get
     set
   }
+  public var linePatternCrossFade: Swift.Double? {
+    get
+    set
+  }
   public var lineTranslateTransition: MapboxMaps.StyleTransition? {
     get
     set
@@ -5000,8 +5152,19 @@ extension Swift.Never : MapboxMaps.MapContent {
   public static func coordinate(for projectedMeters: MapboxCoreMaps.ProjectedMeters) -> CoreLocation.CLLocationCoordinate2D
   public static func project(_ coordinate: CoreLocation.CLLocationCoordinate2D, zoomScale: CoreFoundation.CGFloat) -> MapboxCoreMaps.MercatorCoordinate
   public static func unproject(_ mercatorCoordinate: MapboxCoreMaps.MercatorCoordinate, zoomScale: CoreFoundation.CGFloat) -> CoreLocation.CLLocationCoordinate2D
+  public static func getLatitudeScale(_ latitude: CoreLocation.CLLocationDegrees) -> Swift.Double
+  public static func latLngToMercatorXY(coordinate: CoreLocation.CLLocationCoordinate2D) -> MapboxCoreMaps.MercatorCoordinate
+  public static func worldSize(scale: Swift.Double) -> Swift.Double
   @objc deinit
 }
+public enum VectorSourcePromoteId : Swift.Equatable, Swift.Codable, Swift.Sendable {
+  case global(MapboxMaps.Value<Swift.String>)
+  case byLayer([Swift.String : MapboxMaps.Value<Swift.String>])
+  public init(from decoder: any Swift.Decoder) throws
+  public func encode(to encoder: any Swift.Encoder) throws
+  public static func == (a: MapboxMaps.VectorSourcePromoteId, b: MapboxMaps.VectorSourcePromoteId) -> Swift.Bool
+}
+@available(*, deprecated, message: "Use VectorSourcePromoteId instead")
 public enum PromoteId : Swift.Equatable, Swift.Codable, Swift.Sendable {
   case string(Swift.String)
   case object([Swift.String : Swift.String])
@@ -5168,6 +5331,13 @@ public struct TextTransform : Swift.RawRepresentable, Swift.Codable, Swift.Hasha
   public static let uppercase: MapboxMaps.TextTransform
   public static let lowercase: MapboxMaps.TextTransform
   public typealias RawValue = Swift.String
+}
+@_spi(Experimental) @_documentation(visibility: public) public struct CircleElevationReference : Swift.RawRepresentable, Swift.Codable, Swift.Hashable, Swift.Sendable {
+  @_spi(Experimental) @_documentation(visibility: public) public let rawValue: Swift.String
+  @_spi(Experimental) @_documentation(visibility: public) public init(rawValue: Swift.String)
+  @_spi(Experimental) @_documentation(visibility: public) public static let none: MapboxMaps.CircleElevationReference
+  @_spi(Experimental) @_documentation(visibility: public) public static let hdRoadMarkup: MapboxMaps.CircleElevationReference
+  @_spi(Experimental) public typealias RawValue = Swift.String
 }
 public struct FillTranslateAnchor : Swift.RawRepresentable, Swift.Codable, Swift.Hashable, Swift.Sendable {
   public let rawValue: Swift.String
@@ -5388,9 +5558,9 @@ public struct Puck2DConfiguration : Swift.Equatable, Swift.Sendable {
   public var accuracyRingColor: UIKit.UIColor
   public var accuracyRingBorderColor: UIKit.UIColor
   public var slot: MapboxMaps.Slot?
-  public var layerPosition: MapboxMaps.LayerPosition?
+  public var layerPosition: MapboxCoreMaps.LayerPosition?
   public init(topImage: UIKit.UIImage? = nil, bearingImage: UIKit.UIImage? = nil, shadowImage: UIKit.UIImage? = nil, scale: MapboxMaps.Value<Swift.Double>? = nil, pulsing: MapboxMaps.Puck2DConfiguration.Pulsing? = nil, showsAccuracyRing: Swift.Bool = false, opacity: Swift.Double = 1)
-  public init(topImage: UIKit.UIImage? = nil, bearingImage: UIKit.UIImage? = nil, shadowImage: UIKit.UIImage? = nil, scale: MapboxMaps.Value<Swift.Double>? = nil, showsAccuracyRing: Swift.Bool = false, accuracyRingColor: UIKit.UIColor = UIColor(red: 0.537, green: 0.812, blue: 0.941, alpha: 0.3), accuracyRingBorderColor: UIKit.UIColor = UIColor(red: 0.537, green: 0.812, blue: 0.941, alpha: 0.3), opacity: Swift.Double = 1, layerPosition: MapboxMaps.LayerPosition? = nil)
+  public init(topImage: UIKit.UIImage? = nil, bearingImage: UIKit.UIImage? = nil, shadowImage: UIKit.UIImage? = nil, scale: MapboxMaps.Value<Swift.Double>? = nil, showsAccuracyRing: Swift.Bool = false, accuracyRingColor: UIKit.UIColor = UIColor(red: 0.537, green: 0.812, blue: 0.941, alpha: 0.3), accuracyRingBorderColor: UIKit.UIColor = UIColor(red: 0.537, green: 0.812, blue: 0.941, alpha: 0.3), opacity: Swift.Double = 1, layerPosition: MapboxCoreMaps.LayerPosition? = nil)
   public static func makeDefault(showBearing: Swift.Bool = false) -> MapboxMaps.Puck2DConfiguration
   public static func == (a: MapboxMaps.Puck2DConfiguration, b: MapboxMaps.Puck2DConfiguration) -> Swift.Bool
 }
@@ -5406,9 +5576,9 @@ public struct Puck3DConfiguration : Swift.Equatable, Swift.Sendable {
   public var modelEmissiveStrength: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var modelColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   public var slot: MapboxMaps.Slot?
-  public var layerPosition: MapboxMaps.LayerPosition?
-  public init(model: MapboxMaps.Model, modelScale: MapboxMaps.Value<[Swift.Double]>? = nil, modelRotation: MapboxMaps.Value<[Swift.Double]>? = nil, modelOpacity: MapboxMaps.Value<Swift.Double>? = nil, layerPosition: MapboxMaps.LayerPosition? = nil)
-  @_spi(Experimental) @_documentation(visibility: public) public init(model: MapboxMaps.Model, modelScale: MapboxMaps.Value<[Swift.Double]>? = nil, modelRotation: MapboxMaps.Value<[Swift.Double]>? = nil, modelOpacity: MapboxMaps.Value<Swift.Double>? = nil, modelCastShadows: MapboxMaps.Value<Swift.Bool>? = nil, modelReceiveShadows: MapboxMaps.Value<Swift.Bool>? = nil, modelScaleMode: MapboxMaps.Value<MapboxMaps.ModelScaleMode>? = nil, modelEmissiveStrength: MapboxMaps.Value<Swift.Double> = .constant(1), modelColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>? = nil, layerPosition: MapboxMaps.LayerPosition? = nil)
+  public var layerPosition: MapboxCoreMaps.LayerPosition?
+  public init(model: MapboxMaps.Model, modelScale: MapboxMaps.Value<[Swift.Double]>? = nil, modelRotation: MapboxMaps.Value<[Swift.Double]>? = nil, modelOpacity: MapboxMaps.Value<Swift.Double>? = nil, layerPosition: MapboxCoreMaps.LayerPosition? = nil)
+  @_spi(Experimental) @_documentation(visibility: public) public init(model: MapboxMaps.Model, modelScale: MapboxMaps.Value<[Swift.Double]>? = nil, modelRotation: MapboxMaps.Value<[Swift.Double]>? = nil, modelOpacity: MapboxMaps.Value<Swift.Double>? = nil, modelCastShadows: MapboxMaps.Value<Swift.Bool>? = nil, modelReceiveShadows: MapboxMaps.Value<Swift.Bool>? = nil, modelScaleMode: MapboxMaps.Value<MapboxMaps.ModelScaleMode>? = nil, modelEmissiveStrength: MapboxMaps.Value<Swift.Double> = .constant(1), modelColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>? = nil, layerPosition: MapboxCoreMaps.LayerPosition? = nil)
   public static func == (a: MapboxMaps.Puck3DConfiguration, b: MapboxMaps.Puck3DConfiguration) -> Swift.Bool
 }
 extension MapboxCoreMaps.QueriedFeature {
@@ -5420,31 +5590,23 @@ extension MapboxCoreMaps.QueriedFeature {
   @_spi(Experimental) public init()
   @_spi(Experimental) @_documentation(visibility: public) public var centerThinning: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var centerThinningTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var centerThinningUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var color: MapboxMaps.Value<MapboxMaps.StyleColor>?
   @_spi(Experimental) @_documentation(visibility: public) public var colorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) @_documentation(visibility: public) public var colorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var density: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var densityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var densityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var direction: MapboxMaps.Value<[Swift.Double]>?
   @_spi(Experimental) @_documentation(visibility: public) public var directionTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var directionUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var distortionStrength: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var distortionStrengthTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var distortionStrengthUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var dropletSize: MapboxMaps.Value<[Swift.Double]>?
   @_spi(Experimental) @_documentation(visibility: public) public var dropletSizeTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var dropletSizeUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var intensity: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var intensityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var intensityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var opacity: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var opacityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var opacityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignette: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var vignetteUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColor: MapboxMaps.Value<MapboxMaps.StyleColor>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
@@ -5453,6 +5615,7 @@ extension MapboxCoreMaps.QueriedFeature {
     @_spi(Experimental) case centerThinningTransition
     @_spi(Experimental) case color
     @_spi(Experimental) case colorTransition
+    @_spi(Experimental) case colorUseTheme
     @_spi(Experimental) case density
     @_spi(Experimental) case densityTransition
     @_spi(Experimental) case direction
@@ -5469,6 +5632,7 @@ extension MapboxCoreMaps.QueriedFeature {
     @_spi(Experimental) case vignetteTransition
     @_spi(Experimental) case vignetteColor
     @_spi(Experimental) case vignetteColorTransition
+    @_spi(Experimental) case vignetteColorUseTheme
     @_spi(Experimental) public init?(rawValue: Swift.String)
     @_spi(Experimental) public init?(stringValue: Swift.String)
     @_spi(Experimental) public init?(intValue: Swift.Int)
@@ -6012,28 +6176,21 @@ extension MapboxMaps.Snapshotter {
   @_spi(Experimental) public init()
   @_spi(Experimental) @_documentation(visibility: public) public var centerThinning: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var centerThinningTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var centerThinningUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var color: MapboxMaps.Value<MapboxMaps.StyleColor>?
   @_spi(Experimental) @_documentation(visibility: public) public var colorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) @_documentation(visibility: public) public var colorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var density: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var densityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var densityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var direction: MapboxMaps.Value<[Swift.Double]>?
   @_spi(Experimental) @_documentation(visibility: public) public var directionTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var directionUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var flakeSize: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var flakeSizeTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var flakeSizeUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var intensity: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var intensityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var intensityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var opacity: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var opacityTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var opacityUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignette: MapboxMaps.Value<Swift.Double>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteTransition: MapboxMaps.StyleTransition?
-  @_spi(Experimental) @_documentation(visibility: public) public var vignetteUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColor: MapboxMaps.Value<MapboxMaps.StyleColor>?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColorTransition: MapboxMaps.StyleTransition?
   @_spi(Experimental) @_documentation(visibility: public) public var vignetteColorUseTheme: MapboxMaps.Value<MapboxMaps.ColorUseTheme>?
@@ -6042,6 +6199,7 @@ extension MapboxMaps.Snapshotter {
     @_spi(Experimental) case centerThinningTransition
     @_spi(Experimental) case color
     @_spi(Experimental) case colorTransition
+    @_spi(Experimental) case colorUseTheme
     @_spi(Experimental) case density
     @_spi(Experimental) case densityTransition
     @_spi(Experimental) case direction
@@ -6056,6 +6214,7 @@ extension MapboxMaps.Snapshotter {
     @_spi(Experimental) case vignetteTransition
     @_spi(Experimental) case vignetteColor
     @_spi(Experimental) case vignetteColorTransition
+    @_spi(Experimental) case vignetteColorUseTheme
     @_spi(Experimental) public init?(rawValue: Swift.String)
     @_spi(Experimental) public init?(stringValue: Swift.String)
     @_spi(Experimental) public init?(intValue: Swift.Int)
@@ -6183,153 +6342,153 @@ extension MapboxMaps.CustomGeometrySource : MapboxMaps.MapStyleContent {
 @_spi(Experimental) extension MapboxMaps.CustomRasterSource : MapboxMaps.MapStyleContent {
   @_spi(Experimental) public typealias Body = Swift.Never
 }
-@_spi(Experimental) @_documentation(visibility: public) final public class StandardBuildingsFeature : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) @_documentation(visibility: public) public struct State : Swift.Codable, Swift.Equatable {
-    @_spi(Experimental) @_documentation(visibility: public) public var highlight: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public var select: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public init(highlight: Swift.Bool? = nil, select: Swift.Bool? = nil)
-    @_spi(Experimental) public static func == (a: MapboxMaps.StandardBuildingsFeature.State, b: MapboxMaps.StandardBuildingsFeature.State) -> Swift.Bool
-    @_spi(Experimental) public func encode(to encoder: any Swift.Encoder) throws
-    @_spi(Experimental) public init(from decoder: any Swift.Decoder) throws
+final public class StandardBuildingsFeature : MapboxMaps.FeaturesetFeatureType {
+  public struct State : Swift.Codable, Swift.Equatable {
+    public var highlight: Swift.Bool?
+    public var select: Swift.Bool?
+    public init(highlight: Swift.Bool? = nil, select: Swift.Bool? = nil)
+    public static func == (a: MapboxMaps.StandardBuildingsFeature.State, b: MapboxMaps.StandardBuildingsFeature.State) -> Swift.Bool
+    public func encode(to encoder: any Swift.Encoder) throws
+    public init(from decoder: any Swift.Decoder) throws
   }
-  @_spi(Experimental) @_documentation(visibility: public) public struct StateKey : Swift.CustomStringConvertible {
-    @_spi(Experimental) public let description: Swift.String
-    @_spi(Experimental) @_documentation(visibility: public) public static let highlight: MapboxMaps.StandardBuildingsFeature.StateKey
-    @_spi(Experimental) @_documentation(visibility: public) public static let select: MapboxMaps.StandardBuildingsFeature.StateKey
+  public struct StateKey : Swift.CustomStringConvertible {
+    public let description: Swift.String
+    public static let highlight: MapboxMaps.StandardBuildingsFeature.StateKey
+    public static let select: MapboxMaps.StandardBuildingsFeature.StateKey
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var group: Swift.String? {
-    @_spi(Experimental) get
+  final public var group: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var id: MapboxMaps.FeaturesetFeatureId? {
-    @_spi(Experimental) get
+  final public var id: MapboxMaps.FeaturesetFeatureId? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardBuildingsFeature> {
-    @_spi(Experimental) get
+  final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardBuildingsFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var state: MapboxMaps.StandardBuildingsFeature.State {
-    @_spi(Experimental) get
+  final public var state: MapboxMaps.StandardBuildingsFeature.State {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var geometry: MapboxMaps.Geometry {
-    @_spi(Experimental) get
+  final public var geometry: MapboxMaps.Geometry {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var properties: Turf.JSONObject {
-    @_spi(Experimental) get
+  final public var properties: Turf.JSONObject {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) public init?(from other: MapboxMaps.FeaturesetFeature)
-  @_spi(Experimental) @objc deinit
+  public init?(from other: MapboxMaps.FeaturesetFeature)
+  @objc deinit
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardBuildingsFeature {
-  @_spi(Experimental) @_documentation(visibility: public) public static var standardBuildings: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardBuildingsFeature> {
-    @_spi(Experimental) get
+extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardBuildingsFeature {
+  public static var standardBuildings: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardBuildingsFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) public static func standardBuildings(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
+  public static func standardBuildings(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
 }
-@_spi(Experimental) @_documentation(visibility: public) final public class StandardPlaceLabelsFeature : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) @_documentation(visibility: public) public struct State : Swift.Codable, Swift.Equatable {
-    @_spi(Experimental) @_documentation(visibility: public) public var hide: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public var highlight: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public var select: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public init(hide: Swift.Bool? = nil, highlight: Swift.Bool? = nil, select: Swift.Bool? = nil)
-    @_spi(Experimental) public static func == (a: MapboxMaps.StandardPlaceLabelsFeature.State, b: MapboxMaps.StandardPlaceLabelsFeature.State) -> Swift.Bool
-    @_spi(Experimental) public func encode(to encoder: any Swift.Encoder) throws
-    @_spi(Experimental) public init(from decoder: any Swift.Decoder) throws
+final public class StandardPlaceLabelsFeature : MapboxMaps.FeaturesetFeatureType {
+  public struct State : Swift.Codable, Swift.Equatable {
+    public var hide: Swift.Bool?
+    public var highlight: Swift.Bool?
+    public var select: Swift.Bool?
+    public init(hide: Swift.Bool? = nil, highlight: Swift.Bool? = nil, select: Swift.Bool? = nil)
+    public static func == (a: MapboxMaps.StandardPlaceLabelsFeature.State, b: MapboxMaps.StandardPlaceLabelsFeature.State) -> Swift.Bool
+    public func encode(to encoder: any Swift.Encoder) throws
+    public init(from decoder: any Swift.Decoder) throws
   }
-  @_spi(Experimental) @_documentation(visibility: public) public struct StateKey : Swift.CustomStringConvertible {
-    @_spi(Experimental) public let description: Swift.String
-    @_spi(Experimental) @_documentation(visibility: public) public static let hide: MapboxMaps.StandardPlaceLabelsFeature.StateKey
-    @_spi(Experimental) @_documentation(visibility: public) public static let highlight: MapboxMaps.StandardPlaceLabelsFeature.StateKey
-    @_spi(Experimental) @_documentation(visibility: public) public static let select: MapboxMaps.StandardPlaceLabelsFeature.StateKey
+  public struct StateKey : Swift.CustomStringConvertible {
+    public let description: Swift.String
+    public static let hide: MapboxMaps.StandardPlaceLabelsFeature.StateKey
+    public static let highlight: MapboxMaps.StandardPlaceLabelsFeature.StateKey
+    public static let select: MapboxMaps.StandardPlaceLabelsFeature.StateKey
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var name: Swift.String? {
-    @_spi(Experimental) get
+  final public var name: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var `class`: Swift.String? {
-    @_spi(Experimental) get
+  final public var `class`: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var id: MapboxMaps.FeaturesetFeatureId? {
-    @_spi(Experimental) get
+  final public var id: MapboxMaps.FeaturesetFeatureId? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPlaceLabelsFeature> {
-    @_spi(Experimental) get
+  final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPlaceLabelsFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var state: MapboxMaps.StandardPlaceLabelsFeature.State {
-    @_spi(Experimental) get
+  final public var state: MapboxMaps.StandardPlaceLabelsFeature.State {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var geometry: MapboxMaps.Geometry {
-    @_spi(Experimental) get
+  final public var geometry: MapboxMaps.Geometry {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var properties: Turf.JSONObject {
-    @_spi(Experimental) get
+  final public var properties: Turf.JSONObject {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) public init?(from other: MapboxMaps.FeaturesetFeature)
-  @_spi(Experimental) @objc deinit
+  public init?(from other: MapboxMaps.FeaturesetFeature)
+  @objc deinit
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardPlaceLabelsFeature {
-  @_spi(Experimental) @_documentation(visibility: public) public static var standardPlaceLabels: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPlaceLabelsFeature> {
-    @_spi(Experimental) get
+extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardPlaceLabelsFeature {
+  public static var standardPlaceLabels: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPlaceLabelsFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) public static func standardPlaceLabels(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
+  public static func standardPlaceLabels(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
 }
-@_spi(Experimental) @_documentation(visibility: public) final public class StandardPoiFeature : MapboxMaps.FeaturesetFeatureType {
-  @_spi(Experimental) @_documentation(visibility: public) public struct State : Swift.Codable, Swift.Equatable {
-    @_spi(Experimental) @_documentation(visibility: public) public var hide: Swift.Bool?
-    @_spi(Experimental) @_documentation(visibility: public) public init(hide: Swift.Bool? = nil)
-    @_spi(Experimental) public static func == (a: MapboxMaps.StandardPoiFeature.State, b: MapboxMaps.StandardPoiFeature.State) -> Swift.Bool
-    @_spi(Experimental) public func encode(to encoder: any Swift.Encoder) throws
-    @_spi(Experimental) public init(from decoder: any Swift.Decoder) throws
+final public class StandardPoiFeature : MapboxMaps.FeaturesetFeatureType {
+  public struct State : Swift.Codable, Swift.Equatable {
+    public var hide: Swift.Bool?
+    public init(hide: Swift.Bool? = nil)
+    public static func == (a: MapboxMaps.StandardPoiFeature.State, b: MapboxMaps.StandardPoiFeature.State) -> Swift.Bool
+    public func encode(to encoder: any Swift.Encoder) throws
+    public init(from decoder: any Swift.Decoder) throws
   }
-  @_spi(Experimental) @_documentation(visibility: public) public struct StateKey : Swift.CustomStringConvertible {
-    @_spi(Experimental) public let description: Swift.String
-    @_spi(Experimental) @_documentation(visibility: public) public static let hide: MapboxMaps.StandardPoiFeature.StateKey
+  public struct StateKey : Swift.CustomStringConvertible {
+    public let description: Swift.String
+    public static let hide: MapboxMaps.StandardPoiFeature.StateKey
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var name: Swift.String? {
-    @_spi(Experimental) get
+  final public var name: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var group: Swift.String? {
-    @_spi(Experimental) get
+  final public var group: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var `class`: Swift.String? {
-    @_spi(Experimental) get
+  final public var `class`: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var maki: Swift.String? {
-    @_spi(Experimental) get
+  final public var maki: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var transitMode: Swift.String? {
-    @_spi(Experimental) get
+  final public var transitMode: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var transitStopType: Swift.String? {
-    @_spi(Experimental) get
+  final public var transitStopType: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var transitNetwork: Swift.String? {
-    @_spi(Experimental) get
+  final public var transitNetwork: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var airportRef: Swift.String? {
-    @_spi(Experimental) get
+  final public var airportRef: Swift.String? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var id: MapboxMaps.FeaturesetFeatureId? {
-    @_spi(Experimental) get
+  final public var id: MapboxMaps.FeaturesetFeatureId? {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPoiFeature> {
-    @_spi(Experimental) get
+  final public var featureset: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPoiFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var state: MapboxMaps.StandardPoiFeature.State {
-    @_spi(Experimental) get
+  final public var state: MapboxMaps.StandardPoiFeature.State {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var geometry: MapboxMaps.Geometry {
-    @_spi(Experimental) get
+  final public var geometry: MapboxMaps.Geometry {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public var properties: Turf.JSONObject {
-    @_spi(Experimental) get
+  final public var properties: Turf.JSONObject {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) final public let coordinate: CoreLocation.CLLocationCoordinate2D
-  @_spi(Experimental) @_documentation(visibility: public) public init?(from other: MapboxMaps.FeaturesetFeature)
-  @_spi(Experimental) @objc deinit
+  final public let coordinate: CoreLocation.CLLocationCoordinate2D
+  public init?(from other: MapboxMaps.FeaturesetFeature)
+  @objc deinit
 }
-@_spi(Experimental) @_documentation(visibility: public) extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardPoiFeature {
-  @_spi(Experimental) @_documentation(visibility: public) public static var standardPoi: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPoiFeature> {
-    @_spi(Experimental) get
+extension MapboxMaps.FeaturesetDescriptor where FeatureType == MapboxMaps.StandardPoiFeature {
+  public static var standardPoi: MapboxMaps.FeaturesetDescriptor<MapboxMaps.StandardPoiFeature> {
+    get
   }
-  @_spi(Experimental) @_documentation(visibility: public) public static func standardPoi(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
+  public static func standardPoi(importId: Swift.String) -> MapboxMaps.FeaturesetDescriptor<FeatureType>
 }
 @_documentation(visibility: internal) extension MapboxMaps.StyleManager {
   @available(*, deprecated, renamed: "styleURI")
@@ -6446,8 +6605,8 @@ extension MapboxMaps.StyleImport {
   @_spi(Experimental) @_documentation(visibility: public) public func colorTheme(_ colorTheme: MapboxMaps.ColorTheme?) -> MapboxMaps.StyleImport
 }
 @_hasMissingDesignatedInitializers public class StyleManager {
-  public func addLayer(_ layer: any MapboxMaps.Layer, layerPosition: MapboxMaps.LayerPosition? = nil) throws
-  public func addPersistentLayer(_ layer: any MapboxMaps.Layer, layerPosition: MapboxMaps.LayerPosition? = nil) throws
+  public func addLayer(_ layer: any MapboxMaps.Layer, layerPosition: MapboxCoreMaps.LayerPosition? = nil) throws
+  public func addPersistentLayer(_ layer: any MapboxMaps.Layer, layerPosition: MapboxCoreMaps.LayerPosition? = nil) throws
   public func layer<T>(withId id: Swift.String, type: T.Type) throws -> T where T : MapboxMaps.Layer
   public func layer(withId id: Swift.String) throws -> any MapboxMaps.Layer
   public func updateLayer<T>(withId id: Swift.String, type: T.Type, update: (inout T) throws -> Swift.Void) throws where T : MapboxMaps.Layer
@@ -6491,12 +6650,12 @@ extension MapboxMaps.StyleImport {
   public func getStyleImportConfigProperty(for importId: Swift.String, config: Swift.String) throws -> MapboxCoreMaps.StylePropertyValue
   public func setStyleImportConfigProperties(for importId: Swift.String, configs: [Swift.String : Any]) throws
   public func setStyleImportConfigProperty(for importId: Swift.String, config: Swift.String, value: Any) throws
-  public func addLayer(with properties: [Swift.String : Any], layerPosition: MapboxMaps.LayerPosition?) throws
-  public func moveLayer(withId id: Swift.String, to position: MapboxMaps.LayerPosition) throws
-  public func addPersistentLayer(with properties: [Swift.String : Any], layerPosition: MapboxMaps.LayerPosition?) throws
+  public func addLayer(with properties: [Swift.String : Any], layerPosition: MapboxCoreMaps.LayerPosition?) throws
+  public func moveLayer(withId id: Swift.String, to position: MapboxCoreMaps.LayerPosition) throws
+  public func addPersistentLayer(with properties: [Swift.String : Any], layerPosition: MapboxCoreMaps.LayerPosition?) throws
   public func isPersistentLayer(id: Swift.String) throws -> Swift.Bool
-  public func addPersistentCustomLayer(withId id: Swift.String, layerHost: any MapboxCoreMaps.CustomLayerHost, layerPosition: MapboxMaps.LayerPosition?) throws
-  public func addCustomLayer(withId id: Swift.String, layerHost: any MapboxCoreMaps.CustomLayerHost, layerPosition: MapboxMaps.LayerPosition?) throws
+  public func addPersistentCustomLayer(withId id: Swift.String, layerHost: any MapboxCoreMaps.CustomLayerHost, layerPosition: MapboxCoreMaps.LayerPosition?) throws
+  public func addCustomLayer(withId id: Swift.String, layerHost: any MapboxCoreMaps.CustomLayerHost, layerPosition: MapboxCoreMaps.LayerPosition?) throws
   public func removeLayer(withId id: Swift.String) throws
   public func layerExists(withId id: Swift.String) -> Swift.Bool
   public var allSlotIdentifiers: [MapboxMaps.Slot] {
@@ -6583,7 +6742,7 @@ extension MapboxMaps.StyleManager {
   @_spi(Experimental) @_documentation(visibility: public) public func removeColorTheme() throws
 }
 extension MapboxMaps.StyleManager {
-  @_spi(Experimental) public var featuresets: [MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>] {
+  public var featuresets: [MapboxMaps.FeaturesetDescriptor<MapboxMaps.FeaturesetFeature>] {
     get
   }
 }
@@ -7041,7 +7200,12 @@ public struct VectorSource : MapboxMaps.Source {
   public var minzoom: Swift.Double?
   public var maxzoom: Swift.Double?
   public var attribution: Swift.String?
-  public var promoteId: MapboxMaps.PromoteId?
+  public var promoteId2: MapboxMaps.VectorSourcePromoteId?
+  @available(*, deprecated, message: "Use promoteId2 instead")
+  public var promoteId: MapboxMaps.PromoteId? {
+    get
+    set
+  }
   public var volatile: Swift.Bool?
   public var prefetchZoomDelta: Swift.Double?
   public var tileCacheBudget: MapboxMaps.TileCacheBudgetSize?
@@ -7241,7 +7405,7 @@ public struct Viewport : Swift.Equatable, Swift.Sendable {
     public var geometry: MapboxMaps.Geometry
     public var bearing: CoreFoundation.CGFloat
     public var pitch: CoreFoundation.CGFloat
-    public var geometryPadding: SwiftUI.EdgeInsets
+    public var geometryPadding: SwiftUICore.EdgeInsets
     public var maxZoom: Swift.Double?
     public var offset: CoreFoundation.CGPoint?
     public static func == (a: MapboxMaps.Viewport.OverviewOptions, b: MapboxMaps.Viewport.OverviewOptions) -> Swift.Bool
@@ -7252,7 +7416,7 @@ public struct Viewport : Swift.Equatable, Swift.Sendable {
     public var pitch: CoreFoundation.CGFloat
     public static func == (a: MapboxMaps.Viewport.FollowPuckOptions, b: MapboxMaps.Viewport.FollowPuckOptions) -> Swift.Bool
   }
-  public var padding: SwiftUI.EdgeInsets
+  public var padding: SwiftUICore.EdgeInsets
   public static var idle: MapboxMaps.Viewport {
     get
   }
@@ -7260,14 +7424,14 @@ public struct Viewport : Swift.Equatable, Swift.Sendable {
     get
   }
   public static func camera(center: CoreLocation.CLLocationCoordinate2D? = nil, anchor: CoreFoundation.CGPoint? = nil, zoom: CoreFoundation.CGFloat? = nil, bearing: CoreLocation.CLLocationDirection? = nil, pitch: CoreFoundation.CGFloat? = nil) -> MapboxMaps.Viewport
-  public static func overview(geometry: any Turf.GeometryConvertible, bearing: CoreFoundation.CGFloat = 0, pitch: CoreFoundation.CGFloat = 0, geometryPadding: SwiftUI.EdgeInsets = .init(), maxZoom: Swift.Double? = nil, offset: CoreFoundation.CGPoint? = nil) -> MapboxMaps.Viewport
+  public static func overview(geometry: any Turf.GeometryConvertible, bearing: CoreFoundation.CGFloat = 0, pitch: CoreFoundation.CGFloat = 0, geometryPadding: SwiftUICore.EdgeInsets = .init(), maxZoom: Swift.Double? = nil, offset: CoreFoundation.CGPoint? = nil) -> MapboxMaps.Viewport
   public static func followPuck(zoom: CoreFoundation.CGFloat, bearing: MapboxMaps.FollowPuckViewportStateBearing = .constant(0), pitch: CoreFoundation.CGFloat = 0) -> MapboxMaps.Viewport
   @available(*, deprecated, renamed: "padding")
-  public func inset(by insets: SwiftUI.EdgeInsets, ignoringSafeArea: SwiftUI.Edge.Set = []) -> MapboxMaps.Viewport
+  public func inset(by insets: SwiftUICore.EdgeInsets, ignoringSafeArea: SwiftUICore.Edge.Set = []) -> MapboxMaps.Viewport
   @available(*, unavailable, renamed: "padding")
-  public func inset(edges: SwiftUI.Edge.Set, length: CoreFoundation.CGFloat, ignoringSafeArea: Swift.Bool = false) -> MapboxMaps.Viewport
-  public func padding(_ padding: SwiftUI.EdgeInsets) -> MapboxMaps.Viewport
-  public func padding(_ edges: SwiftUI.Edge.Set = .all, _ length: CoreFoundation.CGFloat) -> MapboxMaps.Viewport
+  public func inset(edges: SwiftUICore.Edge.Set, length: CoreFoundation.CGFloat, ignoringSafeArea: Swift.Bool = false) -> MapboxMaps.Viewport
+  public func padding(_ padding: SwiftUICore.EdgeInsets) -> MapboxMaps.Viewport
+  public func padding(_ edges: SwiftUICore.Edge.Set = .all, _ length: CoreFoundation.CGFloat) -> MapboxMaps.Viewport
   public var isIdle: Swift.Bool {
     get
   }
@@ -7369,9 +7533,11 @@ public struct ViewportStatusChangeReason : Swift.Hashable, Swift.Sendable {
 public protocol ViewportTransition : AnyObject {
   func run(to toState: any MapboxMaps.ViewportState, completion: @escaping (_ success: Swift.Bool) -> Swift.Void) -> any MapboxCommon.Cancelable
 }
+extension MapboxMaps.Map : Swift.Sendable {}
 extension MapboxMaps.PanMode : Swift.Hashable {}
 extension MapboxMaps.PanMode : Swift.RawRepresentable {}
 extension MapboxMaps.PuckBearing : Swift.Hashable {}
+extension MapboxMaps.MapReader : Swift.Sendable {}
 extension MapboxMaps.MapView.ResizingAnimation : Swift.Equatable {}
 extension MapboxMaps.MapView.ResizingAnimation : Swift.Hashable {}
 extension MapboxMaps.OrnamentPosition : Swift.Hashable {}
