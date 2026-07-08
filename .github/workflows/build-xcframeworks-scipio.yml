@@ -21,6 +21,10 @@ on:
         description: 'mapbox-navigation-ios SOURCE tag (e.g. 3.11.0) — must have a real vX.Y.Z git tag on that repo'
         required: true
         default: '3.11.0'
+      xcode_version:
+        description: 'Xcode version for maxim-lobanov/setup-xcode (e.g. 16.4, 16.2, 15.4) — added after a real run failed with a posix_spawn "No such file or directory" error for Xcode 16.4s internal xcbuild tool; try a different version here without editing this file.'
+        required: true
+        default: '16.4'
 
 jobs:
   build:
@@ -37,10 +41,29 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16.4
+      - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.4'
+          xcode-version: ${{ inputs.xcode_version }}
+
+      - name: Diagnostic — list available Xcode installs and check XCBuild path
+        run: |
+          echo "🔍 Xcode versions available on this runner:"
+          ls -la /Applications/ | grep -i xcode || echo "  (none found matching 'xcode')"
+          echo ""
+          echo "🔍 xcode-select -p:"
+          xcode-select -p
+          echo ""
+          echo "🔍 Checking the exact path a real build failed on (posix_spawn: No such file or directory):"
+          XCBUILD_PATH="$(xcode-select -p)/../SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild"
+          if [ -f "$XCBUILD_PATH" ]; then
+            echo "  ✅ Found: $XCBUILD_PATH"
+            ls -la "$XCBUILD_PATH"
+          else
+            echo "  ❌ NOT FOUND: $XCBUILD_PATH"
+            echo "  Contents of the parent directory, if it exists:"
+            ls -la "$(dirname "$XCBUILD_PATH")" 2>&1 || echo "  (parent directory doesn't exist either)"
+          fi
 
       - name: Configure Mapbox downloads credentials
         env:
