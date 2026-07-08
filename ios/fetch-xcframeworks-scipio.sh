@@ -86,12 +86,26 @@ echo "   Output:   $FRAMEWORKS_DIR"
 echo ""
 
 # ── 1. Clone the SOURCE repo (not mapbox-navigation-ios-build-artifacts) ───
-echo "📦 Cloning mapbox-navigation-ios v$MAPBOX_NAV_VERSION (source repo)..."
-git clone --branch "v$MAPBOX_NAV_VERSION" --depth 1 \
+# FIX (found from a real build log, not guessed): a shallow clone
+# (--depth 1) of an ANNOTATED tag produced this warning in production —
+# "refs/tags/vX.Y.Z <sha> is not a commit!" — followed immediately by
+# Scipio failing with "Invalid package... the data couldn't be read
+# because it isn't in the correct format" the moment it tried to read the
+# manifest. Shallow-cloning annotated tags is a known problematic
+# combination in git; a full clone avoids it. Slower, but this repo isn't
+# huge and correctness matters more here than clone speed.
+echo "📦 Cloning mapbox-navigation-ios v$MAPBOX_NAV_VERSION (source repo, full clone)..."
+git clone --branch "v$MAPBOX_NAV_VERSION" \
   https://github.com/mapbox/mapbox-navigation-ios.git \
   "$WORK_DIR/mapbox-navigation-ios"
 
 cd "$WORK_DIR/mapbox-navigation-ios"
+
+# Fail fast with a clearer, SPM-native error message here if the manifest
+# still can't be read, rather than surfacing only via Scipio's own less
+# specific "Invalid package" wrapper further down.
+echo "🔍 Sanity-checking the package manifest can be read..."
+swift package describe --type json > /dev/null
 
 # ── 2. Patch a MapboxDirections product declaration into a LOCAL copy ──────
 # See the "KNOWN GAPS" note at the top of this file for why this exists.
@@ -125,6 +139,21 @@ with open(path, 'w') as f:
     f.write(content)
 print("Patched: MapboxDirections added as a library product.")
 PYEOF
+
+# Second check, right after patching — isolates "did my patch break the
+# manifest" from "was the checkout already broken" (the first check above
+# already ruled the latter out if this point is reached, since it already
+# passed once on the unpatched file).
+echo "🔍 Sanity-checking the patched manifest can still be read..."
+swift package describe --type json > /dev/null
+echo "   OK — patch did not break manifest parsing."
+
+# Ensure Package.resolved actually exists before relying on
+# --only-use-versions-from-resolved-file below — `swift package describe`
+# above may or may not have generated one as a side effect depending on
+# the toolchain version, so resolve explicitly rather than assume.
+echo "🔒 Resolving package dependencies (writes Package.resolved)..."
+swift package resolve
 
 # ── 3. Fetch and build Scipio ───────────────────────────────────────────────
 echo "📦 Cloning and building Scipio (giginet/Scipio)..."
