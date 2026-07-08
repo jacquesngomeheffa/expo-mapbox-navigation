@@ -24,7 +24,7 @@ on:
       xcode_version:
         description: 'Xcode version for maxim-lobanov/setup-xcode (e.g. 16.4, 16.2, 15.4) — added after a real run failed with a posix_spawn "No such file or directory" error for Xcode 16.4s internal xcbuild tool; try a different version here without editing this file.'
         required: true
-        default: '16.4'
+        default: '16.2'
 
 jobs:
   build:
