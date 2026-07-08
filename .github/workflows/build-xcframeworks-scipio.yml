@@ -46,6 +46,21 @@ jobs:
         with:
           xcode-version: ${{ inputs.xcode_version }}
 
+      - name: Ensure a matching iOS Simulator runtime is installed
+        # FIX, found from a real build log + a matching precedent on Apple's
+        # own developer forums (same exact error message, same root cause):
+        # "No simulator runtime version from [...] available to use with
+        # iphonesimulator SDK version [...]" happens when only the
+        # iphonesimulator SDK/tooling is present but no matching Simulator
+        # RUNTIME (disk image) is actually installed — common right after
+        # switching Xcode versions via maxim-lobanov/setup-xcode, which only
+        # switches the active Xcode.app symlink and doesn't guarantee a
+        # matching simulator runtime is installed for that specific version.
+        # This surfaced as an asset catalog (actool) failure inside
+        # mapbox-maps-ios's own source (IndicatorAssets.xcassets) when
+        # Scipio's --support-simulators flag builds for iphonesimulator.
+        run: xcodebuild -downloadPlatform iOS
+
       - name: Diagnostic — check XCBuild path across every installed Xcode version
         run: |
           echo "🔍 Checking the exact path a real build failed on, across every Xcode install on this runner:"
