@@ -63,9 +63,9 @@ This is required by the vendored xcframework approach (same requirement as the o
 
 ---
 
-## iOS Architecture
+## iOS Architecture mapboxMapsVersion = 11.14.0
 
-### How it works (as of 2.3.0)
+### How it works (as of 2.3.0) 
 
 Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only â€” Mapbox has not shipped CocoaPods support for it. Earlier versions of this package (2.2.x) tried to bridge SPM into CocoaPods live, at your app's `pod install` time, using the same `post_install` Ruby-hook technique `@rnmapbox/maps` uses for its own dependencies. That approach turned out to be fundamentally unreliable in practice: React Native's own SPM manager silently strips manually-added SPM package references during `pod install`, and the officially-sanctioned alternative (`spm_dependency()`) is documented to cause duplicate-symbol errors on statically-linked Expo modules.
 
@@ -79,7 +79,7 @@ Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only â
 
 **Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
 
-### Upgrading the vendored iOS SDK version (maintainers)
+### Upgrading the vendored iOS SDK version (maintainers) actual mapboxMapsVersion = 11.14.0
 
 The iOS binaries are tied to a specific Navigation SDK version, matched to a specific `MapboxMaps` version (see `MAPBOX_NAV_VERSION`/`MAPBOX_MAPS_VERSION`/`MAPBOX_COMMON_VERSION` in [`ios/fetch-xcframeworks.sh`](ios/fetch-xcframeworks.sh)). To bump:
 
