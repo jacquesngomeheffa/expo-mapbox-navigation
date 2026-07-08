@@ -1,0 +1,93 @@
+name: "[EXPERIMENTAL] Build Mapbox Navigation xcframeworks via Scipio (from source)"
+
+# ⚠️ EXPERIMENTAL — an ALTERNATIVE to build-xcframeworks.yml, not a
+# replacement. That workflow (and ios/fetch-xcframeworks.sh, which it
+# calls) is left completely untouched and remains the proven default.
+#
+# This workflow calls ios/fetch-xcframeworks-scipio.sh instead — see that
+# script's own header comment for the full reasoning, status, and known
+# gaps. In short: it builds MapboxNavigationCore/UIKit/etc. from SOURCE via
+# Scipio, rather than downloading Mapbox's own precompiled
+# mapbox-navigation-ios-build-artifacts binaries, as an attempt to resolve
+# a real production launch crash that persisted even with the correct
+# MapboxMaps version confirmed resolved by CocoaPods.
+#
+# UNTESTED end-to-end as of writing — expect to iterate on real failures
+# here, not a clean first run.
+on:
+  workflow_dispatch:
+    inputs:
+      mapbox_nav_version:
+        description: 'mapbox-navigation-ios SOURCE tag (e.g. 3.11.0) — must have a real vX.Y.Z git tag on that repo'
+        required: true
+        default: '3.11.0'
+
+jobs:
+  build:
+    runs-on: macos-15
+    # Longer timeout than the precompiled-artifacts workflow — this compiles
+    # from source instead of downloading prebuilt binaries, which is
+    # meaningfully slower. 30 minutes was enough for the download-only flow;
+    # this is a guess at a safe ceiling, not a measured figure — adjust
+    # after a real run shows actual timing.
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16.4
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.4'
+
+      - name: Configure Mapbox downloads credentials
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        run: |
+          if [ -z "$MAPBOX_DOWNLOADS_TOKEN" ]; then
+            echo "::error::MAPBOX_DOWNLOADS_TOKEN secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          cat > ~/.netrc << EOF
+          machine api.mapbox.com
+          login mapbox
+          password $MAPBOX_DOWNLOADS_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+      - name: Build xcframeworks from source via Scipio
+        env:
+          MAPBOX_NAV_VERSION: ${{ inputs.mapbox_nav_version }}
+        run: |
+          chmod +x ios/fetch-xcframeworks-scipio.sh
+          ./ios/fetch-xcframeworks-scipio.sh
+
+      - name: Verify frameworks were produced
+        run: |
+          ls -la ios/Frameworks/
+          test -d "ios/Frameworks/MapboxNavigationCore.xcframework" || { echo "::error::MapboxNavigationCore.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxNavigationUIKit.xcframework" || { echo "::error::MapboxNavigationUIKit.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxDirections.xcframework" || { echo "::error::MapboxDirections.xcframework missing — see the KNOWN GAPS note in fetch-xcframeworks-scipio.sh"; exit 1; }
+          if [ ! -d "ios/Frameworks/MapboxNavigationNative.xcframework" ]; then
+            echo "::warning::MapboxNavigationNative.xcframework is missing — this is a KNOWN, documented gap in fetch-xcframeworks-scipio.sh, not yet resolved. Do not merge/publish from this branch until it's handled."
+          fi
+
+      - name: Upload frameworks as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapbox-navigation-xcframeworks-scipio-${{ inputs.mapbox_nav_version }}
+          path: ios/Frameworks/
+          retention-days: 30
+
+      - name: Commit frameworks to a branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="xcframeworks-scipio/${{ inputs.mapbox_nav_version }}"
+          git checkout -b "$BRANCH"
+          git add -f ios/Frameworks/
+          git commit -m "Build mapbox-navigation-ios ${{ inputs.mapbox_nav_version }} xcframeworks from source via Scipio (experimental)"
+          git push origin "$BRANCH" --force
+          echo "::notice::Pushed to branch $BRANCH — DO NOT merge or publish from this branch without validating on a real device first. This is an experimental, unproven build path."
