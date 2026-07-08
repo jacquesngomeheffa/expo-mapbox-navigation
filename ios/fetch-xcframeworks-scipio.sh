@@ -144,25 +144,101 @@ else:
 
 if '.library(\n            name: "MapboxDirections"' in content:
     print("MapboxDirections product already present — no patch needed.")
-    with open(path, 'w') as f:
-        f.write(content)
-    sys.exit(0)
+else:
+    marker = '.library(\n            name: "MapboxNavigationCore",'
+    if marker not in content:
+        print("ERROR: could not find insertion point for MapboxDirections in "
+              "Package.swift — the file's structure may have changed since "
+              "this script was written. Manual patch needed.", file=sys.stderr)
+        sys.exit(1)
+    insertion = ('.library(\n'
+                 '            name: "MapboxDirections",\n'
+                 '            targets: ["MapboxDirections"]\n'
+                 '        ),\n        ' + marker.lstrip())
+    content = content.replace(marker, insertion, 1)
+    print("Patched: MapboxDirections added as a library product.")
 
-marker = '.library(\n            name: "MapboxNavigationCore",'
-if marker not in content:
-    print("ERROR: could not find insertion point in Package.swift — "
-          "the file's structure may have changed since this script was "
-          "written. Manual patch needed.", file=sys.stderr)
-    sys.exit(1)
+# FIX (found from a real build log — an actual explicit error, not a
+# guess this time): `scipio create`'s generic "Invalid package... the data
+# couldn't be read because it isn't in the correct format" was ultimately
+# traced to this real, concrete error further down the same log:
+#   "package 'swift-custom-dump' @ 1.6.1 is using Swift tools version
+#    6.1.0 but the installed version is 6.0.3"
+# Scipio bundles its OWN embedded copy of SwiftPM-as-a-library (confirmed
+# in its own README: "Currently, we support Swift 6.0"), separate from
+# and OLDER than the system's actual Swift toolchain. mapbox-navigation-ios
+# has a TEST-ONLY, transitive dependency chain — `_MapboxNavigationTestKit`
+# (a real library product, not a test target itself) depends on
+# `swift-snapshot-testing`, which depends on `swift-custom-dump`, which
+# requires a newer tools-version than Scipio's embedded SwiftPM supports.
+# `MapboxDirectionsTests` and `MapboxNavigationPackageTests` (actual test
+# targets) also pull in `swift-snapshot-testing`/`OHHTTPStubs`. None of
+# this package's own vendored frameworks (MapboxNavigationCore/UIKit/
+# Directions/_MapboxNavigationHelpers/_MapboxNavigationLocalization) need
+# any of it — removing it entirely from this LOCAL, uncommitted copy
+# eliminates the tools-version conflict without affecting anything we
+# actually vendor.
+print("🩹 Removing test-only dependencies incompatible with Scipio's embedded SwiftPM (swift-snapshot-testing/OHHTTPStubs)...")
+blocks_to_remove = [
+    ('_MapboxNavigationTestKit product declaration',
+     '        .library(\n'
+     '            name: "_MapboxNavigationTestKit",\n'
+     '            targets: ["_MapboxNavigationTestKit"]\n'
+     '        ),\n'),
+    ('OHHTTPStubs package dependency',
+     '        .package(url: "https://github.com/AliSoftware/OHHTTPStubs", from: "9.1.0"),\n'),
+    ('swift-snapshot-testing package dependency',
+     '        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.18.1"),\n'),
+    ('MapboxDirectionsTests test target',
+     '        .testTarget(\n'
+     '            name: "MapboxDirectionsTests",\n'
+     '            dependencies: [\n'
+     '                "MapboxDirections",\n'
+     '                .product(name:  "OHHTTPStubsSwift", package: "OHHTTPStubs"),\n'
+     '            ],\n'
+     '            resources: [.process("Fixtures")]\n'
+     '        ),\n'),
+    ('MapboxNavigationPackageTests test target',
+     '        .testTarget(\n'
+     '            name: "MapboxNavigationPackageTests",\n'
+     '            dependencies: [\n'
+     '                "MapboxNavigationUIKit",\n'
+     '                "TestHelper",\n'
+     '                "CarPlayTestHelper",\n'
+     '                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),\n'
+     '                .product(name:  "OHHTTPStubsSwift", package: "OHHTTPStubs"),\n'
+     '            ],\n'
+     '            exclude: [\n'
+     '                "Info.plist",\n'
+     '                "__Snapshots__", // Ignore snapshots folder\n'
+     '            ]\n'
+     '        ),\n'),
+    ('_MapboxNavigationTestKit target itself',
+     '        .target(\n'
+     '            name: "_MapboxNavigationTestKit",\n'
+     '            dependencies: [\n'
+     '                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),\n'
+     '                "_MapboxNavigationTestHelpers",\n'
+     '            ],\n'
+     '            path: "Sources/.empty/_MapboxNavigationTestKit"\n'
+     '        ),\n'),
+]
+any_missing = False
+for label, block in blocks_to_remove:
+    if block in content:
+        content = content.replace(block, '', 1)
+        print(f"   removed: {label}")
+    else:
+        print(f"   ⚠️  NOT FOUND (already absent, or file structure changed): {label}")
+        any_missing = True
+if any_missing:
+    print("   ⚠️  Some expected blocks were not found — this is only a problem "
+          "if 'swift-custom-dump'/tools-version errors reappear later; the "
+          "file's structure may have changed since this script was written.")
 
-insertion = ('.library(\n'
-             '            name: "MapboxDirections",\n'
-             '            targets: ["MapboxDirections"]\n'
-             '        ),\n        ' + marker.lstrip())
-content = content.replace(marker, insertion, 1)
 with open(path, 'w') as f:
     f.write(content)
-print("Patched: MapboxDirections added as a library product.")
+print("Package.swift patching complete.")
 PYEOF
 
 # Second check, right after patching — isolates "did my patch break the
