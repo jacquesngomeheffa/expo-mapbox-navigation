@@ -46,24 +46,26 @@ jobs:
         with:
           xcode-version: ${{ inputs.xcode_version }}
 
-      - name: Diagnostic — list available Xcode installs and check XCBuild path
+      - name: Diagnostic — check XCBuild path across every installed Xcode version
         run: |
-          echo "🔍 Xcode versions available on this runner:"
-          ls -la /Applications/ | grep -i xcode || echo "  (none found matching 'xcode')"
+          echo "🔍 Checking the exact path a real build failed on, across every Xcode install on this runner:"
+          echo "   (posix_spawn: No such file or directory, /Contents/SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild)"
           echo ""
-          echo "🔍 xcode-select -p:"
-          xcode-select -p
+          for app in /Applications/Xcode*.app; do
+            # Skip symlink aliases (e.g. Xcode_16.4.0.app -> Xcode_16.4.app) —
+            # only check real directories, to avoid printing the same result twice.
+            if [ -L "$app" ]; then
+              continue
+            fi
+            CANDIDATE="$app/Contents/SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild"
+            if [ -f "$CANDIDATE" ]; then
+              echo "  ✅ FOUND in $app"
+            else
+              echo "  ❌ missing in $app"
+            fi
+          done
           echo ""
-          echo "🔍 Checking the exact path a real build failed on (posix_spawn: No such file or directory):"
-          XCBUILD_PATH="$(xcode-select -p)/../SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild"
-          if [ -f "$XCBUILD_PATH" ]; then
-            echo "  ✅ Found: $XCBUILD_PATH"
-            ls -la "$XCBUILD_PATH"
-          else
-            echo "  ❌ NOT FOUND: $XCBUILD_PATH"
-            echo "  Contents of the parent directory, if it exists:"
-            ls -la "$(dirname "$XCBUILD_PATH")" 2>&1 || echo "  (parent directory doesn't exist either)"
-          fi
+          echo "ℹ️  Use whichever version(s) show ✅ above as the 'xcode_version' input on the next run."
 
       - name: Configure Mapbox downloads credentials
         env:
