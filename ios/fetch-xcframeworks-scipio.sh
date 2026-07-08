@@ -114,13 +114,38 @@ swift package describe --type json > /dev/null
 echo "🩹 Patching Package.swift: adding MapboxDirections as a declared library product..."
 python3 - "$PWD/Package.swift" <<'PYEOF'
 import sys
+import re
 
 path = sys.argv[1]
 with open(path) as f:
     content = f.read()
 
+# FIX, found from a real build log: Scipio's official docs state it
+# targets Swift 6.0 and show `// swift-tools-version: 6.0` (WITH a space
+# after the colon) in every example. mapbox-navigation-ios's actual
+# Package.swift at v3.11.0 declares `// swift-tools-version:5.9` — no
+# space. Both are valid, standard Swift syntax (Apple's own `swift
+# package describe`/`swift package resolve` handle it fine — confirmed
+# against a real build log, both succeeded against the unmodified file).
+# But Scipio doesn't use Apple's manifest loader for this — it depends on
+# its own third-party manifest parser (giginet/PackageManifestKit), which
+# is a plausible, untested-but-testable candidate for why `scipio create`
+# failed immediately with a generic "Invalid package... the data couldn't
+# be read because it isn't in the correct format" on this exact file,
+# right after standard SPM tooling read the same file with no issue.
+# Normalizing to the spaced format Scipio's own docs use is a cheap,
+# low-risk thing to try — NOT a confirmed fix, just the best next test.
+tools_version_pattern = re.compile(r'^// swift-tools-version:(\d)', re.MULTILINE)
+if tools_version_pattern.search(content):
+    content = tools_version_pattern.sub(r'// swift-tools-version: \1', content, count=1)
+    print("Normalized swift-tools-version line to include a space (Scipio doc format).")
+else:
+    print("swift-tools-version line already has a space, or pattern not found — no change made there.")
+
 if '.library(\n            name: "MapboxDirections"' in content:
     print("MapboxDirections product already present — no patch needed.")
+    with open(path, 'w') as f:
+        f.write(content)
     sys.exit(0)
 
 marker = '.library(\n            name: "MapboxNavigationCore",'
