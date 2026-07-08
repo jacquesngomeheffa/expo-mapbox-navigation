@@ -221,8 +221,8 @@ cd "$WORK_DIR/mapbox-navigation-ios"
 echo "🔍 DIAGNOSTIC: swift package dump-package (first 100 lines)..."
 swift package dump-package 2>&1 | head -100 || echo "   (dump-package itself failed — see output above)"
 echo ""
-echo "🔍 DIAGNOSTIC: full Package.swift content as fed to Scipio..."
-cat -A Package.swift | head -50
+echo "🔍 DIAGNOSTIC: full Package.swift content as fed to Scipio (first 50 lines)..."
+head -50 Package.swift
 echo "   [... truncated, see workflow artifact for full file if needed ...]"
 echo ""
 
