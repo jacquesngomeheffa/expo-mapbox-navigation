@@ -33,12 +33,30 @@ const withMapboxNavigation = (config, options = {}) => {
     // Read here specifically to sync into androidColorOverrides' generated
     // XML resources (mapbox_main_maneuver_background_color, in both a
     // values/ and values-night/ variant — see addAndroidConfig() below).
-    // Every other color prop (maneuverTurnIconColor, etaBar*, etc.) is
-    // passed directly as a view prop to native (via src/index.tsx's
-    // `{...props}` spread) and never needs to be read by this config
-    // plugin at all — these two are a deliberate exception.
+    // Every other color prop is passed directly as a view prop to native
+    // (via src/index.tsx's `{...props}` spread) and never needs to be read
+    // by this config plugin at all — these three are a deliberate
+    // exception.
+    //
+    // FIX: `maneuverTurnIconColor` added to that exception list. Per
+    // Mapbox's own official customization guide (Android Navigation SDK,
+    // "Change the color of maneuver turn icons"), the turn icon's color is
+    // controlled EXCLUSIVELY through a build-time XML style chain
+    // (MapboxCustomManeuverTurnIconStyle, referenced from
+    // MapboxCustomManeuverStyle via the maneuverViewIconStyle /
+    // laneGuidanceManeuverIconStyle attributes) — there is no runtime
+    // equivalent for icon color the way ManeuverViewOptions.
+    // maneuverBackgroundColor exists for the background. The native
+    // Kotlin-side ManeuverViewOptions.turnIconManeuver() call this package
+    // already made was therefore never able to work on its own — this was
+    // a genuine missing implementation, not a data-flow bug (confirmed:
+    // native-side diagnostic logging showed the color correctly parsed and
+    // handed to the SDK every time, with resId=0/"not generated" for the
+    // custom style — see the maneuver color investigation). Reading it
+    // here, generating the missing style chain below, closes that gap.
     maneuverBackgroundColorDay,
     maneuverBackgroundColorNight,
+    maneuverTurnIconColor,
   } = options;
 
   if (!accessToken) {
@@ -57,7 +75,7 @@ const withMapboxNavigation = (config, options = {}) => {
 
   // ── Android ───────────────────────────────────────────────────────────────
   config = withAppBuildGradle(config, (mod) => {
-    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight);
+    addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight, maneuverTurnIconColor);
     return mod;
   });
 
@@ -274,7 +292,7 @@ function calculateMapboxCommonVersion(mapboxMapsVersion) {
   return ['24', ...parts.slice(1)].join('.');
 }
 
-function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight) {
+function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuverBackgroundColorDay, maneuverBackgroundColorNight, maneuverTurnIconColor) {
   if (!mod.modResults.contents.includes('abiFilters')) {
     mod.modResults.contents = mod.modResults.contents.replace(
       /defaultConfig {([\s\S]*?)}/,
@@ -421,21 +439,61 @@ function addAndroidConfig(mod, mapboxMapsVersion, androidColorOverrides, maneuve
   // ContextThemeWrapper on the native side, alongside — not instead of —
   // the ManeuverViewOptions-based approach). Same day/night duplication as
   // the color resources above, and for the exact same reason.
-  function maneuverStyleXml(overrides) {
-    if (!overrides.mapbox_main_maneuver_background_color) return null;
+  //
+  // FIX: also generates the turn-icon-color style chain
+  // (MapboxCustomManeuverTurnIconStyle, referenced via
+  // maneuverViewIconStyle/laneGuidanceManeuverIconStyle), per Mapbox's own
+  // official Android Navigation SDK guide ("Change the color of maneuver
+  // turn icons") — confirmed against that guide's exact attribute/style
+  // names, not guessed. This was the missing piece: maneuverTurnIconColor
+  // has no runtime equivalent to ManeuverViewOptions.maneuverBackgroundColor
+  // for icon color, so the native-side ManeuverViewOptions.turnIconManeuver()
+  // call alone could never visibly work, regardless of how correctly it
+  // received and parsed the color (confirmed via diagnostic logging during
+  // the investigation into this exact prop).
+  //
+  // maneuverTurnIconColor has no separate day/night prop of its own (unlike
+  // the background color) — the SAME value is used for both values/ and
+  // values-night/ generation below, for the same reason the background
+  // color needs both: Mapbox ships its own values-night/ qualified
+  // defaults for MapboxStyleTurnIconManeuver too, which would otherwise
+  // silently win over a values/-only override in dark mode.
+  //
+  // No regression for existing apps using only the background color props:
+  // when maneuverTurnIconColor is not set, the generated XML is byte-for-byte
+  // identical to before this fix (no icon style block, no icon-referencing
+  // items on MapboxCustomManeuverStyle).
+  function maneuverStyleXml(overrides, turnIconColor) {
+    const bgColor = overrides.mapbox_main_maneuver_background_color;
+    if (!bgColor && !turnIconColor) return null;
+
+    const bgItems = bgColor
+      ? '        <item name="maneuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>\n' +
+        '        <item name="subManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>\n' +
+        '        <item name="upcomingManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>\n'
+      : '';
+
+    const iconStyleBlock = turnIconColor
+      ? `    <style name="MapboxCustomManeuverTurnIconStyle" parent="MapboxStyleTurnIconManeuver">\n` +
+        `        <item name="maneuverTurnIconColor">${turnIconColor}</item>\n` +
+        `    </style>\n`
+      : '';
+
+    const iconRefItems = turnIconColor
+      ? '        <item name="maneuverViewIconStyle">@style/MapboxCustomManeuverTurnIconStyle</item>\n' +
+        '        <item name="laneGuidanceManeuverIconStyle">@style/MapboxCustomManeuverTurnIconStyle</item>\n'
+      : '';
+
     return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
-        <item name="maneuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
-        <item name="subManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
-        <item name="upcomingManeuverViewBackgroundColor">@color/mapbox_main_maneuver_background_color</item>
-    </style>
+${iconStyleBlock}    <style name="MapboxCustomManeuverStyle" parent="MapboxStyleManeuverView">
+${bgItems}${iconRefItems}    </style>
 </resources>
 `;
   }
 
-  writeValuesFile('values', 'mapbox_maneuver_style.xml', maneuverStyleXml(dayColorOverrides));
-  writeValuesFile('values-night', 'mapbox_maneuver_style.xml', maneuverStyleXml(nightColorOverrides));
+  writeValuesFile('values', 'mapbox_maneuver_style.xml', maneuverStyleXml(dayColorOverrides, maneuverTurnIconColor));
+  writeValuesFile('values-night', 'mapbox_maneuver_style.xml', maneuverStyleXml(nightColorOverrides, maneuverTurnIconColor));
 }
 
 function addAndroidPermissions(mod, accessToken) {

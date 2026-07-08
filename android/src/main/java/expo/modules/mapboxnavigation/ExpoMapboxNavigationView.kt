@@ -148,6 +148,88 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // becoming mandatory (not optional) starting Android 15+.
     private var lastSystemBarInsets: androidx.core.graphics.Insets = androidx.core.graphics.Insets.NONE
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIX: ETA bar invisible on some real devices even with the WindowInsets
+    // listener (set up in buildUI()) already in place.
+    //
+    // Root cause, confirmed against Expo's own SDK 53 changelog (not a
+    // guess): starting Android 15, edge-to-edge is enforced for apps
+    // targeting API 35 — content can legitimately draw behind the system
+    // navigation bar. Starting Android 16 specifically, the opt-out
+    // attribute (windowOptOutEdgeToEdgeEnforcement) is disabled outright —
+    // there is no way for an app to avoid this, regardless of its own
+    // configuration. On devices/OS versions predating this (e.g. Android
+    // 13), the system bar reserves real screen space the traditional way,
+    // so insets being Insets.NONE there was always correct — nothing to
+    // fix. On Android 15+, that's no longer true, and this view depends on
+    // actually receiving a WindowInsets dispatch to know it.
+    //
+    // The existing ViewCompat.setOnApplyWindowInsetsListener(root) in
+    // buildUI() only works if that dispatch actually reaches this nested
+    // native view. On React Native's New Architecture (Fabric), with
+    // react-native-safe-area-context present in the host app (as it is
+    // here), insets are commonly consumed higher up the RN view tree —
+    // by SafeAreaProvider or RN's own root view handling — before ever
+    // reaching a custom native view nested inside it. When that happens,
+    // lastSystemBarInsets stays stuck at Insets.NONE for this view's
+    // entire lifetime, and the ETA bar's bottom margin never adjusts —
+    // positioning it under the system navigation bar on hardware where
+    // content now genuinely draws edge-to-edge.
+    //
+    // fetchSystemBarInsetsDirectly() sidesteps this by reading insets
+    // straight from the Activity's own decorView, independently of
+    // whatever does or doesn't reach this view via RN's own dispatch
+    // chain. Called once in buildUI() (see applySystemBarInsets below) to
+    // seed a correct value immediately, in addition to — not instead of —
+    // the existing listener, which still keeps the value in sync for
+    // later changes (rotation, nav bar show/hide) on devices where
+    // dispatch does reach this view normally. Returns Insets.NONE (a
+    // no-op, identical to this package's previous behavior) if `context`
+    // isn't an Activity or no insets are available yet — never throws.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun fetchSystemBarInsetsDirectly(): androidx.core.graphics.Insets {
+        val activity = findActivity(context) ?: return androidx.core.graphics.Insets.NONE
+        val decorView = activity.window?.decorView ?: return androidx.core.graphics.Insets.NONE
+        val insets = ViewCompat.getRootWindowInsets(decorView) ?: return androidx.core.graphics.Insets.NONE
+        return insets.getInsets(WindowInsetsCompat.Type.systemBars())
+    }
+
+    // Resolves the actual Activity out of a possibly-wrapped Context.
+    // NOT a direct `context as? Activity` cast: the Context handed to an
+    // Expo/RN native view is frequently a ReactContext or similar
+    // ContextWrapper — itself not an Activity, even though it wraps one —
+    // so a direct cast would silently return null on exactly the setups
+    // this fix targets, defeating the whole point. Unwraps one
+    // ContextWrapper layer at a time (the standard, well-known Android
+    // pattern for this) until an actual Activity is found or the chain is
+    // exhausted. Returns null (never throws) if no Activity is found
+    // anywhere in the chain.
+    private fun findActivity(ctx: Context): android.app.Activity? {
+        var current = ctx
+        while (current is android.content.ContextWrapper) {
+            if (current is android.app.Activity) return current
+            current = current.baseContext
+        }
+        return current as? android.app.Activity
+    }
+
+    // Single shared update path for applying a given set of system bar
+    // insets to both the ETA bar's bottom margin and the speed limit
+    // panel's position — used by both fetchSystemBarInsetsDirectly()'s
+    // one-time seed call and the ongoing WindowInsets listener, so both
+    // mechanisms stay perfectly consistent with each other (no duplicated
+    // or divergent logic between the two).
+    private fun applySystemBarInsets(insets: androidx.core.graphics.Insets) {
+        lastSystemBarInsets = insets
+        etaBar?.let { bar ->
+            (bar.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                lp.bottomMargin = lastSystemBarInsets.bottom
+                bar.layoutParams = lp
+            }
+        }
+        applySpeedLimitPosition()
+    }
+
     private var etaBar: LinearLayout? = null
     private var btnMuteView: ImageView? = null
     private var btnOverviewView: ImageView? = null
@@ -568,17 +650,25 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // device, since edge-to-edge display is becoming mandatory rather
         // than optional starting Android 15+.
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
-            lastSystemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            etaBar?.let { bar ->
-                (bar.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-                    lp.bottomMargin = lastSystemBarInsets.bottom
-                    bar.layoutParams = lp
-                }
-            }
-            applySpeedLimitPosition()
+            applySystemBarInsets(insets.getInsets(WindowInsetsCompat.Type.systemBars()))
             insets
         }
         ViewCompat.requestApplyInsets(root)
+
+        // FIX: seed lastSystemBarInsets immediately with a direct read from
+        // the Activity's decorView (see fetchSystemBarInsetsDirectly()'s
+        // full reasoning above, near lastSystemBarInsets' declaration),
+        // rather than relying solely on the listener above ever firing.
+        // On Android 16 (edge-to-edge enforced, no opt-out possible) with
+        // react-native-safe-area-context in the host app, that dispatch
+        // can be consumed higher up the RN view tree before ever reaching
+        // this nested native view — which previously left
+        // lastSystemBarInsets stuck at Insets.NONE for this view's entire
+        // lifetime, and the ETA bar positioned under the system navigation
+        // bar as a result. A harmless, idempotent no-op wherever the
+        // listener above already fires correctly (applySystemBarInsets
+        // would simply be called twice with the same value).
+        applySystemBarInsets(fetchSystemBarInsetsDirectly())
 
         addView(root)
     }

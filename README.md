@@ -57,8 +57,8 @@ This is required by the vendored xcframework approach (same requirement as the o
 |--------|----------|---------|-------------|
 | `accessToken` | ✅ | — | Public Mapbox token (`pk.*`). Used for map tiles and routing. |
 | `downloadsToken` | ✅ | — | Secret Mapbox token (`sk.*`) with **Downloads:Read** scope. Same token as `RNMapboxMapsDownloadToken`. Kept for backward compatibility with app.json configs from earlier versions — as of 2.3.0 it's no longer used at app-build time (the iOS SDK is vendored as prebuilt binaries; nothing downloads from `api.mapbox.com` during your `pod install`/EAS build anymore). |
-| `mapboxMapsVersion` | ✅ | `"11.11.0"` | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
-| `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7 — was deprecated/unused after 2.3.0's iOS rewrite). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula (see [iOS Architecture](#ios-architecture) history) — a best-effort approximation, not a guarantee. Has no effect on iOS; the iOS SDK version is fixed by which npm package version you install actually fixed at **(11.14.0)**. |
+| `mapboxMapsVersion` | ✅ | `"11.11.0"` IOS fixed at **(11.14.0)** | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
+| `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7 — was deprecated/unused after 2.3.0's iOS rewrite). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula (see [iOS Architecture](#ios-architecture) history) — a best-effort approximation, not a guarantee. Has no effect on iOS; the iOS SDK version is fixed by which npm package version you install. |
 | `androidColorOverrides` | — | `{}` | Override Mapbox native resource colors on Android. |
 
 ---
@@ -155,9 +155,9 @@ All color props are optional — defaults are applied when omitted.
 
 | Prop | Default | Description |
 |------|---------|-------------|
-| `maneuverBackgroundColorDay` | Mapbox default | Background of the turn-by-turn instruction banner (day/light mode). Uses `ManeuverViewOptions.maneuverBackgroundColor` (official Mapbox SDK API). **Android: see [priority vs. `androidColorOverrides`](#mapbox-native-colors-android-via-plugin) below if you also use that option.** |
-| `maneuverBackgroundColorNight` | Mapbox default | Same, for night mode — the component switches automatically based on time of day (6am–8pm = day). |
-| `maneuverTurnIconColor` | Mapbox default | Color of the turn-direction icon inside the instruction banner. Uses `ManeuverViewOptions.turnIconManeuver`. |
+| `maneuverBackgroundColorDay` | Mapbox default | Background of the turn-by-turn instruction banner (day/light mode). Sets `ManeuverViewOptions.maneuverBackgroundColor` at runtime (Android/iOS). **Android: has no visible effect from this prop alone — must also be set as a plugin option in `app.json` for the real on-screen color to change. See the callout right below, and [priority vs. `androidColorOverrides`](#mapbox-native-colors-android-via-plugin).** |
+| `maneuverBackgroundColorNight` | Mapbox default | Same, for night mode — the component switches automatically based on time of day (6am–8pm = day). **Android: same `app.json` plugin-option requirement as `maneuverBackgroundColorDay` above.** |
+| `maneuverTurnIconColor` | Mapbox default | Color of the turn-direction icon inside the instruction banner. Sets `ManeuverViewOptions.turnIconManeuver` at runtime. **Android: has no visible effect from this prop alone — Mapbox's SDK has no runtime API for icon color, only a build-time XML style chain. Must also be set as a plugin option in `app.json`. See the callout right below.** |
 | `navigationPuckColor` | Mapbox default | Tints Mapbox's own default location puck icon (the arrow showing your position/heading on the map — distinct from `maneuverTurnIconColor`, which is inside the banner, not on the map). Ignored if `navigationPuckImagePath` or `navigationPuck3DModelPath` is set. |
 | `navigationPuckImagePath` | — | Replaces the puck icon entirely with a local image (`file://` URI or absolute path). Never tinted, even if `navigationPuckColor` is also set — avoids any risk of a tint operation failing on an arbitrary custom image. Falls back to the color/default icon if the file can't be loaded. |
 | `navigationPuck3DModelPath` | — | Replaces the 2D puck with a 3D model (`.glb`/`.gltf`) — a local path, `asset://name.glb` (Android's bundled assets), or a full URL. Takes priority over both puck props above when set and valid. Falls back to the 2D puck if the model fails to load. |
@@ -181,6 +181,47 @@ All color props are optional — defaults are applied when omitted.
   iconButtonMutedColor="#EA4335"
 />
 ```
+
+> **Android: `maneuverBackgroundColorDay`, `maneuverBackgroundColorNight`, and `maneuverTurnIconColor` alone are not enough.**
+>
+> All three set a matching `ManeuverViewOptions` field at runtime — confirmed, via diagnostic logging, to correctly receive and parse the right value every time — but on Android, **none of them visibly changes anything on their own**. The maneuver banner's actual on-screen appearance (background *and* icon color) is controlled by a build-time Android resource style (`MapboxCustomManeuverStyle` / `MapboxCustomManeuverTurnIconStyle`), generated by this package's **config plugin** from its own `app.json` options — not from view props on your React component. This isn't a bug to work around: config plugins run at `expo prebuild` time, before your JS ever executes, so they have no way to read a runtime prop value — and Mapbox's SDK resolves the banner's actual colors from that compiled resource, not from the runtime API. See [Mapbox Native Colors](#mapbox-native-colors-android-via-plugin) below for the full mechanism.
+>
+> **You need the same three values in two places**: as `app.json` plugin options (this is what actually changes the color on screen) and, if you like, also as view props on your component (harmless — kept for iOS parity and forward-compatibility, but currently has no visible effect of its own on Android). To avoid maintaining the same hex values twice, put them in one shared file and spread it into both:
+>
+> ```js
+> // maneuverColors.js — single source of truth
+> module.exports = {
+>   maneuverBackgroundColorDay: "#1E2433",
+>   maneuverBackgroundColorNight: "#0B0E14",
+>   maneuverTurnIconColor: "#1A73E8",
+> };
+> ```
+>
+> ```js
+> // app.config.js — the JS config format, so it can require() the file above
+> // (a static app.json cannot)
+> const maneuverColors = require('./maneuverColors');
+>
+> module.exports = {
+>   expo: {
+>     plugins: [
+>       ["@jacques_gordon/expo-mapbox-navigation", {
+>         accessToken: "pk.xxx",
+>         downloadsToken: "sk.xxx",
+>         ...maneuverColors,
+>       }],
+>     ],
+>   },
+> };
+> ```
+>
+> ```tsx
+> // Your component — spread the same object, so there's exactly one place
+> // to ever change one of these three colors
+> import maneuverColors from '../maneuverColors';
+>
+> <MapboxNavigationView {...maneuverColors} /* ...other props */ />
+> ```
 
 > **iOS parity, as of this release:**
 > - `maneuverBackgroundColorDay`/`maneuverBackgroundColorNight` — implemented via a custom `StandardDayStyle`/`StandardNightStyle` subclass pair, styling `InstructionsBannerView` through `UIAppearance` (Mapbox's own confirmed, documented v3 mechanism for this). **Read once, at the time a route is presented** — unlike Android, `NavigationOptions.styles` is a construction-time configuration, so changing these colors while navigation is already active takes effect on the *next* route, not instantly. This is an architectural difference from Android's live-updating maneuver view, not an oversight.
@@ -211,6 +252,8 @@ Override Mapbox's built-in resource colors (route line, etc.) via `androidColorO
 3. **Otherwise, Mapbox's own default.**
 
 In short: if you're only using one of the two, just use `maneuverBackgroundColorDay` — it's kept in sync automatically. Reach for `androidColorOverrides.mapbox_main_maneuver_background_color` directly only if you specifically need to pin an exact value regardless of what any prop says (e.g. a design system constant that shouldn't be app-configurable).
+
+**`maneuverTurnIconColor` — plugin option only, no priority conflict.** Unlike the background color above, there's no `androidColorOverrides` key for the turn icon's color, so there's nothing to prioritize against — just set `maneuverTurnIconColor` as a plugin option and it's used directly to generate `MapboxCustomManeuverTurnIconStyle`, referenced from `MapboxCustomManeuverStyle` via `maneuverViewIconStyle`/`laneGuidanceManeuverIconStyle` (Mapbox's own official mechanism for this — see their "Change the color of maneuver turn icons" guide). Same single build-time XML style file as the background color, generated in both `res/values/` and `res/values-night/` — Mapbox ships its own `values-night/` default for this too, which would otherwise silently win in dark mode the same way it originally did for the background color.
 
 ---
 
@@ -285,6 +328,25 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 3.1.6
+**A real production iOS launch crash fixed (confirmed binary incompatibility, from an actual crash report), plus the `maneuverTurnIconColor` doc/implementation gap closed and an Android 16 edge-to-edge fix for the ETA bar.**
+
+- **Fixed: app crashed at launch on iOS, every time, with no navigation UI ever appearing.** Confirmed directly from a real device crash report (not a guess): a `DYLD`/`Symbol missing` termination —
+  ```
+  Symbol not found: _$s10MapboxMaps11GestureTypeO9singleTapyA2CmFWC
+  Referenced from: .../MapboxNavigationCore.framework
+  Expected in:      .../MapboxMaps.framework
+  ```
+  Root cause: the vendored `MapboxNavigationCore` xcframework (Navigation SDK **3.8.2**) was compiled against a newer/different `MapboxMaps` API surface than what was actually linked at runtime (`MapboxMaps` **11.11.0**, installed via `@rnmapbox/maps`'s `RNMapboxMapsVersion`) — a hard binary incompatibility, not something any podspec/Podfile/project setting can paper over.
+  - **Fix**: vendored xcframeworks rebuilt at Navigation SDK **3.11.0**, paired with `RNMapboxMapsVersion: "11.14.0"`. This exact pairing is confirmed directly from Mapbox's own [v3.11.0 release notes](https://github.com/mapbox/mapbox-navigation-ios/releases/tag/v3.11.0) ("Packaging: MapboxNavigationCore now requires MapboxMaps v11.14.0, MapboxNavigationCore now requires MapboxNavigationNative v324.14.0") — not an assumed-compatible version, the literal one Mapbox states is required. Verified against the actual vendored binaries' own `Info.plist` (`MapboxNavigationCore`/`MapboxNavigationUIKit`/`MapboxDirections`/`_MapboxNavigationHelpers` all report `3.11.0`; `MapboxNavigationNative` reports `324.14.0`) — both match exactly.
+  - **`ios/fetch-xcframeworks.sh`'s own default `MAPBOX_NAV_VERSION` updated from `3.8.2` to `3.11.0`**, so it now matches what's actually vendored/committed. Previously, re-running this script without an explicit override would have silently regressed back to the crashing `3.8.2`/`11.11.0` pairing.
+  - **Maintainer note, going forward**: this package's own `s.platforms`/`IPHONEOS_DEPLOYMENT_TARGET` (currently `15.1`) were not affected by this specific bump — no change in MapboxMaps 11.14.0's own minimum deployment target was found in its release notes. Any future Navigation SDK version bump must re-check both the exact required `MapboxMaps` pairing (from that release's own "Packaging" changelog section) **and** whether that paired `MapboxMaps` version raised its own minimum iOS deployment target.
+- **Fixed: `maneuverTurnIconColor` had no actual effect on Android, even when set correctly.** The [Color Customization](#color-customization-android) and [Mapbox Native Colors](#mapbox-native-colors-android-via-plugin) sections already documented this prop needing to be set as a plugin option in `app.json` (not just as a view prop) — but the config plugin never actually read or acted on it: `maneuverTurnIconColor` was never destructured from the plugin's own `options` parameter, so no `MapboxCustomManeuverTurnIconStyle`/`maneuverViewIconStyle` was ever generated, regardless of what was set anywhere. Confirmed via real-device diagnostic logging (`MapboxCustomManeuverStyle lookup returned resId=0`) before fixing — same class of bug as the `maneuverBackgroundColorDay` destructuring bug in 3.1.2's history.
+  - **Fix**: the plugin now reads `maneuverTurnIconColor` from its options and generates the full style chain confirmed against Mapbox's own official Android Navigation SDK guide ("Change the color of maneuver turn icons") — `MapboxCustomManeuverTurnIconStyle` (parent `MapboxStyleTurnIconManeuver`), referenced from `MapboxCustomManeuverStyle` via `maneuverViewIconStyle`/`laneGuidanceManeuverIconStyle`. Generated in both `res/values/` and `res/values-night/`, same reasoning as the background color fix in 3.1.5 (Mapbox ships its own `values-night/` default for this too). No separate day/night variant of this prop exists, so the same value is used for both.
+  - **No regression for existing apps**: verified the generated XML is byte-for-byte identical to before this fix for any app that only configures the background color props and never sets `maneuverTurnIconColor` at all.
+- **Fixed: the ETA bar could still render under the system navigation bar on some real devices even with the `WindowInsets` listener from 3.1.5 in place** — specifically observed on an Android 16 device, not reproduced on an Android 13 device with the same code. Root cause, confirmed against Expo SDK 53's own changelog: Android 16 disables the edge-to-edge opt-out attribute entirely (no app can avoid it, regardless of configuration), while Android 15 still allowed opting out and pre-15 devices never had this enforcement at all. On React Native's New Architecture with `react-native-safe-area-context` in the host app, the `WindowInsets` dispatch this package's listener depends on can be consumed higher up the RN view tree before ever reaching this package's nested native view — leaving `lastSystemBarInsets` stuck at `Insets.NONE` for the view's entire lifetime on affected devices.
+  - **Fix**: added `fetchSystemBarInsetsDirectly()`, which reads system bar insets straight from the Activity's own `decorView` — found via `findActivity()`, which safely unwraps `ContextWrapper` layers (a plain `context as? Activity` cast is not reliable here, since the `Context` handed to an Expo/RN native view is frequently a `ReactContext`, not the `Activity` itself) — independently of whatever does or doesn't reach this view via RN's own dispatch chain. Called once during `buildUI()`, in addition to (not instead of) the existing listener, so devices where the listener already works correctly see no change at all.
 
 ### 3.1.5
 **Two confirmed real-device-only issues resolved (both invisible on emulators, masking them until physical hardware testing), plus the maneuver color fix implemented.**

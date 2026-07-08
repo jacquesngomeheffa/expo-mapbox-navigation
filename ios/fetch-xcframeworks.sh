@@ -44,7 +44,26 @@ FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 # twice: once for the version gap itself, once because s.platforms alone
 # turned out not to be enough on its own). Check the target version's
 # release notes at https://github.com/mapbox/mapbox-maps-ios/releases.
-MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.2}"
+#
+# UPDATED to 3.11.0 (was 3.8.2): confirmed as the actual version currently
+# vendored/committed in ios/Frameworks/ (CFBundleShortVersionString check),
+# following a real production crash at launch with 3.8.2 paired against
+# MapboxMaps 11.11.0 — "Symbol not found:
+# _$s10MapboxMaps11GestureTypeO9singleTapyA2CmFWC", a binary
+# incompatibility between that Navigation Core build and that Maps SDK
+# version. 3.11.0 is confirmed, directly from Mapbox's own v3.11.0 release
+# notes (https://github.com/mapbox/mapbox-navigation-ios/releases/tag/v3.11.0),
+# to require EXACTLY MapboxMaps v11.14.0 and MapboxNavigationNative
+# v324.14.0 — both match what's actually vendored here. Raising this
+# script's own default to 3.11.0 keeps it consistent with what's actually
+# shipped, so re-running this script without an explicit override
+# reproduces the same (working) versions rather than silently regressing
+# back to the crashing 3.8.2/11.11.0 pairing. Whoever bumps this next:
+# `RNMapboxMapsVersion` in the consuming app's @rnmapbox/maps config must
+# be updated to the exact matching MapboxMaps version from that new
+# Navigation release's own "Packaging" changelog section — this script has
+# no way to enforce or verify that pairing itself.
+MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.11.0}"
 
 echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
 echo "   Output: $FRAMEWORKS_DIR"
