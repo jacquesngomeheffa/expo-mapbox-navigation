@@ -112,7 +112,7 @@ swift package describe --type json > /dev/null
 # This edits the checkout inside $WORK_DIR only — never anything committed
 # to this repo.
 echo "🩹 Patching Package.swift: adding MapboxDirections as a declared library product..."
-python3 - "$PWD/Package.swift" <<'PYEOF'
+python3 -u - "$PWD/Package.swift" <<'PYEOF'
 import sys
 import re
 
@@ -181,8 +181,17 @@ echo "🔒 Resolving package dependencies (writes Package.resolved)..."
 swift package resolve
 
 # ── 3. Fetch and build Scipio ───────────────────────────────────────────────
-echo "📦 Cloning and building Scipio (giginet/Scipio)..."
-git clone --depth 1 https://github.com/giginet/Scipio.git "$WORK_DIR/Scipio"
+# FIX attempt #3 (previous two — full clone instead of shallow, and
+# normalizing swift-tools-version's spacing — did NOT resolve the error,
+# confirmed by two consecutive real build logs showing the identical
+# failure). Pinning to a specific, confirmed-existing release tag (0.27.2)
+# instead of blindly building whatever `main` happens to be at run time —
+# unpinned "latest main" is generally bad practice for reproducibility
+# regardless of whether it's the actual cause here, and removes one more
+# source of variability before the next diagnostic attempt.
+SCIPIO_VERSION="${SCIPIO_VERSION:-0.27.2}"
+echo "📦 Cloning and building Scipio v$SCIPIO_VERSION (giginet/Scipio)..."
+git clone --branch "$SCIPIO_VERSION" --depth 1 https://github.com/giginet/Scipio.git "$WORK_DIR/Scipio"
 (cd "$WORK_DIR/Scipio" && swift build -c release)
 
 SCIPIO_BIN="$WORK_DIR/Scipio/.build/release/scipio"
@@ -191,11 +200,32 @@ if [ ! -x "$SCIPIO_BIN" ]; then
   exit 1
 fi
 
+echo "ℹ️  Scipio version check:"
+"$SCIPIO_BIN" --version || echo "   (--version not supported by this Scipio release, or failed — non-fatal, continuing)"
+
 # ── 4. Run Scipio against the (patched) mapbox-navigation-ios checkout ─────
 # Exact command per kried's documented workaround on
 # mapbox/mapbox-navigation-ios#4703 — also what youssefhenna/
 # expo-mapbox-navigation uses for the same reason.
 cd "$WORK_DIR/mapbox-navigation-ios"
+
+# DIAGNOSTIC, added after two failed attempts at guessing the cause of
+# "Invalid package... the data couldn't be read because it isn't in the
+# correct format" from `scipio create` — this exact same error occurred
+# twice in a row despite (1) a full (non-shallow) clone and (2) normalizing
+# swift-tools-version's spacing, neither of which changed the outcome. `
+# swift package describe`/`resolve` succeed against this exact file both
+# times, so the problem is specific to Scipio's own manifest handling, not
+# a real defect in the package. Dumping this raw information here so the
+# NEXT failure (if any) comes with actual data instead of another guess.
+echo "🔍 DIAGNOSTIC: swift package dump-package (first 100 lines)..."
+swift package dump-package 2>&1 | head -100 || echo "   (dump-package itself failed — see output above)"
+echo ""
+echo "🔍 DIAGNOSTIC: full Package.swift content as fed to Scipio..."
+cat -A Package.swift | head -50
+echo "   [... truncated, see workflow artifact for full file if needed ...]"
+echo ""
+
 echo "🏗️  Running Scipio (building from source — this will take a while)..."
 "$SCIPIO_BIN" create . -f \
   --platforms iOS \
