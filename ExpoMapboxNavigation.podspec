@@ -11,21 +11,19 @@ Pod::Spec.new do |s|
   s.author         = package['author']
   s.homepage       = package['homepage']
 
-  # RESTORED (from the 3.1.9/3.1.10 youssefhenna-alignment experiment,
-  # back to this project's own original approach): MapboxMaps 11.14.0
-  # (installed by @rnmapbox/maps) has a minimum deployment target of iOS
-  # 15.1 — confirmed directly from a real build error: "compiling for iOS
-  # 14.0, but module 'MapboxMaps' has a minimum deployment target of iOS
-  # 15.1". Our own target must match or exceed that, since our vendored
-  # MapboxNavigationCore/UIKit frameworks import MapboxMaps internally
-  # (@_spi imports visible in their private Swift interfaces).
+  # Confirmed directly from a Mapbox engineer on their own issue tracker
+  # (mapbox/mapbox-maps-ios#1669): MapboxMaps 11.20.0 requires iOS 15.1 —
+  # our own target must match or exceed that, since our vendored
+  # MapboxNavigationCore/UIKit/MapboxMaps frameworks all require it.
   s.platforms      = { :ios => '15.1' }
   s.swift_version  = '5.9'
   s.source         = { git: package['repository']['url'], tag: "v#{s.version}" }
 
   s.dependency 'ExpoModulesCore'
 
-  # ── Sibling Mapbox pods (provided by @rnmapbox/maps, not vendored here) ───
+  # ── Sibling Mapbox pods — MapboxCommon/MapboxCoreMaps/Turf still come
+  #    from CocoaPods (via @rnmapbox/maps); MapboxMaps does NOT anymore ────
+  #
   # Our vendored MapboxNavigationCore/MapboxDirections frameworks' private
   # Swift interfaces (.private.swiftinterface) import MapboxCommon_Private
   # and Turf internally. Without an explicit CocoaPods dependency declared
@@ -34,65 +32,60 @@ Pod::Spec.new do |s|
   # against our vendored frameworks — even though @rnmapbox/maps already
   # installs these same pods elsewhere in the project.
   #
-  # `MapboxMaps` pinned to an EXACT version, not left unconstrained. Root
-  # cause of a real production launch crash (DYLD "Symbol not found:
-  # GestureType.singleTap", confirmed via crash report): with no
-  # constraint here, CocoaPods was free to resolve MapboxMaps to whatever
-  # satisfied every OTHER pod's constraint across this project's full
-  # ~184-pod graph — not guaranteed to be the exact same build our
-  # vendored MapboxNavigationCore.xcframework was linked against at
-  # Mapbox's own build time, even at a matching version *number*.
+  # `MapboxMaps` is intentionally NOT declared here anymore. It is vendored
+  # directly (see s.vendored_frameworks below, and ios/MapboxMaps.podspec /
+  # plugin/src/index.js for the Podfile override that makes @rnmapbox/maps'
+  # own dependency resolve to that same vendored copy) — confirmed directly
+  # from a Mapbox engineer on their own issue tracker
+  # (mapbox/mapbox-maps-ios#1669): MapboxMaps as distributed via CocoaPods
+  # trunk is built WITHOUT BUILD_LIBRARY_FOR_DISTRIBUTION=YES, so "some
+  # symbols are stripped from the binary" — causing a real, confirmed DYLD
+  # "Symbol not found: GestureType.singleTap" launch crash whenever a
+  # separately-compiled framework (our own vendored MapboxNavigationCore)
+  # depends on it, regardless of version pairing or which channel built
+  # MapboxNavigationCore itself (proven with real crash-report binary
+  # UUIDs — even a from-source Scipio build hit this identically). The fix
+  # is to vendor MapboxMaps from mapbox-maps-ios-binary instead — a
+  # separate, official Mapbox repo built WITH that flag — and to make sure
+  # it's the only copy of MapboxMaps that ends up in the app (see the
+  # Podfile override).
   #
-  # 11.14.0 is the exact version Mapbox's own v3.11.0 release notes state
-  # MapboxNavigationCore requires ("Packaging: MapboxNavigationCore now
-  # requires MapboxMaps v11.14.0") — confirmed directly from
-  # https://github.com/mapbox/mapbox-navigation-ios/releases/tag/v3.11.0.
-  # This is intentionally NOT sourced from a plugin option or environment
-  # variable: unlike the Android-side `mapboxMapsVersion` option (see
-  # plugin/src/index.js), letting a consumer override this to an arbitrary
-  # value would defeat the entire point — it would let someone
-  # accidentally request a MapboxMaps version incompatible with THIS exact
-  # npm package version's vendored binaries, recreating the very crash
-  # this fix closes. The iOS Maps version is fixed by which version of
-  # this npm package you install, same as MapboxNavigationCore itself —
-  # matching `RNMapboxMapsVersion` in your own app's @rnmapbox/maps config
-  # to this exact value remains your responsibility, but this podspec no
-  # longer lets CocoaPods silently resolve to something else.
-  #
-  # ⚠️ MAINTAINER: this value MUST be updated together with
-  # MAPBOX_MAPS_VERSION in ios/fetch-xcframeworks-scipio.sh (this
-  # version's build method — see below), whenever the vendored SDK
-  # version is bumped — see "Upgrading the vendored iOS SDK version" in
-  # README.md.
+  # ⚠️ MAINTAINER: MAPBOX_NAV_VERSION/MAPBOX_MAPS_VERSION in
+  # ios/fetch-xcframeworks.sh, ios/MapboxMaps.podspec's own `s.version`,
+  # and s.platforms above must all be updated together whenever the
+  # vendored SDK version is bumped — see "Upgrading the vendored iOS SDK
+  # version" in README.md.
   s.dependency 'MapboxCommon'
   s.dependency 'MapboxCoreMaps'
-  s.dependency 'MapboxMaps', '11.14.0'
   s.dependency 'Turf'
 
-  # ── iOS: Mapbox Navigation SDK v3 via VENDORED XCFRAMEWORKS ───────────────
+  # ── iOS: Mapbox Navigation SDK v3 + MapboxMaps, via VENDORED XCFRAMEWORKS ──
   #
   # Mapbox Navigation SDK v3 is distributed as SOURCE CODE via SPM only — it
-  # has no CocoaPods support. So: ios/Frameworks/*.xcframework are built
-  # ONCE (see ios/fetch-xcframeworks-scipio.sh — this version's build
-  # method, using youssefhenna/expo-mapbox-navigation's own technique: a
-  # minimal, hand-written Package.swift + Scipio, built directly against
-  # the exact mapbox-maps-ios SPM tag this version targets, rather than
-  # downloading Mapbox's own precompiled mapbox-navigation-ios-build-
-  # artifacts binaries) and committed to this package.
+  # has no CocoaPods support. So: ios/Frameworks/*.xcframework are fetched
+  # ONCE (see ios/fetch-xcframeworks.sh — downloads official precompiled
+  # binaries from mapbox-navigation-ios-build-artifacts for the
+  # Navigation-specific frameworks, and from mapbox-maps-ios-binary for
+  # MapboxMaps itself) and committed to this package.
   #
-  # IMPORTANT — do NOT vendor MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf
-  # here. @rnmapbox/maps already installs those via CocoaPods, and
-  # MapboxNavigationCore.xcframework is built to link against that SAME
-  # version (kept in sync — see ios/fetch-xcframeworks-scipio.sh for the
-  # version-alignment requirement). Vendoring a second copy of those
-  # specific frameworks would reintroduce duplicate-symbol errors, per the
-  # exact guidance a Mapbox engineer gave for this same scenario on
-  # mapbox/mapbox-navigation-ios#4703.
-  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework')).map { |f| f.sub("#{__dir__}/", '') }
+  # MapboxMaps.xcframework is fetched into this same ios/Frameworks/
+  # directory (see ios/fetch-xcframeworks.sh) but is deliberately EXCLUDED
+  # from this glob — it's vendored exclusively by the separate
+  # ios/MapboxMaps.podspec (pod name 'MapboxMaps', not 'ExpoMapboxNavigation'),
+  # activated via the Podfile override in plugin/src/index.js. Letting
+  # BOTH this pod's own vendored_frameworks AND the separate MapboxMaps
+  # pod vendor the exact same physical .xcframework file would link it
+  # twice into the final app — reintroducing the exact duplicate-symbol
+  # problem this whole architecture exists to avoid. See the comment on
+  # the removed `s.dependency 'MapboxMaps'` line above for the full
+  # reasoning on why MapboxMaps is handled this way at all.
+  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework'))
+    .reject { |f| File.basename(f) == 'MapboxMaps.xcframework' }
+    .map { |f| f.sub("#{__dir__}/", '') }
 
   s.source_files = 'ios/**/*.{swift,h,m,mm}'
   s.exclude_files = [
-    'ios/fetch-xcframeworks-scipio.sh',
+    'ios/fetch-xcframeworks.sh',
     'ios/Frameworks/*.xcframework/**/*.h',
   ]
 

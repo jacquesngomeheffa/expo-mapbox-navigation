@@ -13,6 +13,13 @@ const withMapboxNavigation = (config, options = {}) => {
   const {
     accessToken,
     downloadsToken,
+    // Android-only, and even more strictly so now than before: iOS's
+    // MapboxMaps version is fully determined by ios/fetch-xcframeworks.sh's
+    // own MAPBOX_MAPS_VERSION constant (vendored directly — see
+    // ExpoMapboxNavigation.podspec and ios/MapboxMaps.podspec) and is not
+    // affected by this option in any way. Left at its historical default;
+    // Android's own version story is separate and untouched by the
+    // MapboxMaps-vendoring work described elsewhere in this file.
     mapboxMapsVersion = '11.11.0',
     // Android only (see calculateAndroidNavVersion below / withProjectBuildGradle
     // mod). If set, used EXACTLY as given — no auto-calculation, no safety
@@ -224,6 +231,105 @@ ext {
         fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
         console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote Mapbox credentials to ~/.netrc');
       }
+      return mod;
+    },
+  ]);
+
+  // ── iOS: Podfile override — force MapboxMaps to resolve to our vendored
+  //    copy project-wide, not CocoaPods trunk ─────────────────────────────
+  //
+  // THE ACTUAL FIX for a DYLD "Symbol not found: GestureType.singleTap"
+  // launch crash that this whole investigation chased for a very long
+  // time, through many wrong turns (different SDK version pairings,
+  // rewriting this project's own Swift source, building MapboxNavigationCore
+  // from source via Scipio instead of downloading it — none of which
+  // touched the real cause).
+  //
+  // Confirmed directly from a Mapbox engineer on their own issue tracker
+  // (mapbox/mapbox-maps-ios#1669), not this project's own theory: MapboxMaps
+  // as distributed via CocoaPods trunk is built WITHOUT
+  // BUILD_LIBRARY_FOR_DISTRIBUTION=YES, so "some symbols are stripped from
+  // the binary" — and "In the scenario where a third party compiled
+  // framework would also depend on the MapboxMaps module, the build would
+  // fail (missing symbols)... a runtime error if the framework is dynamic."
+  // Our own vendored MapboxNavigationCore.xcframework (see
+  // ExpoMapboxNavigation.podspec) is exactly that "third party compiled
+  // framework" — it depends on MapboxMaps' full witness tables (library
+  // evolution). This was proven with real crash-report binary UUIDs: even
+  // a from-source Scipio build of MapboxNavigationCore, linked against the
+  // EXACT same MapboxMaps version CocoaPods installs, crashed identically —
+  // the mismatch was never about how MapboxNavigationCore itself gets
+  // built, only about which MapboxMaps binary it links against at runtime.
+  //
+  // ios/fetch-xcframeworks.sh now ALSO vendors MapboxMaps.xcframework
+  // itself, from mapbox-maps-ios-binary — a separate, official Mapbox repo
+  // built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES specifically for this
+  // kind of use case. But vendoring it in THIS package alone isn't
+  // sufficient: @rnmapbox/maps' own podspec unconditionally declares its
+  // own `s.dependency 'MapboxMaps'`, which CocoaPods would otherwise
+  // resolve from trunk regardless of what we vendor — producing a SECOND,
+  // different MapboxMaps binary linked into the same app (a duplicate-
+  // symbol risk, not the missing-symbol crash this specific fix targets,
+  // but a real problem of its own).
+  //
+  // The fix: CocoaPods resolves exactly ONE version/source per pod name
+  // across an entire Podfile. An explicit `pod 'MapboxMaps', :podspec =>
+  // '...'` declaration in the Podfile itself takes precedence over what
+  // any dependency (including @rnmapbox/maps) implicitly requests from
+  // trunk — so inserting this line, pointing at ios/MapboxMaps.podspec
+  // (a small local podspec in THIS package that vendors the same
+  // fetch-xcframeworks.sh-downloaded binary), makes @rnmapbox/maps'
+  // own dependency resolve to our vendored copy too. One MapboxMaps
+  // binary in the final app, not two.
+  //
+  // Inserted right before `use_expo_modules!`/`use_native_modules!` — the
+  // standard entry point in Expo-generated Podfiles, and early enough that
+  // CocoaPods locks onto this declaration before any other pod (including
+  // @rnmapbox/maps itself) gets a chance to request its own resolution.
+  config = withDangerousMod(config, [
+    'ios',
+    (mod) => {
+      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
+      if (!fs.existsSync(podfilePath)) {
+        console.warn(
+          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Podfile not found at ' +
+            podfilePath +
+            ' — could not insert the MapboxMaps override. This will likely cause a ' +
+            'duplicate-symbol or missing-symbol crash — see this mod\'s own comment for why.'
+        );
+        return mod;
+      }
+
+      let podfileContent = fs.readFileSync(podfilePath, 'utf8');
+      const MARKER = '# @jacques_gordon/expo-mapbox-navigation: MapboxMaps override';
+      if (podfileContent.includes(MARKER)) {
+        // Already inserted by a previous prebuild — idempotent, do nothing.
+        return mod;
+      }
+
+      const overrideLine =
+        `${MARKER}\n` +
+        `  pod 'MapboxMaps', :podspec => '../node_modules/@jacques_gordon/expo-mapbox-navigation/ios/MapboxMaps.podspec'\n`;
+
+      const anchorPattern = /^\s*use_(expo|native)_modules!.*$/m;
+      if (anchorPattern.test(podfileContent)) {
+        podfileContent = podfileContent.replace(anchorPattern, (match) => `${overrideLine}${match}`);
+      } else {
+        console.warn(
+          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find use_expo_modules!/' +
+            'use_native_modules! in the generated Podfile to anchor the MapboxMaps override — ' +
+            'the Podfile\'s own structure may have changed. Inspect ' +
+            podfilePath +
+            ' manually and update this mod\'s anchorPattern accordingly.'
+        );
+        return mod;
+      }
+
+      fs.writeFileSync(podfilePath, podfileContent);
+      console.log(
+        '[@jacques_gordon/expo-mapbox-navigation] ✅ Inserted MapboxMaps Podfile override — ' +
+          '@rnmapbox/maps will now resolve MapboxMaps to our vendored copy instead of CocoaPods trunk'
+      );
       return mod;
     },
   ]);

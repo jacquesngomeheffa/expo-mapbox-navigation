@@ -5,25 +5,75 @@
 # copies them into ios/Frameworks/, which ExpoMapboxNavigation.podspec
 # vendors via s.vendored_frameworks.
 #
-# WHY THIS SCRIPT LOOKS SO SIMPLE (no Scipio, no local compilation):
-# Mapbox officially publishes a SEPARATE repository,
-# mapbox-navigation-ios-build-artifacts, whose sole purpose is to expose
-# MapboxNavigationCore / MapboxNavigationUIKit / MapboxDirections /
-# _MapboxNavigationHelpers (and their own transitive binary dependencies)
-# as precompiled .xcframework.zip downloads — the exact same download
-# mechanism (api.mapbox.com/downloads/v2/...) that already worked
-# flawlessly, every single time, for MapboxNavigationNative/MapboxCommon/
-# MapboxCoreMaps/Turf throughout this project's whole build history.
-# Earlier (2024) these two targets were source-only, which is why the
-# community ended up reaching for Scipio in the first place (see
-# mapbox/mapbox-navigation-ios#4703) — Mapbox has since closed that gap
-# themselves by publishing this dedicated artifacts repo, so we no longer
-# need to build anything locally at all.
+# ⚠️ MAJOR CHANGE from earlier versions of this script: now ALSO vendors
+# MapboxMaps.xcframework itself, from a SECOND official Mapbox repo
+# (mapbox-maps-ios-binary) — not just the Navigation-specific frameworks.
+# This is the actual, confirmed root cause fix for a DYLD "Symbol not
+# found: GestureType.singleTap" launch crash that persisted through many
+# earlier attempts (different SDK version pairings, different Swift
+# source, building MapboxNavigationCore from source via Scipio instead of
+# downloading it) — none of which touched the real cause.
 #
-# We clone Mapbox's own repo AT THE MATCHING TAG and let SwiftPM resolve +
-# download the binaries using MAPBOX'S OWN Package.swift and checksums —
-# nothing here is hand-transcribed, so there's no risk of a copy-paste
-# checksum mismatch.
+# THE REAL ROOT CAUSE, confirmed directly from a Mapbox engineer on their
+# own issue tracker (mapbox/mapbox-maps-ios#1669 — not this project's own
+# theory):
+#   "Because the CocoaPods and SwiftPM [source] versions of the framework
+#    are provided by source and the project that builds it does not set
+#    BUILD_LIBRARY_FOR_DISTRIBUTION to YES, some symbols are stripped from
+#    the binary... In the scenario where a third party compiled framework
+#    would also depend on the MapboxMaps module, the build would fail
+#    (missing symbols)... a runtime error if the framework is dynamic."
+# MapboxNavigationCore (whether downloaded precompiled from Mapbox, or
+# built ourselves via Scipio) is exactly this "third party compiled
+# framework" — it depends on MapboxMaps' FULL witness tables (library
+# evolution). @rnmapbox/maps installs MapboxMaps via CocoaPods, which is
+# built WITHOUT that flag — symbols missing, exactly matching this
+# project's crash, regardless of which channel built MapboxNavigationCore
+# itself. This was proven with real crash-report UUIDs: even a from-source
+# Scipio build of MapboxNavigationCore, linked against the EXACT same
+# MapboxMaps version CocoaPods installs, still crashed identically — the
+# mismatch was never about MapboxNavigationCore's own build process at
+# all.
+#
+# THE FIX: Mapbox publishes a real, official, SEPARATE binary distribution
+# specifically for this — mapbox-maps-ios-binary — built WITH
+# BUILD_LIBRARY_FOR_DISTRIBUTION=YES, exactly like the precompiled
+# xcframeworks Mapbox already gives us for MapboxNavigationCore itself.
+# Binary releases are available starting from MapboxMaps v11.20.0 —
+# conveniently exactly the version Navigation SDK v3.20.0 requires (see
+# MAPBOX_NAV_VERSION below), confirmed directly from
+# https://github.com/mapbox/mapbox-navigation-ios/blob/main/CHANGELOG.md's
+# "## 3.20.0" / "Packaging" section.
+#
+# WHY THIS SCRIPT STILL LOOKS SIMPLE FOR THE NAVIGATION-SPECIFIC PART (no
+# Scipio, no local compilation): Mapbox officially publishes a SEPARATE
+# repository, mapbox-navigation-ios-build-artifacts, whose sole purpose is
+# to expose MapboxNavigationCore / MapboxNavigationUIKit / MapboxDirections
+# / _MapboxNavigationHelpers / _MapboxNavigationLocalization (and their own
+# transitive binary dependencies, e.g. MapboxNavigationNative) as
+# precompiled .xcframework.zip downloads via the same
+# api.mapbox.com/downloads/v2/... mechanism used throughout this project's
+# history. We clone Mapbox's own repos AT THE MATCHING TAGS and let SwiftPM
+# resolve + download the binaries using MAPBOX'S OWN Package.swift and
+# checksums — nothing here is hand-transcribed.
+#
+# ⚠️ UNVERIFIED ASSUMPTION, flagged honestly: this script assumes
+# mapbox-maps-ios-binary's own git tags directly contain (or SwiftPM-
+# resolve-and-download, the same way mapbox-navigation-ios-build-artifacts
+# already does) a MapboxMaps.xcframework reachable the same way. This
+# mirrors the ALREADY-PROVEN pattern this script uses for the Navigation
+# frameworks, but has not itself been run end-to-end — expect to iterate
+# on the first real run, the same way every step of this whole
+# investigation needed real trial and error.
+#
+# ⚠️ STILL UNRESOLVED, deliberately out of scope for this specific fix:
+# @rnmapbox/maps will still install its OWN separate copy of MapboxMaps
+# via CocoaPods regardless of what this script vendors — simply vendoring
+# MapboxMaps.xcframework here does not by itself prevent that second copy
+# from being linked too (a duplicate-symbol risk, not the missing-symbol
+# crash this fix targets). Preventing that requires a Podfile-level pod
+# override, implemented separately in plugin/src/index.js — see that
+# file's own comments.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -32,99 +82,54 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 
-# Must match what @rnmapbox/maps installs via CocoaPods in this project
-# (check `pod install` log for "Installing MapboxCommon (...)" etc). This
-# exact tag was confirmed to exist in mapbox-navigation-ios-build-artifacts.
-#
-# ⚠️  MAINTAINER REMINDER: when bumping this version, also check whether
-# the target MapboxMaps release raised its own minimum iOS deployment
-# target, and update BOTH `s.platforms` AND `pod_target_xcconfig`'s
-# IPHONEOS_DEPLOYMENT_TARGET in ExpoMapboxNavigation.podspec to match if
-# so (see 2.3.4/2.3.5 changelog — this exact mismatch broke real builds
-# twice: once for the version gap itself, once because s.platforms alone
-# turned out not to be enough on its own). Check the target version's
-# release notes at https://github.com/mapbox/mapbox-maps-ios/releases.
-#
-# UPDATED to 3.11.0 (was 3.8.2): confirmed as the actual version currently
-# vendored/committed in ios/Frameworks/ (CFBundleShortVersionString check),
-# following a real production crash at launch with 3.8.2 paired against
-# MapboxMaps 11.11.0 — "Symbol not found:
-# _$s10MapboxMaps11GestureTypeO9singleTapyA2CmFWC", a binary
-# incompatibility between that Navigation Core build and that Maps SDK
-# version. 3.11.0 is confirmed, directly from Mapbox's own v3.11.0 release
-# notes (https://github.com/mapbox/mapbox-navigation-ios/releases/tag/v3.11.0),
-# to require EXACTLY MapboxMaps v11.14.0 and MapboxNavigationNative
-# v324.14.0 — both match what's actually vendored here. Raising this
-# script's own default to 3.11.0 keeps it consistent with what's actually
-# shipped, so re-running this script without an explicit override
-# reproduces the same (working) versions rather than silently regressing
-# back to the crashing 3.8.2/11.11.0 pairing. Whoever bumps this next:
-# `RNMapboxMapsVersion` in the consuming app's @rnmapbox/maps config must
-# be updated to the exact matching MapboxMaps version from that new
-# Navigation release's own "Packaging" changelog section — this script has
-# no way to enforce or verify that pairing itself.
-# FIX (confirmed via a real screenshot of mapbox-navigation-ios's own
-# CHANGELOG.md, not guessed): downgraded from 3.11.0 to 3.8.0.
-#
-# Root cause established over a long investigation: 3.11.0 requires
-# MapboxMaps 11.14.0 per its own release notes, and CocoaPods correctly
-# resolved exactly that version (confirmed via a real `pod install` log) —
-# yet the app still crashed at launch with DYLD "Symbol not found:
-# GestureType.singleTap". Leading hypothesis: `mapbox-navigation-ios-
-# build-artifacts`'s own precompiled build of MapboxNavigationCore isn't
-# guaranteed to be ABI-identical to the MapboxMaps binary CocoaPods
-# distributes at the same version *number* — two different distribution
-# channels for "the same" release.
-#
-# This package originates as a fork of youssefhenna/expo-mapbox-navigation,
-# whose own docs state it was "developed and tested for Mapbox Maps
-# version 11.11.0" — a pairing that's ACTUALLY BEEN RUN, not just
-# theoretically compatible per release notes. Confirmed directly from
-# mapbox-navigation-ios's own CHANGELOG.md: MapboxMaps v11.11.0 is
-# required by Navigation Core **3.8.0** specifically (paired with
-# MapboxNavigationNative v324.0.0) — NOT 3.8.2, the version this project
-# was on when the ORIGINAL crash first occurred (see 3.1.6 changelog).
-# 3.8.2 likely bumped the required MapboxMaps version past 11.11.0 without
-# this being re-verified at the time — a real, unverified assumption that
-# may have been this whole investigation's actual starting mistake.
+# Confirmed directly from mapbox-navigation-ios's own CHANGELOG.md ("##
+# 3.20.0" / "Packaging" / "MapboxNavigationCore now requires MapboxMaps
+# v11.20.0" / "MapboxNavigationCore now requires MapboxNavigationNative
+# v324.20.0"). 11.20.0 is also, not by our choice but by Mapbox's own
+# versioning, exactly the FIRST version available via
+# mapbox-maps-ios-binary's binary distribution — this pairing was chosen
+# specifically because it's the oldest (most conservative, presumably
+# most-tested-in-the-wild) version where the real fix (vendoring
+# MapboxMaps built WITH BUILD_LIBRARY_FOR_DISTRIBUTION) is actually
+# possible at all.
 #
 # ⚠️ MAINTAINER: `RNMapboxMapsVersion` in the consuming app's
-# @rnmapbox/maps config MUST be set to exactly "11.11.0" to match — see
-# ExpoMapboxNavigation.podspec's `s.dependency 'MapboxMaps'` line, which
-# must also be kept in sync with this value.
-MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.0}"
+# @rnmapbox/maps config is no longer the thing that determines which
+# MapboxMaps binary actually links — this script vendors MapboxMaps
+# directly now (see MAPBOX_MAPS_VERSION below and the Podfile override in
+# plugin/src/index.js). Keep RNMapboxMapsVersion set to the SAME value
+# anyway, so @rnmapbox/maps' own CocoaPods dependency declaration (which
+# still gets resolved, even though our Podfile override replaces what it
+# actually links against) doesn't produce a confusing version-mismatch
+# warning during `pod install`.
+MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.20.0}"
 
-# Reference-only constant — NOT used by this script to fetch anything (this
-# script only fetches Navigation-specific frameworks; MapboxMaps itself
-# comes from CocoaPods, per ../ExpoMapboxNavigation.podspec's `s.dependency
-# 'MapboxMaps', ...` line). Exists purely so this exact required pairing is
-# recorded in ONE place a maintainer will actually look when bumping
-# MAPBOX_NAV_VERSION above — previously this pairing was only discoverable
-# by manually checking Mapbox's release notes each time, with nothing in
-# the repo itself recording what the CURRENT vendored build actually
-# requires. Confirmed exact for 3.8.0 directly from a real screenshot of
-# mapbox-navigation-ios's own CHANGELOG.md ("## 3.8.0" / "Packaging" /
-# "MapboxNavigationCore now requires MapboxMaps v11.11.0"). ⚠️ MUST be
-# updated together with the podspec's hardcoded `s.dependency 'MapboxMaps',
-# ...` value AND the consuming app's `RNMapboxMapsVersion` whenever
-# MAPBOX_NAV_VERSION above is bumped — see "Upgrading the vendored iOS SDK
-# version" in README.md.
-MAPBOX_MAPS_VERSION="11.11.0"
+# No longer reference-only — this now DRIVES which mapbox-maps-ios-binary
+# tag gets vendored (see Step 1b below), in addition to still recording
+# the pairing for MAPBOX_NAV_VERSION above. Confirmed exact for 3.20.0
+# directly from mapbox-navigation-ios's own CHANGELOG.md — not assumed.
+# ⚠️ MUST be updated together with MAPBOX_NAV_VERSION above, and with
+# ExpoMapboxNavigation.podspec's platform/deployment-target settings if
+# this new MapboxMaps version raises its own minimum — see "Upgrading the
+# vendored iOS SDK version" in README.md.
+MAPBOX_MAPS_VERSION="11.20.0"
 
-echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
+echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION + MapboxMaps v$MAPBOX_MAPS_VERSION"
 echo "   Output: $FRAMEWORKS_DIR"
 echo ""
 
-# ── Step 1: Clone Mapbox's own build-artifacts repo at the matching tag ─────
 TMPDIR=$(mktemp -d)
-echo "📦 Cloning mapbox-navigation-ios-build-artifacts v$MAPBOX_NAV_VERSION..."
+mkdir -p "$FRAMEWORKS_DIR"
+
+# ── Step 1: Navigation-specific frameworks, from mapbox-navigation-ios-build-artifacts
+echo "📦 [1/2] Cloning mapbox-navigation-ios-build-artifacts v$MAPBOX_NAV_VERSION..."
 git clone --branch "v$MAPBOX_NAV_VERSION" --depth 1 \
   https://github.com/mapbox/mapbox-navigation-ios-build-artifacts.git \
-  "$TMPDIR/build-artifacts"
+  "$TMPDIR/nav-build-artifacts"
 
-cd "$TMPDIR/build-artifacts"
+cd "$TMPDIR/nav-build-artifacts"
 
-# ── Step 1b: Patch out MapboxNavigationCustomRoute ───────────────────────────
+# ── Step 1a: Patch out MapboxNavigationCustomRoute ──────────────────────────
 # `--product` filtering on `swift build` (tried first) does NOT prevent SPM
 # from resolving/validating every declared target in the manifest before
 # selecting what to actually compile — it still attempts to fetch
@@ -143,37 +148,24 @@ with open("Package.swift") as f:
 
 original_len = len(content)
 
-# Remove the .library(...) product declaration for MapboxNavigationCustomRoute
 content = re.sub(
     r'\.library\(\s*name:\s*"MapboxNavigationCustomRoute".*?\),\s*\n',
     '',
     content,
     flags=re.DOTALL,
 )
-
-# Remove the .target(...) wrapper for MapboxNavigationCustomRouteWrapper
 content = re.sub(
     r'\.target\(\s*name:\s*"MapboxNavigationCustomRouteWrapper".*?\),\s*\n',
     '',
     content,
     flags=re.DOTALL,
 )
-
-# Remove the libraryTargets() call that declares the gated binaryTarget
 content = content.replace('binaryTargets() + libraryTargets() + [', 'binaryTargets() + [')
 
-# Add an explicit macOS platform minimum. Package.swift only declares
-# `platforms: [.iOS(.v14)]`, so SwiftPM defaults the (otherwise
-# unspecified) macOS minimum to 10.13 for this package's own targets —
-# but MapboxCommon/MapboxNavigationNative (separate packages) declare a
-# macOS 10.15 minimum themselves, causing:
-# "the library 'MapboxNavigationCoreWrapper' requires macos 10.13, but
-# depends on the product 'MapboxCommon' which requires macos 10.15".
-# We only build for iOS and never actually ship anything for macOS, but
-# SwiftPM still validates platform consistency across the whole graph
-# even so. Declaring a macOS floor here that's >= what the dependencies
-# require resolves the mismatch without changing anything that matters
-# for the actual iOS build output.
+# SPM defaults the (otherwise unspecified) macOS minimum to 10.13 for this
+# package's own targets, but MapboxCommon/MapboxNavigationNative declare a
+# macOS 10.15 minimum themselves, causing a platform-consistency error even
+# though we only build for iOS.
 content = content.replace(
     'platforms: [.iOS(.v14)]',
     'platforms: [.iOS(.v14), .macOS(.v10_15)]',
@@ -188,30 +180,11 @@ with open("Package.swift", "w") as f:
     f.write(content)
 PYEOF
 
-# ── Step 2: Resolve + download the precompiled binaries ─────────────────────
-# `swift build` (not just `swift package resolve`) is used deliberately:
-# resolve alone only pins Package.resolved, it does not necessarily fetch
-# and extract binary target .zip artifacts to disk. Building the package
-# forces that download/extraction. The only "targets" that actually compile
-# here are Mapbox's own tiny empty wrapper stubs (see their Package.swift:
-# `path: "Sources/.empty/..."`) — this is plain `swift build`, not Scipio,
-# and does not invoke Xcode's internal xcbuild the way Scipio did.
-echo ""
-echo "⬇️  Resolving and downloading precompiled binaries..."
+echo "⬇️  Resolving and downloading precompiled Navigation binaries..."
 swift build -c release
 
-# ── Step 3: Copy the needed xcframeworks into the module ────────────────────
-echo ""
-echo "📋 Copying xcframeworks to $FRAMEWORKS_DIR..."
-mkdir -p "$FRAMEWORKS_DIR"
-
-ARTIFACTS_DIR="$TMPDIR/build-artifacts/.build/artifacts"
-
-# Copy only what @rnmapbox/maps doesn't already provide via CocoaPods
-# (MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf stay out — vendoring a
-# second copy of those would reintroduce duplicate-symbol errors, per
-# mapbox/mapbox-navigation-ios#4703).
-NEEDED_FRAMEWORKS=(
+ARTIFACTS_DIR="$TMPDIR/nav-build-artifacts/.build/artifacts"
+NEEDED_NAV_FRAMEWORKS=(
   "MapboxNavigationCore"
   "MapboxNavigationUIKit"
   "MapboxDirections"
@@ -219,58 +192,65 @@ NEEDED_FRAMEWORKS=(
   "_MapboxNavigationLocalization"
   "MapboxNavigationNative"
 )
-
-for fw in "${NEEDED_FRAMEWORKS[@]}"; do
+for fw in "${NEEDED_NAV_FRAMEWORKS[@]}"; do
   found=$(find "$ARTIFACTS_DIR" -iname "${fw}.xcframework" -type d | head -1)
   if [ -n "$found" ]; then
     echo "   ✅ $fw.xcframework"
+    rm -rf "${FRAMEWORKS_DIR:?}/$fw.xcframework"
     cp -R "$found" "$FRAMEWORKS_DIR/"
   else
     echo "   ❌ $fw.xcframework not found under $ARTIFACTS_DIR"
   fi
 done
 
-# ── Step 4: Patch the deployment target baked into Mapbox's own binaries ────
-#
-# THE REAL FIX for "compiling for iOS 14.0, but module 'MapboxMaps' has a
-# minimum deployment target of iOS 15.1":
-#
-# This has nothing to do with our own podspec, config plugin, or the
-# consuming app's Xcode project (all of which were tried and failed in
-# 2.3.4/2.3.5/2.3.6). Mapbox's own officially-published, precompiled
-# MapboxNavigationCore/UIKit/Directions/_MapboxNavigationHelpers binaries
-# for Navigation SDK 3.8.2 have `-target arm64-apple-ios14.0` (and
-# `...-simulator` for the simulator slice) hard-baked into the first line
-# of every one of their .swiftinterface / .private.swiftinterface files —
-# confirmed by directly inspecting the downloaded binaries:
-#   // swift-module-flags: -target arm64-apple-ios14.0 ... -module-name MapboxNavigationCore
-# This is a permanent property of THIS SPECIFIC BINARY RELEASE, embedded
-# by Mapbox at their own build time (compiled with Xcode 15.1 / Swift
-# 5.9.2, per the same file's DTXcode/swift-compiler-version metadata) —
-# no consumer-side setting (podspec, Podfile, project.pbxproj) can reach
-# or override it, which is exactly why every earlier attempt at this fix
-# had no effect. Even mapbox-navigation-ios-build-artifacts' latest
-# Package.swift (as of this writing) still only declares
-# `platforms: [.iOS(.v14)]`, so a version bump alone is not guaranteed to
-# fix this either.
-#
-# Since these .swiftinterface files are plain text (not binary), and this
-# exact same "-target arm64-apple-ios14.0" string appears exactly once
-# per file (verified — never appears elsewhere in these files), it's safe
-# to patch directly: raise it to match MapboxMaps' actual real minimum
-# (15.1, confirmed from the build error itself) in our OWN vendored copy,
-# after copying but before this package ships. This does not modify
-# Mapbox's original downloaded artifacts, only the copies in
-# ios/Frameworks/ that get published in this npm package.
+# ── Step 2: MapboxMaps itself, from mapbox-maps-ios-binary ──────────────────
+# THE ACTUAL FIX for the recurring crash — see the file-level comment above
+# for the full reasoning. This is a SEPARATE Mapbox repo from the one
+# above, dedicated specifically to distributing MapboxMaps as a precompiled
+# binary built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES.
 echo ""
-echo "🩹 Patching iOS target baked into vendored .swiftinterface files (14.0 → 15.1)..."
+echo "📦 [2/2] Cloning mapbox-maps-ios-binary v$MAPBOX_MAPS_VERSION..."
+git clone --branch "$MAPBOX_MAPS_VERSION" --depth 1 \
+  https://github.com/mapbox/mapbox-maps-ios-binary.git \
+  "$TMPDIR/maps-binary"
+
+cd "$TMPDIR/maps-binary"
+
+echo "⬇️  Resolving and downloading the precompiled MapboxMaps binary..."
+swift build -c release
+
+MAPS_ARTIFACTS_DIR="$TMPDIR/maps-binary/.build/artifacts"
+found=$(find "$MAPS_ARTIFACTS_DIR" -iname "MapboxMaps.xcframework" -type d | head -1)
+if [ -z "$found" ]; then
+  # Fallback: some Mapbox binary-distribution repos commit the
+  # xcframework directly into the repo tree at the release tag, rather
+  # than resolving it as a SwiftPM binaryTarget artifact — check there
+  # too before giving up, since this script's assumption about exactly
+  # how this specific repo exposes the binary is unverified (see the
+  # file-level comment above).
+  found=$(find "$TMPDIR/maps-binary" -iname "MapboxMaps.xcframework" -type d | head -1)
+fi
+if [ -n "$found" ]; then
+  echo "   ✅ MapboxMaps.xcframework"
+  rm -rf "${FRAMEWORKS_DIR:?}/MapboxMaps.xcframework"
+  cp -R "$found" "$FRAMEWORKS_DIR/"
+else
+  echo "   ❌ MapboxMaps.xcframework not found under $TMPDIR/maps-binary — this script's"
+  echo "      assumption about how mapbox-maps-ios-binary exposes its binary was wrong."
+  echo "      Inspect $TMPDIR/maps-binary manually (before it's cleaned up) to find the"
+  echo "      real location and fix this script's search paths accordingly."
+  exit 1
+fi
+
+# ── Step 3: Patch the deployment target baked into Mapbox's own binaries ────
+# See earlier versions of this script / README changelog for the full
+# history of this specific fix. Kept as a safety net — a no-op if these
+# particular binaries don't need it.
+echo ""
+echo "🩹 Patching iOS target baked into vendored .swiftinterface files (14.0 → 15.1), if needed..."
 PATCHED_COUNT=0
 while IFS= read -r -d '' interface_file; do
   if grep -q -- "-ios14\.0" "$interface_file"; then
-    # Matches every architecture slice's target triple in one pass
-    # (arm64-apple-ios14.0, arm64-apple-ios14.0-simulator,
-    # x86_64-apple-ios14.0-simulator, ...) since "-ios14.0" is a common
-    # substring across all of them, rather than hardcoding each triple.
     sed -i '' 's/-ios14\.0/-ios15.1/g' "$interface_file"
     PATCHED_COUNT=$((PATCHED_COUNT + 1))
   fi
@@ -283,4 +263,9 @@ rm -rf "$TMPDIR"
 
 echo ""
 echo "✅ Done! xcframeworks are in $FRAMEWORKS_DIR"
+echo "   This now includes MapboxMaps.xcframework itself — make sure"
+echo "   ExpoMapboxNavigation.podspec's s.dependency list no longer declares"
+echo "   'MapboxMaps' as a CocoaPods dependency (it's vendored now), and that"
+echo "   the Podfile override in plugin/src/index.js is in place to stop"
+echo "   @rnmapbox/maps from linking a second, separate copy."
 echo "   Commit the Frameworks/ directory and publish the package."
