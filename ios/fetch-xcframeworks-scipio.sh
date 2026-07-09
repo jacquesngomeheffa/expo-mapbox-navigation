@@ -53,6 +53,10 @@ set -euo pipefail
 MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.11.0}"
 MAPBOX_MAPS_VERSION="11.14.0"
 MAPBOX_NAV_NATIVE_VERSION="324.14.0"
+# Confirmed via a real `pod install` log seen earlier in this
+# investigation (MapboxMaps 11.14.0 paired with "Installing MapboxCommon
+# (24.14.0)") — not guessed.
+MAPBOX_COMMON_VERSION="24.14.0"
 SCIPIO_VERSION="${SCIPIO_VERSION:-0.27.2}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,18 +79,53 @@ git clone --branch "v$MAPBOX_NAV_VERSION" \
 
 cd "$WORK_DIR/mapbox-navigation-ios"
 
-# ── 2. Replace Package.swift entirely with a minimal, hand-written one ────
-# This is youssefhenna's actual technique — not a patch of the official
-# file. Only declares what this package actually vendors. Confirmed
-# against the REAL v3.11.0 Package.swift's target dependency graph
-# directly (see the file-level comment above for specifics).
-echo "🩹 Replacing Package.swift with a minimal, hand-written manifest..."
-cat > Package.swift << PACKAGESWIFT_EOF
+# ── 2. Replace Package.swift entirely with youssefhenna's own template ────
+# CORRECTED from an earlier version of this script, which hand-wrote a
+# manifest based on reading the REAL, OFFICIAL Package.swift at v3.11.0
+# directly — that file declares `mapbox-navigation-native-ios` as a
+# regular `.package()` dependency. A real build confirmed this hits a
+# known, externally-documented SwiftPM limitation, unrelated to anything
+# specific to this project: transitive dependencies of binary targets
+# are not reliably resolved when the CONSUMING target itself becomes a
+# binary product (see https://github.com/tuist/tuist/issues/8056 for the
+# exact same symptom — "linking/runtime errors... missing symbols for
+# types/functions defined in the transitive dependency of the
+# xcframework" — on a completely different tool, confirming this isn't
+# Scipio-specific or specific to any mistake in an earlier version of
+# this script).
+#
+# youssefhenna/expo-mapbox-navigation's own template (confirmed working
+# for their own 3.8.0/11.11.0 build) sidesteps this entirely by declaring
+# MapboxNavigationNative as a manually-pinned `.binaryTarget` with an
+# explicit checksum — a structurally different dependency declaration
+# that doesn't hit the same SPM bug. This script now follows that exact
+# structure (per youssefhenna's own README instructions: "update the
+# versions according to the cloned branch" — reusing their template
+# as-is, not re-deriving a new structure from the official file at this
+# different tag), only swapping in the version numbers for this
+# script's target pairing (3.11.0/11.14.0/324.14.0), not the official
+# file's newer dependency-declaration style.
+echo "🩹 Replacing Package.swift with youssefhenna's own template structure..."
+
+# youssefhenna's own README documents this checksum as something you
+# only discover by letting a build fail once ("Checksum for
+# navNativeChecksum will be incorrect. Run swift build -c release which
+# will fail and give you the correct checksum to update with. After
+# updating, proceed with steps, do not re-run.") — automated here as a
+# two-pass process instead of a manual one, so this script doesn't
+# require interactive babysitting on a CI runner.
+PLACEHOLDER_CHECKSUM="0000000000000000000000000000000000000000000000000000000000000000000000"
+
+write_package_swift() {
+  local checksum="$1"
+  cat > Package.swift << PACKAGESWIFT_EOF
 // swift-tools-version: 5.9
 import PackageDescription
 
-let navNativeVersion: Version = "${MAPBOX_NAV_NATIVE_VERSION}"
+let (navNativeVersion, navNativeChecksum) = ("${MAPBOX_NAV_NATIVE_VERSION}", "${checksum}")
 let mapsVersion: Version = "${MAPBOX_MAPS_VERSION}"
+let commonVersion: Version = "${MAPBOX_COMMON_VERSION}"
+let mapboxApiDownloads = "https://api.mapbox.com/downloads/v2"
 
 let package = Package(
     name: "MapboxNavigation",
@@ -99,8 +138,8 @@ let package = Package(
         .library(name: "MapboxDirections", targets: ["MapboxDirections"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mapbox/mapbox-navigation-native-ios.git", exact: navNativeVersion),
         .package(url: "https://github.com/mapbox/mapbox-maps-ios.git", exact: mapsVersion),
+        .package(url: "https://github.com/mapbox/mapbox-common-ios.git", exact: commonVersion),
         .package(url: "https://github.com/mapbox/turf-swift.git", exact: "4.0.0"),
     ],
     targets: [
@@ -123,10 +162,11 @@ let package = Package(
         .target(
             name: "MapboxNavigationCore",
             dependencies: [
+                .product(name: "MapboxCommon", package: "mapbox-common-ios"),
+                "MapboxNavigationNative",
+                "MapboxDirections",
                 "_MapboxNavigationLocalization",
                 "_MapboxNavigationHelpers",
-                .product(name: "MapboxNavigationNative", package: "mapbox-navigation-native-ios"),
-                "MapboxDirections",
                 .product(name: "MapboxMaps", package: "mapbox-maps-ios"),
             ],
             resources: [
@@ -139,25 +179,56 @@ let package = Package(
                 .product(name: "Turf", package: "turf-swift"),
             ]
         ),
+        navNativeBinaryTarget(
+            name: "MapboxNavigationNative",
+            version: navNativeVersion,
+            checksum: navNativeChecksum
+        ),
     ]
 )
-PACKAGESWIFT_EOF
 
-# ── 3. Sanity-check the replaced manifest can actually be read ─────────────
-# Cheap, fails fast with a clear SPM-native error if the hand-written
-# manifest above doesn't match the real Sources/ directory layout at this
-# tag (e.g. if a target's default source path doesn't exist, or a
-# resource file referenced above isn't actually present) — rather than
-# surfacing only via Scipio's own less specific error wrapper further
-# down.
-echo "🔍 Sanity-checking the replaced manifest can be read..."
+private func navNativeBinaryTarget(name: String, version: String, checksum: String) -> Target {
+    let url = "\(mapboxApiDownloads)/dash-native/releases/ios/packages/\(version)/MapboxNavigationNative.xcframework.zip"
+    return .binaryTarget(name: name, url: url, checksum: checksum)
+}
+PACKAGESWIFT_EOF
+}
+
+write_package_swift "$PLACEHOLDER_CHECKSUM"
+
+# ── 3. Discover the real checksum (youssefhenna's manual step, automated) ──
+# The placeholder checksum above is deliberately wrong. `swift package
+# resolve` will fail, but Swift's own error message includes the correct
+# checksum it actually computed from the downloaded artifact — extract
+# it and rewrite Package.swift with the real value, matching
+# youssefhenna's documented manual process exactly, just without needing
+# a human to copy-paste it between two runs.
+echo "🔍 Resolving once with a placeholder checksum to discover the real one..."
+RESOLVE_OUTPUT="$(swift package resolve 2>&1)" || true
+echo "$RESOLVE_OUTPUT"
+
+REAL_CHECKSUM="$(echo "$RESOLVE_OUTPUT" | grep -oE 'checksum of downloaded artifact of binary target .MapboxNavigationNative. \([a-f0-9]+\)' | grep -oE '[a-f0-9]{16,}' | head -1)"
+
+if [ -z "$REAL_CHECKSUM" ]; then
+  echo "❌ Could not extract the real checksum from swift package resolve's output above."
+  echo "   Swift's error message format may have changed — inspect the output manually"
+  echo "   and update this script's extraction regex if needed."
+  exit 1
+fi
+
+echo "✅ Discovered real checksum: $REAL_CHECKSUM"
+echo "🩹 Rewriting Package.swift with the real checksum..."
+write_package_swift "$REAL_CHECKSUM"
+
+# ── 4. Sanity-check the corrected manifest can actually be read ───────────
+echo "🔍 Sanity-checking the corrected manifest can be read..."
 swift package dump-package > /dev/null
 echo "   OK"
 
-echo "🔒 Resolving package dependencies (writes Package.resolved)..."
+echo "🔒 Resolving package dependencies for real (writes Package.resolved)..."
 swift package resolve
 
-# ── 4. Fetch and build Scipio ───────────────────────────────────────────────
+# ── 5. Fetch and build Scipio ───────────────────────────────────────────────
 echo "📦 Cloning and building Scipio v$SCIPIO_VERSION (giginet/Scipio)..."
 git clone --branch "$SCIPIO_VERSION" --depth 1 https://github.com/giginet/Scipio.git "$WORK_DIR/Scipio"
 (cd "$WORK_DIR/Scipio" && swift build -c release)
@@ -168,7 +239,7 @@ if [ ! -x "$SCIPIO_BIN" ]; then
   exit 1
 fi
 
-# ── 5. Run Scipio ────────────────────────────────────────────────────────
+# ── 6. Run Scipio ────────────────────────────────────────────────────────
 # Exact command per kried's documented workaround on
 # mapbox/mapbox-navigation-ios#4703 — also what youssefhenna/
 # expo-mapbox-navigation's own README documents using, verbatim.
@@ -192,7 +263,7 @@ echo "🏗️  Running Scipio (building from source — this will take a while).
   --embed-debug-symbols \
   --verbose
 
-# ── 6. Copy the frameworks this package actually vendors ───────────────────
+# ── 7. Copy the frameworks this package actually vendors ───────────────────
 # MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf are still intentionally NOT
 # vendored here — they still come from CocoaPods via @rnmapbox/maps. This
 # script only changes HOW MapboxNavigationCore/UIKit/etc. themselves get
@@ -204,6 +275,7 @@ NEEDED_FRAMEWORKS=(
   "MapboxDirections"
   "_MapboxNavigationHelpers"
   "_MapboxNavigationLocalization"
+  "MapboxNavigationNative"
 )
 
 # UNVERIFIED: this is Scipio's documented default output directory name.
@@ -213,7 +285,7 @@ if [ ! -d "$SCIPIO_OUTPUT_DIR" ]; then
   echo "❌ Expected Scipio output directory not found at $SCIPIO_OUTPUT_DIR"
   echo "   Check Scipio's actual printed output path above and update"
   echo "   SCIPIO_OUTPUT_DIR in this script accordingly — untested against"
-  echo "   a real Scipio run for this specific minimal Package.swift."
+  echo "   a real Scipio run for this specific manifest."
   exit 1
 fi
 
@@ -228,19 +300,9 @@ for fw in "${NEEDED_FRAMEWORKS[@]}"; do
     echo "  ⚠️  $fw.xcframework NOT FOUND at $src — check Scipio's actual output layout for this product/target."
   fi
 done
-
-echo ""
-echo "⚠️  MapboxNavigationNative.xcframework is NOT copied by this script."
-echo "    Since this minimal Package.swift declares it as a regular SPM package"
-echo "    dependency (not a manual .binaryTarget like youssefhenna's older"
-echo "    3.8.0-era template did), it should already resolve as its own binary"
-echo "    xcframework via SPM's normal dependency resolution — likely under"
-echo "    $WORK_DIR/mapbox-navigation-ios/.build/checkouts/ or wherever Scipio"
-echo "    places resolved binary dependencies. UNTESTED where exactly it ends"
-echo "    up — check after a real run and update this script to copy it too."
 echo ""
 
-# ── 7. Apply the 14.0 → 15.1 deployment target patch ────────────────────
+# ── 8. Apply the 14.0 → 15.1 deployment target patch ────────────────────
 # Same reasoning as this project's own earlier fetch-xcframeworks.sh
 # (used when vendoring Mapbox's own precompiled mapbox-navigation-ios-
 # build-artifacts binaries) — Mapbox bakes a hardcoded
