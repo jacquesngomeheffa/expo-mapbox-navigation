@@ -47,7 +47,7 @@ jobs:
           xcode-version: ${{ inputs.xcode_version }}
 
       - name: Ensure a matching iOS Simulator runtime is installed
-        # FIX, found from a real build log + a matching precedent on Apple's
+        # FIX, found from a real build error + a matching precedent on Apple's
         # own developer forums (same exact error message, same root cause):
         # "No simulator runtime version from [...] available to use with
         # iphonesimulator SDK version [...]" happens when only the
@@ -59,7 +59,31 @@ jobs:
         # This surfaced as an asset catalog (actool) failure inside
         # mapbox-maps-ios's own source (IndicatorAssets.xcassets) when
         # Scipio's --support-simulators flag builds for iphonesimulator.
-        run: xcodebuild -downloadPlatform iOS
+        #
+        # FIX #2, found from a real run of THIS exact step failing:
+        # `xcodebuild -downloadPlatform iOS` itself is separately flaky on
+        # GitHub-hosted macOS runners — confirmed as a widely-reported,
+        # already-known issue (not specific to this project at all): "Unable
+        # to connect to simulator." / exit code 70, reported to fail ~40% of
+        # the time on actions/runner-images (see
+        # https://github.com/actions/runner-images/issues/13459 and
+        # https://github.com/actions/runner-images/issues/12763 — same exact
+        # error message and exit code). Retrying a few times is the
+        # documented workaround; there's no code-level fix since this is an
+        # Apple/runner-image-side flakiness, not something this script or
+        # workflow caused.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "Attempt $attempt/5: xcodebuild -downloadPlatform iOS"
+            if xcodebuild -downloadPlatform iOS; then
+              echo "✅ Succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "⚠️  Attempt $attempt failed (known GitHub Actions runner flakiness — see actions/runner-images#13459). Retrying in 20s..."
+            sleep 20
+          done
+          echo "::error::xcodebuild -downloadPlatform iOS failed after 5 attempts — this may be a longer-lived runner-side outage, not just the usual transient flakiness. Check https://github.com/actions/runner-images/issues for open incidents before re-running."
+          exit 1
 
       - name: Diagnostic — check XCBuild path across every installed Xcode version
         run: |
