@@ -130,7 +130,7 @@ Pod::Spec.new do |s|
   s.prepare_command = <<-CMD
     if [ -z "$(ls -A ios/Frameworks 2>/dev/null)" ]; then
       echo "warning: ios/Frameworks is empty — the xcframeworks have not been built yet."
-      echo "         Run the 'Build Mapbox Navigation xcframeworks (Scipio)' GitHub Actions"
+      echo "         Run the 'Build Mapbox Navigation xcframeworks' GitHub Actions"
       echo "         workflow and merge its output branch before publishing this package."
     fi
   CMD

@@ -28,7 +28,8 @@ Pod::Spec.new do |s|
   # MapboxMaps that ends up in the final app, via this override.
   s.name              = 'MapboxMaps'
   s.version           = '11.20.0'
-  s.summary           = 'Vendored MapboxMaps.xcframework (built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES via mapbox-maps-ios-binary), overriding CocoaPods trunk project-wide to fix a DYLD missing-symbol launch crash. See ExpoMapboxNavigation.podspec and ios/fetch-xcframeworks.sh for the full investigation this addresses.'
+  s.summary           = 'Vendored MapboxMaps.xcframework overriding CocoaPods trunk to fix a DYLD missing-symbol launch crash.'
+  s.description       = 'Vendored MapboxMaps.xcframework (built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES via mapbox-maps-ios-binary), overriding CocoaPods trunk project-wide to fix a DYLD missing-symbol launch crash. See ExpoMapboxNavigation.podspec and ios/fetch-xcframeworks.sh for the full investigation this addresses.'
   s.homepage          = 'https://github.com/mapbox/mapbox-maps-ios'
   s.license           = { :type => 'Mapbox Terms of Service', :text => 'See https://www.mapbox.com/legal/tos/' }
   s.author            = 'Mapbox'
@@ -42,7 +43,7 @@ Pod::Spec.new do |s|
   # ExpoMapboxNavigation.podspec). Same ios/Frameworks/ directory as the
   # rest of this package's vendored binaries — this podspec lives
   # alongside it, one directory up from where the main podspec sits.
-  s.vendored_frameworks = File.join(__dir__, 'Frameworks/MapboxMaps.xcframework')
+  s.vendored_frameworks = 'Frameworks/MapboxMaps.xcframework'
 
   # Matches how mapbox-maps-ios-binary itself builds this — a dynamic
   # framework, not static. Do NOT change this to true: the whole point of

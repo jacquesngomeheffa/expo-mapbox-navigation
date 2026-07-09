@@ -8,8 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf build",
     "lint": "tsc --noEmit",
-    "test": "echo \"Tests require a full Expo project with EAS Build. See README.\"",
-    "prepublishOnly": "npm run build"
+    "test": "echo \"Tests require a full Expo project with EAS Build. See README.\""
   },
   "keywords": [
     "expo",
