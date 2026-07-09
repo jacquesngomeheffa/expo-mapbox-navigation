@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       mapbox_nav_version:
-        description: 'mapbox-navigation-ios-build-artifacts version tag (e.g. 3.8.2)'
+        description: 'mapbox-navigation-ios-build-artifacts version tag (e.g. 3.20.0) — MAPBOX_MAPS_VERSION inside fetch-xcframeworks.sh must be updated separately to match, see README'
         required: true
-        default: '3.8.2'
+        default: '3.20.0'
 
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -48,16 +48,18 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
-      # Light retry kept only for transient network hiccups during
-      # download — this is no longer a 10-30 minute compile, just fetching
-      # a handful of prebuilt .xcframework.zip files, so 2 attempts with a
-      # short wait is plenty.
+      # This now fetches from TWO separate Mapbox repos (mapbox-navigation-
+      # ios-build-artifacts for the Navigation-specific frameworks, and
+      # mapbox-maps-ios-binary for MapboxMaps itself — see
+      # ios/fetch-xcframeworks.sh's own header comment for why), each with
+      # its own `swift build -c release` dependency resolution. Timeout
+      # bumped accordingly from the single-repo era.
       - name: Fetch prebuilt xcframeworks (with retry)
         uses: nick-fields/retry@v3
         env:
           MAPBOX_NAV_VERSION: ${{ inputs.mapbox_nav_version }}
         with:
-          timeout_minutes: 15
+          timeout_minutes: 30
           max_attempts: 2
           retry_wait_seconds: 15
           command: |
@@ -70,6 +72,10 @@ jobs:
           test -d "ios/Frameworks/MapboxNavigationCore.xcframework" || { echo "::error::MapboxNavigationCore.xcframework missing"; exit 1; }
           test -d "ios/Frameworks/MapboxNavigationUIKit.xcframework" || { echo "::error::MapboxNavigationUIKit.xcframework missing"; exit 1; }
           test -d "ios/Frameworks/MapboxNavigationNative.xcframework" || { echo "::error::MapboxNavigationNative.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxDirections.xcframework" || { echo "::error::MapboxDirections.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/_MapboxNavigationHelpers.xcframework" || { echo "::error::_MapboxNavigationHelpers.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/_MapboxNavigationLocalization.xcframework" || { echo "::error::_MapboxNavigationLocalization.xcframework missing"; exit 1; }
+          test -d "ios/Frameworks/MapboxMaps.xcframework" || { echo "::error::MapboxMaps.xcframework missing — the actual fix for the DYLD missing-symbol crash this script exists for. See ios/fetch-xcframeworks.sh's header comment."; exit 1; }
 
       - name: Upload frameworks as artifact
         uses: actions/upload-artifact@v4
