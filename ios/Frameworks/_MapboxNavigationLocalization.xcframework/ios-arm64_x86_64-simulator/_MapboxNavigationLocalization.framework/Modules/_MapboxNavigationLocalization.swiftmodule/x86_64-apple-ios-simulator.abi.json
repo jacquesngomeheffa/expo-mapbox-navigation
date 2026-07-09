@@ -1,0 +1,244 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "_MapboxNavigationLocalization",
+    "printedName": "_MapboxNavigationLocalization",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "_MapboxNavigationHelpers",
+        "printedName": "_MapboxNavigationHelpers",
+        "declKind": "Import",
+        "moduleName": "_MapboxNavigationLocalization"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "_MapboxNavigationLocalization"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "LocalizationManager",
+        "printedName": "LocalizationManager",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "customLocalizationBundle",
+            "printedName": "customLocalizationBundle",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Foundation.Bundle?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bundle",
+                    "printedName": "Foundation.Bundle",
+                    "usr": "c:objc(cs)NSBundle"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvpZ",
+            "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvpZ",
+            "moduleName": "_MapboxNavigationLocalization",
+            "static": true,
+            "declAttributes": [
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Foundation.Bundle?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Bundle",
+                        "printedName": "Foundation.Bundle",
+                        "usr": "c:objc(cs)NSBundle"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvgZ",
+                "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvgZ",
+                "moduleName": "_MapboxNavigationLocalization",
+                "static": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Foundation.Bundle?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Bundle",
+                        "printedName": "Foundation.Bundle",
+                        "usr": "c:objc(cs)NSBundle"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvsZ",
+                "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvsZ",
+                "moduleName": "_MapboxNavigationLocalization",
+                "static": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvMZ",
+                "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV06customC6BundleSo8NSBundleCSgvMZ",
+                "moduleName": "_MapboxNavigationLocalization",
+                "static": true,
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "localizedString",
+            "printedName": "localizedString(_:tableName:defaultBundle:value:comment:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.String?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "String",
+                    "printedName": "Swift.String",
+                    "usr": "s:SS"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bundle",
+                "printedName": "Foundation.Bundle",
+                "usr": "c:objc(cs)NSBundle"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "usr": "s:SS"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "String",
+                "printedName": "Swift.String",
+                "hasDefaultArg": true,
+                "usr": "s:SS"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:29_MapboxNavigationLocalization0C7ManagerV15localizedString_9tableName13defaultBundle5value7commentS2S_SSSgSo8NSBundleCS2StFZ",
+            "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV15localizedString_9tableName13defaultBundle5value7commentS2S_SSSgSo8NSBundleCS2StFZ",
+            "moduleName": "_MapboxNavigationLocalization",
+            "static": true,
+            "declAttributes": [
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:29_MapboxNavigationLocalization0C7ManagerV",
+        "mangledName": "$s29_MapboxNavigationLocalization0C7ManagerV",
+        "moduleName": "_MapboxNavigationLocalization",
+        "declAttributes": [
+          "AccessControl",
+          "RawDocComment"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      }
+    ],
+    "json_format_version": 8
+  },
+  "ConstValues": [
+    {
+      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/_MapboxNavigationLocalization\/LocalizationManager.swift",
+      "kind": "StringLiteral",
+      "offset": 729,
+      "length": 25,
+      "value": "\"_nonexistent_key_value_\""
+    },
+    {
+      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/_MapboxNavigationLocalization\/LocalizationManager.swift",
+      "kind": "StringLiteral",
+      "offset": 1500,
+      "length": 2,
+      "value": "\"\""
+    }
+  ]
+}

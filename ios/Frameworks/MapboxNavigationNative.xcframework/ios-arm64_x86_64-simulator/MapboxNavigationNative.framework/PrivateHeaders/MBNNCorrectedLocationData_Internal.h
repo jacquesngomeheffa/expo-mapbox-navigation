@@ -1,0 +1,60 @@
+// This file is generated and will be overwritten automatically.
+
+#import <Foundation/Foundation.h>
+
+@class MBNNDRSensorFusionStatus;
+@class MBNNFixLocation;
+@class MBNNIMUDerivedData;
+
+/**
+ * WARNING: This API is not intended for public usage. It can be deleted or changed without any notice.
+ * Corrected GPS location data.
+ */
+NS_SWIFT_NAME(CorrectedLocationData)
+__attribute__((visibility ("default")))
+@interface MBNNCorrectedLocationData : NSObject
+
+// This class provides custom init which should be called
+- (nonnull instancetype)init NS_UNAVAILABLE;
+
+// This class provides custom init which should be called
++ (nonnull instancetype)new NS_UNAVAILABLE;
+
+- (nonnull instancetype)initWithLocation:(nonnull MBNNFixLocation *)location
+                                 isStill:(BOOL)isStill
+                                 imuData:(nullable MBNNIMUDerivedData *)imuData
+                         isDeadReckoning:(BOOL)isDeadReckoning
+                         satellitesCount:(nullable NSNumber *)satellitesCount
+                    drSensorFusionStatus:(nullable MBNNDRSensorFusionStatus *)drSensorFusionStatus;
+
+/**
+ * WARNING: This API is not intended for public usage. It can be deleted or changed without any notice.
+ * Corrected location.
+ */
+@property (nonatomic, readonly, nonnull) MBNNFixLocation *location;
+
+/** The car is not moving. */
+@property (nonatomic, readonly) BOOL isStill;
+
+/**
+ * WARNING: This API is not intended for public usage. It can be deleted or changed without any notice.
+ * Location data derived from IMU.
+ */
+@property (nonatomic, readonly, nullable) MBNNIMUDerivedData *imuData;
+
+/** The corrected location is a result of dead reckoning. */
+@property (nonatomic, readonly) BOOL isDeadReckoning;
+
+/** Number of GPS satellites. */
+@property (nonatomic, readonly, nullable) NSNumber *satellitesCount;
+
+/**
+ * WARNING: This API is not intended for public usage. It can be deleted or changed without any notice.
+ * Status of sensor fuser.
+ */
+@property (nonatomic, readonly, nullable) MBNNDRSensorFusionStatus *drSensorFusionStatus;
+
+
+- (BOOL)isEqualToCorrectedLocationData:(nonnull MBNNCorrectedLocationData *)other;
+
+@end

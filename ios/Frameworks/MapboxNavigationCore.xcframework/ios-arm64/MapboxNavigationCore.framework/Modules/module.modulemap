@@ -1,0 +1,8 @@
+framework module MapboxNavigationCore {
+    header "MapboxNavigationCore-Swift.h"
+    export *
+    link framework "_MapboxNavigationLocalization"
+    link framework "_MapboxNavigationHelpers"
+    link framework "MapboxDirections"
+    link framework "MapboxNavigationNative"
+}

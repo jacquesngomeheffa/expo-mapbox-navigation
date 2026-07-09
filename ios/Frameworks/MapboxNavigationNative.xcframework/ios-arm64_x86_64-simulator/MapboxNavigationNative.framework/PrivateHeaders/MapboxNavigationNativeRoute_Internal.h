@@ -1,0 +1,16 @@
+// This file is generated and will be overwritten automatically.
+
+#import "MBNNUpcomingRouteAlert_Internal.h"
+#import "MBNNUpcomingRouteAlertUpdate_Internal.h"
+#import "MBNNRouteIdentifier_Internal.h"
+#import "MBNNRouteIndices_Internal.h"
+#import "MBNNTimeZone_Internal.h"
+#import "MBNNRouteIntersection_Internal.h"
+#import "MBNNAlternativeRouteInfo_Internal.h"
+#import "MBNNRouteAlternative_Internal.h"
+#import "MBNNRouteDataAccessor_Internal.h"
+#import "MBNNRouteParser_Internal.h"
+#import "MBNNRoutesData_Internal.h"
+#import "MBNNRouteParserCallback_Internal.h"
+#import "MBNNRouteInfo_Internal.h"
+#import "MBNNWaypoint_Internal.h"

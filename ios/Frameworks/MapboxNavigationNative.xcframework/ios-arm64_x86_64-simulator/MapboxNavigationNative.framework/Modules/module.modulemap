@@ -1,0 +1,12 @@
+framework module MapboxNavigationNative {
+  umbrella header "MapboxNavigationNative.h"
+
+  export *
+  module * { export * }
+  link "c++"
+}
+
+module MapboxNavigationNative.Swift {
+  header "MapboxNavigationNative-Swift.h"
+  requires objc
+}
