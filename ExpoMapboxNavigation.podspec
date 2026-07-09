@@ -11,79 +11,81 @@ Pod::Spec.new do |s|
   s.author         = package['author']
   s.homepage       = package['homepage']
 
-  # MapboxMaps 11.11.0 (installed by @rnmapbox/maps) has a minimum
-  # deployment target of iOS 15.1 — confirmed directly from a real build
-  # error: "compiling for iOS 14.0, but module 'MapboxMaps' has a minimum
-  # deployment target of iOS 15.1". Our own target must match or exceed
-  # that, since our vendored MapboxNavigationCore/UIKit frameworks import
-  # MapboxMaps internally (@_spi imports visible in their private Swift
-  # interfaces). iOS 14.0 was carried over from early in this package's
-  # history and never actually re-validated against MapboxMaps' real
-  # minimum once the SDK version was pinned to 11.11.0.
-  s.platforms      = { :ios => '15.1' }
+  # FIX: reverted from '15.1' back to '13.4'.
+  #
+  # '15.1' was added earlier in this investigation based on a real build
+  # error ("compiling for iOS 14.0, but module 'MapboxMaps' has a minimum
+  # deployment target of iOS 15.1"), together with a forced
+  # IPHONEOS_DEPLOYMENT_TARGET override below. But youssefhenna/
+  # expo-mapbox-navigation (this package's origin project, confirmed
+  # working against this exact MapboxMaps version) uses '13.4' — no
+  # special-casing at all. That earlier error was real, but its root cause
+  # was never conclusively pinned down beyond "something forces a lower
+  # deployment target back down" — it's entirely possible the actual cause
+  # was specific to whichever xcframework version/build was in place at
+  # the time, not a structural requirement of this podspec itself. Since
+  # youssefhenna's own simpler podspec is a known-working baseline (this
+  # project's origin, actually run in production) and ours has crashed
+  # twice despite carrying this extra complexity, reverting to match that
+  # baseline as closely as possible takes priority over defending
+  # additions this project made to its own theories along the way. If a
+  # deployment-target-related build failure reappears, re-add
+  # IPHONEOS_DEPLOYMENT_TARGET deliberately at that point, informed by the
+  # actual new error — not preemptively.
+  s.platforms      = { :ios => '13.4' }
   s.swift_version  = '5.9'
   s.source         = { git: package['repository']['url'], tag: "v#{s.version}" }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
 
-  # ── Sibling Mapbox pods (provided by @rnmapbox/maps, not vendored here) ───
-  # Our vendored MapboxNavigationCore/MapboxDirections frameworks' private
-  # Swift interfaces (.private.swiftinterface) import MapboxCommon_Private
-  # and Turf internally. Without an explicit CocoaPods dependency declared
-  # here, CocoaPods doesn't wire up the module/header search paths needed
-  # for Swift to resolve those imports from OUR target when compiling
-  # against our vendored frameworks — even though @rnmapbox/maps already
-  # installs these same pods elsewhere in the project.
+  # FIX: removed `MapboxCommon`/`MapboxCoreMaps` as explicit dependencies.
   #
-  # FIX: `MapboxMaps` now pinned to an EXACT version, not left unconstrained.
+  # These were added on the theory that our vendored frameworks' private
+  # Swift interfaces needed them declared here for CocoaPods to wire up
+  # module/header search paths correctly — but this was never actually
+  # confirmed against a real build; it was a plausible-sounding
+  # justification added preemptively. youssefhenna/expo-mapbox-navigation
+  # (this package's origin project, confirmed working) declares only
+  # `MapboxMaps` and `Turf` — nothing else — and its build succeeds.
+  # Matching that known-working baseline exactly, rather than keeping
+  # unverified extra dependencies this project added to its own theories.
+  #
+  # `MapboxMaps` stays pinned to an EXACT version here (not left
+  # unconstrained, and not read from an ENV var / plugin option the way
+  # youssefhenna's own podspec does it) — see the reasoning below.
+  #
   # Root cause of a real production launch crash (DYLD "Symbol not found:
-  # GestureType.singleTap", confirmed via crash report), even after
-  # RNMapboxMapsVersion was correctly set to match: with no constraint here
-  # at all, CocoaPods was free to resolve MapboxMaps to whatever satisfied
-  # every OTHER pod's constraint across this project's full ~184-pod graph
-  # — which is not guaranteed to be the exact same build our vendored
-  # MapboxNavigationCore.xcframework was linked against at Mapbox's own
-  # build time, even at a matching version *number*. An explicit, exact
-  # constraint here removes that resolution ambiguity entirely, the same
-  # way youssefhenna/expo-mapbox-navigation (this package's origin project)
-  # pins MapboxMaps explicitly in its own podspec rather than leaving it
-  # unconstrained.
+  # GestureType.singleTap", confirmed via crash report): with no
+  # constraint here, CocoaPods was free to resolve MapboxMaps to whatever
+  # satisfied every OTHER pod's constraint across this project's full
+  # ~184-pod graph — not guaranteed to be the exact same build our
+  # vendored MapboxNavigationCore.xcframework was linked against at
+  # Mapbox's own build time, even at a matching version *number*.
   #
   # 11.11.0 is the exact version confirmed required by MapboxNavigationCore
   # 3.8.0 — directly from a real screenshot of mapbox-navigation-ios's own
   # CHANGELOG.md ("## 3.8.0" / "Packaging" / "MapboxNavigationCore now
   # requires MapboxMaps v11.11.0" / "MapboxNavigationNative v324.0.0"), not
-  # assumed. This is the pairing youssefhenna/expo-mapbox-navigation (this
-  # package's origin project) documents as actually developed and tested
-  # against — not just theoretically compatible per release notes, unlike
-  # 3.11.0/11.14.0 (used in 3.1.6/Unreleased), which crashed identically to
-  # this package's very first crash (3.8.2/11.11.0) despite matching
-  # Mapbox's own stated requirement exactly. 3.8.2 (a later patch release)
-  # very likely bumped its own required MapboxMaps version past 11.11.0
-  # without this being re-verified at the time — a real, unverified
-  # assumption that may have been this whole investigation's actual
-  # starting mistake. This is intentionally NOT sourced from a plugin
-  # option or environment variable: unlike the Android-side
+  # assumed. This is the pairing youssefhenna/expo-mapbox-navigation
+  # documents as actually developed and tested against — not just
+  # theoretically compatible per release notes, unlike 3.11.0/11.14.0
+  # (used in 3.1.6/Unreleased), which crashed identically to this
+  # package's very first crash (3.8.2/11.11.0) despite matching Mapbox's
+  # own stated requirement exactly. This is intentionally NOT sourced from
+  # a plugin option or environment variable: unlike the Android-side
   # `mapboxMapsVersion` option (see plugin/src/index.js), letting a
   # consumer override this to an arbitrary value would defeat the entire
   # point — it would let someone accidentally request a MapboxMaps version
   # incompatible with THIS exact npm package version's vendored binaries,
-  # recreating the very crash this fix closes. The iOS Maps version is
-  # fixed by which version of this npm package you install, same as
-  # MapboxNavigationCore itself (see "iOS Architecture" in README.md) —
-  # matching `RNMapboxMapsVersion` in your own app's @rnmapbox/maps config
-  # to this exact value remains your responsibility, but this podspec no
-  # longer lets CocoaPods silently resolve to something else.
+  # recreating the very crash this fix closes.
   #
   # ⚠️ MAINTAINER: this value MUST be updated together with
   # MAPBOX_MAPS_VERSION in ios/fetch-xcframeworks.sh, and with
   # MAPBOX_NAV_VERSION there, whenever the vendored SDK version is bumped —
   # see "Upgrading the vendored iOS SDK version" in README.md.
-  s.dependency 'MapboxCommon'
-  s.dependency 'MapboxCoreMaps'
   s.dependency 'MapboxMaps', '11.11.0'
-  s.dependency 'Turf'
+  s.dependency 'Turf', '~> 4.0.0'
 
   # ── iOS: Mapbox Navigation SDK v3 via VENDORED XCFRAMEWORKS ───────────────
   #
@@ -139,48 +141,19 @@ Pod::Spec.new do |s|
     'ios/fetch-xcframeworks.sh',
     'ios/Frameworks/*.xcframework/**/*.h',
   ]
+  # Matches youssefhenna/expo-mapbox-navigation's own podspec — ensures
+  # vendored frameworks' headers survive CocoaPods' file processing
+  # alongside the exclude_files rule above.
+  s.preserve_paths = [
+    'ios/Frameworks/*.xcframework',
+    'ios/**/*.h',
+    'ios/Frameworks/*.xcframework/**/*.h',
+  ]
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'             => 'YES',
     'SWIFT_COMPILATION_MODE'     => 'wholemodule',
-    # CORRECTION (see 2.3.5 changelog): this WAS removed on the theory that
-    # s.platforms (above) alone was sufficient and kept as the single
-    # source of truth, to reduce the risk of the two declarations going
-    # out of sync. That theory was wrong — confirmed by a real build still
-    # failing with "compiling for iOS 14.0" even with s.platforms set to
-    # 15.1 and this line removed. s.platforms governs CocoaPods'
-    # dependency-compatibility validation; it does NOT reliably force the
-    # actual IPHONEOS_DEPLOYMENT_TARGET build setting used to invoke the
-    # compiler for this target in this project — something (likely the
-    # generated Podfile's own default platform declaration) overrides it
-    # back down to a lower value otherwise. Both declarations are needed;
-    # when bumping the vendored SDK version, update BOTH this value and
-    # s.platforms above.
-    'IPHONEOS_DEPLOYMENT_TARGET' => '15.1',
-  }
-
-  # ── Avoid the .private.swiftinterface toolchain-version check ─────────────
-  # Debug builds default to ENABLE_TESTABILITY = YES (needed for @testable
-  # import elsewhere in the project). That setting makes Xcode re-verify our
-  # vendored frameworks' .private.swiftinterface (the "testable" textual
-  # interface) instead of just linking the precompiled .swiftmodule binary
-  # directly — and THAT re-verification step is what triggers Swift's
-  # strict "this SDK is not supported by the compiler" check if the Swift
-  # compiler that built the vendored xcframeworks differs at all from the
-  # one doing the build (a real, standard, well-documented Swift/Xcode
-  # check — see forums.swift.org and developer.apple.com/forums threads on
-  # this exact error, and mapbox/mapbox-maps-ios#1363 for the same issue
-  # with an earlier Mapbox binary distribution). Precompiled binaries built
-  # with library evolution enabled (which is how Mapbox ships these) are
-  # meant to tolerate a newer consuming compiler without this stricter
-  # recheck — disabling testability avoids forcing that recheck in the
-  # first place. This is scoped to app (not test) targets; if your project
-  # relies on @testable import of your OWN code elsewhere, this setting
-  # does not affect that — it only affects whether Xcode treats imports of
-  # vendored/third-party frameworks like this one as needing their private
-  # interface.
-  s.user_target_xcconfig = {
-    'ENABLE_TESTABILITY' => 'NO',
+    'OTHER_SWIFT_FLAGS'          => '$(inherited)',
   }
 
   s.prepare_command = <<-CMD
