@@ -114,7 +114,12 @@ let package = Package(
             ]
         ),
         .target(name: "_MapboxNavigationHelpers"),
-        .target(name: "_MapboxNavigationLocalization"),
+        .target(
+            name: "_MapboxNavigationLocalization",
+            dependencies: [
+                "_MapboxNavigationHelpers",
+            ]
+        ),
         .target(
             name: "MapboxNavigationCore",
             dependencies: [
