@@ -34,13 +34,55 @@ Pod::Spec.new do |s|
   # here, CocoaPods doesn't wire up the module/header search paths needed
   # for Swift to resolve those imports from OUR target when compiling
   # against our vendored frameworks — even though @rnmapbox/maps already
-  # installs these same pods elsewhere in the project. No version pin here:
-  # CocoaPods resolves one version per pod name across the whole Podfile,
-  # so this just reuses whatever version @rnmapbox/maps already pulls in
-  # rather than risking a second, conflicting constraint.
+  # installs these same pods elsewhere in the project.
+  #
+  # FIX: `MapboxMaps` now pinned to an EXACT version, not left unconstrained.
+  # Root cause of a real production launch crash (DYLD "Symbol not found:
+  # GestureType.singleTap", confirmed via crash report), even after
+  # RNMapboxMapsVersion was correctly set to match: with no constraint here
+  # at all, CocoaPods was free to resolve MapboxMaps to whatever satisfied
+  # every OTHER pod's constraint across this project's full ~184-pod graph
+  # — which is not guaranteed to be the exact same build our vendored
+  # MapboxNavigationCore.xcframework was linked against at Mapbox's own
+  # build time, even at a matching version *number*. An explicit, exact
+  # constraint here removes that resolution ambiguity entirely, the same
+  # way youssefhenna/expo-mapbox-navigation (this package's origin project)
+  # pins MapboxMaps explicitly in its own podspec rather than leaving it
+  # unconstrained.
+  #
+  # 11.11.0 is the exact version confirmed required by MapboxNavigationCore
+  # 3.8.0 — directly from a real screenshot of mapbox-navigation-ios's own
+  # CHANGELOG.md ("## 3.8.0" / "Packaging" / "MapboxNavigationCore now
+  # requires MapboxMaps v11.11.0" / "MapboxNavigationNative v324.0.0"), not
+  # assumed. This is the pairing youssefhenna/expo-mapbox-navigation (this
+  # package's origin project) documents as actually developed and tested
+  # against — not just theoretically compatible per release notes, unlike
+  # 3.11.0/11.14.0 (used in 3.1.6/Unreleased), which crashed identically to
+  # this package's very first crash (3.8.2/11.11.0) despite matching
+  # Mapbox's own stated requirement exactly. 3.8.2 (a later patch release)
+  # very likely bumped its own required MapboxMaps version past 11.11.0
+  # without this being re-verified at the time — a real, unverified
+  # assumption that may have been this whole investigation's actual
+  # starting mistake. This is intentionally NOT sourced from a plugin
+  # option or environment variable: unlike the Android-side
+  # `mapboxMapsVersion` option (see plugin/src/index.js), letting a
+  # consumer override this to an arbitrary value would defeat the entire
+  # point — it would let someone accidentally request a MapboxMaps version
+  # incompatible with THIS exact npm package version's vendored binaries,
+  # recreating the very crash this fix closes. The iOS Maps version is
+  # fixed by which version of this npm package you install, same as
+  # MapboxNavigationCore itself (see "iOS Architecture" in README.md) —
+  # matching `RNMapboxMapsVersion` in your own app's @rnmapbox/maps config
+  # to this exact value remains your responsibility, but this podspec no
+  # longer lets CocoaPods silently resolve to something else.
+  #
+  # ⚠️ MAINTAINER: this value MUST be updated together with
+  # MAPBOX_MAPS_VERSION in ios/fetch-xcframeworks.sh, and with
+  # MAPBOX_NAV_VERSION there, whenever the vendored SDK version is bumped —
+  # see "Upgrading the vendored iOS SDK version" in README.md.
   s.dependency 'MapboxCommon'
   s.dependency 'MapboxCoreMaps'
-  s.dependency 'MapboxMaps'
+  s.dependency 'MapboxMaps', '11.11.0'
   s.dependency 'Turf'
 
   # ── iOS: Mapbox Navigation SDK v3 via VENDORED XCFRAMEWORKS ───────────────
