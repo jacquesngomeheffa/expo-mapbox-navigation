@@ -1,8 +1,8 @@
 {
   "ABIRoot": {
     "kind": "Root",
-    "name": "MapboxDirections",
-    "printedName": "MapboxDirections",
+    "name": "TopLevel",
+    "printedName": "TopLevel",
     "children": [
       {
         "kind": "Import",
@@ -419,7 +419,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -446,7 +446,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -502,20 +502,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -804,7 +790,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -831,7 +817,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -889,20 +875,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -1790,20 +1762,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Hashable",
             "printedName": "Hashable",
             "usr": "s:SH",
@@ -2615,7 +2573,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -2644,7 +2602,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -2669,20 +2627,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "CustomValueOptionSet",
@@ -4073,7 +4017,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -4102,7 +4046,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -4127,20 +4071,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "OptionSet",
@@ -4576,9 +4506,6 @@
             "moduleName": "MapboxDirections",
             "static": true,
             "implicit": true,
-            "declAttributes": [
-              "Nonisolated"
-            ],
             "accessors": [
               {
                 "kind": "Accessor",
@@ -4621,20 +4548,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -5022,20 +4935,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Equatable",
             "printedName": "Equatable",
             "usr": "s:SQ",
@@ -5288,20 +5187,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -7501,20 +7386,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "OptionSet",
             "printedName": "OptionSet",
             "usr": "s:s9OptionSetP",
@@ -8485,7 +8356,7 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "([Swift.String]?, (any Swift.Error)?) -> ()",
+                "printedName": "([Swift.String]?, Swift.Error?) -> ()",
                 "children": [
                   {
                     "kind": "TypeNominal",
@@ -8495,7 +8366,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Tuple",
-                    "printedName": "([Swift.String]?, (any Swift.Error)?)",
+                    "printedName": "([Swift.String]?, Swift.Error?)",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -8522,12 +8393,12 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Optional",
-                        "printedName": "(any Swift.Error)?",
+                        "printedName": "Swift.Error?",
                         "children": [
                           {
                             "kind": "TypeNominal",
                             "name": "Error",
-                            "printedName": "any Swift.Error",
+                            "printedName": "Swift.Error",
                             "usr": "s:s5ErrorP"
                           }
                         ],
@@ -8576,7 +8447,7 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "(Foundation.URL?, Foundation.URLResponse?, (any Swift.Error)?) -> ()",
+                "printedName": "(Foundation.URL?, Foundation.URLResponse?, Swift.Error?) -> ()",
                 "children": [
                   {
                     "kind": "TypeNominal",
@@ -8586,7 +8457,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Tuple",
-                    "printedName": "(Foundation.URL?, Foundation.URLResponse?, (any Swift.Error)?)",
+                    "printedName": "(Foundation.URL?, Foundation.URLResponse?, Swift.Error?)",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -8619,12 +8490,12 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Optional",
-                        "printedName": "(any Swift.Error)?",
+                        "printedName": "Swift.Error?",
                         "children": [
                           {
                             "kind": "TypeNominal",
                             "name": "Error",
-                            "printedName": "any Swift.Error",
+                            "printedName": "Swift.Error",
                             "usr": "s:s5ErrorP"
                           }
                         ],
@@ -8659,20 +8530,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Sendable",
@@ -8757,12 +8614,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Optional",
-                "printedName": "(any Swift.Error)?",
+                "printedName": "Swift.Error?",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "Error",
-                    "printedName": "any Swift.Error",
+                    "printedName": "Swift.Error",
                     "usr": "s:s5ErrorP"
                   }
                 ],
@@ -9344,12 +9201,12 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "(MapboxDirections.DirectionsError.Type) -> (Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.DirectionsError",
+                "printedName": "(MapboxDirections.DirectionsError.Type) -> (Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.DirectionsError",
                 "children": [
                   {
                     "kind": "TypeFunc",
                     "name": "Function",
-                    "printedName": "(Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.DirectionsError",
+                    "printedName": "(Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.DirectionsError",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -9360,7 +9217,7 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Tuple",
-                        "printedName": "(response: Foundation.URLResponse?, underlying: (any Swift.Error)?, code: Swift.String?, message: Swift.String?)",
+                        "printedName": "(response: Foundation.URLResponse?, underlying: Swift.Error?, code: Swift.String?, message: Swift.String?)",
                         "children": [
                           {
                             "kind": "TypeNominal",
@@ -9379,12 +9236,12 @@
                           {
                             "kind": "TypeNominal",
                             "name": "Optional",
-                            "printedName": "(any Swift.Error)?",
+                            "printedName": "Swift.Error?",
                             "children": [
                               {
                                 "kind": "TypeNominal",
                                 "name": "Error",
-                                "printedName": "any Swift.Error",
+                                "printedName": "Swift.Error",
                                 "usr": "s:s5ErrorP"
                               }
                             ],
@@ -9603,20 +9460,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "LocalizedError",
@@ -9838,20 +9681,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Equatable",
@@ -10104,20 +9933,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -10387,20 +10202,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Hashable",
             "printedName": "Hashable",
             "usr": "s:SH",
@@ -10626,20 +10427,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -10972,20 +10759,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Hashable",
             "printedName": "Hashable",
             "usr": "s:SH",
@@ -11173,7 +10946,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -11181,7 +10954,6 @@
             "usr": "s:16MapboxDirections0B7OptionsC6encode2toys7Encoder_p_tKF",
             "mangledName": "$s16MapboxDirections0B7OptionsC6encode2toys7Encoder_p_tKF",
             "moduleName": "MapboxDirections",
-            "isOpen": true,
             "declAttributes": [
               "AccessControl"
             ],
@@ -11202,7 +10974,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -12326,20 +12098,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Decodable",
             "printedName": "Decodable",
             "usr": "s:Se",
@@ -12904,9 +12662,6 @@
             "moduleName": "MapboxDirections",
             "static": true,
             "implicit": true,
-            "declAttributes": [
-              "Nonisolated"
-            ],
             "accessors": [
               {
                 "kind": "Accessor",
@@ -12948,20 +12703,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Equatable",
@@ -13291,20 +13032,6 @@
           "AccessControl"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "CodingKey",
@@ -14467,20 +14194,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Sendable",
             "printedName": "Sendable",
             "usr": "s:s8SendableP",
@@ -14691,20 +14404,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -15010,7 +14709,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -15041,7 +14740,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -15084,7 +14783,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -15114,7 +14813,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -15141,22 +14840,6 @@
         "declAttributes": [
           "AccessControl",
           "RawDocComment"
-        ],
-        "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          }
         ]
       },
       {
@@ -15356,20 +15039,6 @@
           "AccessControl"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "LocalizedError",
@@ -16354,20 +16023,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -16699,20 +16354,6 @@
             ],
             "enumRawTypeName": "String",
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Equatable",
@@ -18992,7 +18633,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -19019,7 +18660,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -19075,20 +18716,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -19249,7 +18876,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -19274,7 +18901,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -19328,20 +18955,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -21385,7 +20998,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -21414,7 +21027,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -21474,20 +21087,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -21593,12 +21192,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Optional",
-                "printedName": "(any Swift.Error)?",
+                "printedName": "Swift.Error?",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "Error",
-                    "printedName": "any Swift.Error",
+                    "printedName": "Swift.Error",
                     "usr": "s:s5ErrorP"
                   }
                 ],
@@ -22020,12 +21619,12 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "(MapboxDirections.IsochroneError.Type) -> (Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.IsochroneError",
+                "printedName": "(MapboxDirections.IsochroneError.Type) -> (Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.IsochroneError",
                 "children": [
                   {
                     "kind": "TypeFunc",
                     "name": "Function",
-                    "printedName": "(Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.IsochroneError",
+                    "printedName": "(Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.IsochroneError",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -22036,7 +21635,7 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Tuple",
-                        "printedName": "(response: Foundation.URLResponse?, underlying: (any Swift.Error)?, code: Swift.String?, message: Swift.String?)",
+                        "printedName": "(response: Foundation.URLResponse?, underlying: Swift.Error?, code: Swift.String?, message: Swift.String?)",
                         "children": [
                           {
                             "kind": "TypeNominal",
@@ -22055,12 +21654,12 @@
                           {
                             "kind": "TypeNominal",
                             "name": "Optional",
-                            "printedName": "(any Swift.Error)?",
+                            "printedName": "Swift.Error?",
                             "children": [
                               {
                                 "kind": "TypeNominal",
                                 "name": "Error",
-                                "printedName": "any Swift.Error",
+                                "printedName": "Swift.Error",
                                 "usr": "s:s5ErrorP"
                               }
                             ],
@@ -22132,20 +21731,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "LocalizedError",
@@ -22433,20 +22018,6 @@
               "RawDocComment"
             ],
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Hashable",
@@ -23544,20 +23115,6 @@
                 "conformances": [
                   {
                     "kind": "Conformance",
-                    "name": "Copyable",
-                    "printedName": "Copyable",
-                    "usr": "s:s8CopyableP",
-                    "mangledName": "$ss8CopyableP"
-                  },
-                  {
-                    "kind": "Conformance",
-                    "name": "Escapable",
-                    "printedName": "Escapable",
-                    "usr": "s:s9EscapableP",
-                    "mangledName": "$ss9EscapableP"
-                  },
-                  {
-                    "kind": "Conformance",
                     "name": "Equatable",
                     "printedName": "Equatable",
                     "usr": "s:SQ",
@@ -23755,20 +23312,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -23793,20 +23336,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Equatable",
@@ -24126,20 +23655,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Sendable",
             "printedName": "Sendable",
             "usr": "s:s8SendableP",
@@ -24270,7 +23785,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -24295,7 +23810,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -24349,20 +23864,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -25069,7 +24570,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -25097,7 +24598,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -25122,20 +24623,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "OptionSet",
@@ -26072,7 +25559,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -26100,7 +25587,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -26125,20 +25612,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -26383,20 +25856,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Equatable",
@@ -26792,9 +26251,6 @@
                 "moduleName": "MapboxDirections",
                 "static": true,
                 "implicit": true,
-                "declAttributes": [
-                  "Nonisolated"
-                ],
                 "accessors": [
                   {
                     "kind": "Accessor",
@@ -26836,20 +26292,6 @@
             ],
             "enumRawTypeName": "String",
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Equatable",
@@ -28100,7 +27542,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -28128,7 +27570,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -28887,7 +28329,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Decoder",
-                    "printedName": "any Swift.Decoder",
+                    "printedName": "Swift.Decoder",
                     "usr": "s:s7DecoderP"
                   }
                 ],
@@ -28914,7 +28356,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Encoder",
-                    "printedName": "any Swift.Encoder",
+                    "printedName": "Swift.Encoder",
                     "usr": "s:s7EncoderP"
                   }
                 ],
@@ -29077,20 +28519,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Decodable",
                 "printedName": "Decodable",
                 "usr": "s:Se",
@@ -29136,20 +28564,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "DirectionsResult",
@@ -29465,7 +28879,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -29474,7 +28888,6 @@
             "mangledName": "$s16MapboxDirections12MatchOptionsC6encode2toys7Encoder_p_tKF",
             "moduleName": "MapboxDirections",
             "overriding": true,
-            "isOpen": true,
             "declAttributes": [
               "AccessControl",
               "Override"
@@ -29496,7 +28909,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -29838,20 +29251,6 @@
           "MapboxDirections.DirectionsOptions"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -30960,20 +30359,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Hashable",
             "printedName": "Hashable",
             "usr": "s:SH",
@@ -31320,20 +30705,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Sendable",
             "printedName": "Sendable",
             "usr": "s:s8SendableP",
@@ -31409,12 +30780,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Optional",
-                "printedName": "(any Swift.Error)?",
+                "printedName": "Swift.Error?",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "Error",
-                    "printedName": "any Swift.Error",
+                    "printedName": "Swift.Error",
                     "usr": "s:s5ErrorP"
                   }
                 ],
@@ -31836,12 +31207,12 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "(MapboxDirections.MatrixError.Type) -> (Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.MatrixError",
+                "printedName": "(MapboxDirections.MatrixError.Type) -> (Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.MatrixError",
                 "children": [
                   {
                     "kind": "TypeFunc",
                     "name": "Function",
-                    "printedName": "(Foundation.URLResponse?, (any Swift.Error)?, Swift.String?, Swift.String?) -> MapboxDirections.MatrixError",
+                    "printedName": "(Foundation.URLResponse?, Swift.Error?, Swift.String?, Swift.String?) -> MapboxDirections.MatrixError",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -31852,7 +31223,7 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Tuple",
-                        "printedName": "(response: Foundation.URLResponse?, underlying: (any Swift.Error)?, code: Swift.String?, message: Swift.String?)",
+                        "printedName": "(response: Foundation.URLResponse?, underlying: Swift.Error?, code: Swift.String?, message: Swift.String?)",
                         "children": [
                           {
                             "kind": "TypeNominal",
@@ -31871,12 +31242,12 @@
                           {
                             "kind": "TypeNominal",
                             "name": "Optional",
-                            "printedName": "(any Swift.Error)?",
+                            "printedName": "Swift.Error?",
                             "children": [
                               {
                                 "kind": "TypeNominal",
                                 "name": "Error",
-                                "printedName": "any Swift.Error",
+                                "printedName": "Swift.Error",
                                 "usr": "s:s5ErrorP"
                               }
                             ],
@@ -31948,20 +31319,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "LocalizedError",
@@ -32515,7 +31872,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -32543,7 +31900,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -32661,20 +32018,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -33408,7 +32751,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -33436,7 +32779,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -33460,20 +32803,6 @@
           "AccessControl"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Sendable",
@@ -33530,7 +32859,7 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "([Swift.String]?, (any Swift.Error)?) -> ()",
+                "printedName": "([Swift.String]?, Swift.Error?) -> ()",
                 "children": [
                   {
                     "kind": "TypeNominal",
@@ -33540,7 +32869,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Tuple",
-                    "printedName": "([Swift.String]?, (any Swift.Error)?)",
+                    "printedName": "([Swift.String]?, Swift.Error?)",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -33567,12 +32896,12 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Optional",
-                        "printedName": "(any Swift.Error)?",
+                        "printedName": "Swift.Error?",
                         "children": [
                           {
                             "kind": "TypeNominal",
                             "name": "Error",
-                            "printedName": "any Swift.Error",
+                            "printedName": "Swift.Error",
                             "usr": "s:s5ErrorP"
                           }
                         ],
@@ -33622,7 +32951,7 @@
               {
                 "kind": "TypeFunc",
                 "name": "Function",
-                "printedName": "(Foundation.URL?, Foundation.URLResponse?, (any Swift.Error)?) -> ()",
+                "printedName": "(Foundation.URL?, Foundation.URLResponse?, Swift.Error?) -> ()",
                 "children": [
                   {
                     "kind": "TypeNominal",
@@ -33632,7 +32961,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Tuple",
-                    "printedName": "(Foundation.URL?, Foundation.URLResponse?, (any Swift.Error)?)",
+                    "printedName": "(Foundation.URL?, Foundation.URLResponse?, Swift.Error?)",
                     "children": [
                       {
                         "kind": "TypeNominal",
@@ -33665,12 +32994,12 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Optional",
-                        "printedName": "(any Swift.Error)?",
+                        "printedName": "Swift.Error?",
                         "children": [
                           {
                             "kind": "TypeNominal",
                             "name": "Error",
-                            "printedName": "any Swift.Error",
+                            "printedName": "Swift.Error",
                             "usr": "s:s5ErrorP"
                           }
                         ],
@@ -33701,22 +33030,6 @@
         "moduleName": "MapboxDirections",
         "declAttributes": [
           "AccessControl"
-        ],
-        "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          }
         ]
       },
       {
@@ -34263,22 +33576,6 @@
         "declAttributes": [
           "AccessControl",
           "RawDocComment"
-        ],
-        "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          }
         ]
       },
       {
@@ -34864,174 +34161,6 @@
                 "accessorKind": "get"
               }
             ]
-          },
-          {
-            "kind": "Var",
-            "name": "isAutomobileAvoidingTraffic",
-            "printedName": "isAutomobileAvoidingTraffic",
-            "children": [
-              {
-                "kind": "TypeNominal",
-                "name": "Bool",
-                "printedName": "Swift.Bool",
-                "usr": "s:Sb"
-              }
-            ],
-            "declKind": "Var",
-            "usr": "s:16MapboxDirections17ProfileIdentifierV27isAutomobileAvoidingTrafficSbvp",
-            "mangledName": "$s16MapboxDirections17ProfileIdentifierV27isAutomobileAvoidingTrafficSbvp",
-            "moduleName": "MapboxDirections",
-            "declAttributes": [
-              "AccessControl"
-            ],
-            "isFromExtension": true,
-            "accessors": [
-              {
-                "kind": "Accessor",
-                "name": "Get",
-                "printedName": "Get()",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Accessor",
-                "usr": "s:16MapboxDirections17ProfileIdentifierV27isAutomobileAvoidingTrafficSbvg",
-                "mangledName": "$s16MapboxDirections17ProfileIdentifierV27isAutomobileAvoidingTrafficSbvg",
-                "moduleName": "MapboxDirections",
-                "isFromExtension": true,
-                "accessorKind": "get"
-              }
-            ]
-          },
-          {
-            "kind": "Var",
-            "name": "isAutomobile",
-            "printedName": "isAutomobile",
-            "children": [
-              {
-                "kind": "TypeNominal",
-                "name": "Bool",
-                "printedName": "Swift.Bool",
-                "usr": "s:Sb"
-              }
-            ],
-            "declKind": "Var",
-            "usr": "s:16MapboxDirections17ProfileIdentifierV12isAutomobileSbvp",
-            "mangledName": "$s16MapboxDirections17ProfileIdentifierV12isAutomobileSbvp",
-            "moduleName": "MapboxDirections",
-            "declAttributes": [
-              "AccessControl"
-            ],
-            "isFromExtension": true,
-            "accessors": [
-              {
-                "kind": "Accessor",
-                "name": "Get",
-                "printedName": "Get()",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Accessor",
-                "usr": "s:16MapboxDirections17ProfileIdentifierV12isAutomobileSbvg",
-                "mangledName": "$s16MapboxDirections17ProfileIdentifierV12isAutomobileSbvg",
-                "moduleName": "MapboxDirections",
-                "isFromExtension": true,
-                "accessorKind": "get"
-              }
-            ]
-          },
-          {
-            "kind": "Var",
-            "name": "isWalking",
-            "printedName": "isWalking",
-            "children": [
-              {
-                "kind": "TypeNominal",
-                "name": "Bool",
-                "printedName": "Swift.Bool",
-                "usr": "s:Sb"
-              }
-            ],
-            "declKind": "Var",
-            "usr": "s:16MapboxDirections17ProfileIdentifierV9isWalkingSbvp",
-            "mangledName": "$s16MapboxDirections17ProfileIdentifierV9isWalkingSbvp",
-            "moduleName": "MapboxDirections",
-            "declAttributes": [
-              "AccessControl"
-            ],
-            "isFromExtension": true,
-            "accessors": [
-              {
-                "kind": "Accessor",
-                "name": "Get",
-                "printedName": "Get()",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Accessor",
-                "usr": "s:16MapboxDirections17ProfileIdentifierV9isWalkingSbvg",
-                "mangledName": "$s16MapboxDirections17ProfileIdentifierV9isWalkingSbvg",
-                "moduleName": "MapboxDirections",
-                "isFromExtension": true,
-                "accessorKind": "get"
-              }
-            ]
-          },
-          {
-            "kind": "Var",
-            "name": "isCycling",
-            "printedName": "isCycling",
-            "children": [
-              {
-                "kind": "TypeNominal",
-                "name": "Bool",
-                "printedName": "Swift.Bool",
-                "usr": "s:Sb"
-              }
-            ],
-            "declKind": "Var",
-            "usr": "s:16MapboxDirections17ProfileIdentifierV9isCyclingSbvp",
-            "mangledName": "$s16MapboxDirections17ProfileIdentifierV9isCyclingSbvp",
-            "moduleName": "MapboxDirections",
-            "declAttributes": [
-              "AccessControl"
-            ],
-            "isFromExtension": true,
-            "accessors": [
-              {
-                "kind": "Accessor",
-                "name": "Get",
-                "printedName": "Get()",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Accessor",
-                "usr": "s:16MapboxDirections17ProfileIdentifierV9isCyclingSbvg",
-                "mangledName": "$s16MapboxDirections17ProfileIdentifierV9isCyclingSbvg",
-                "moduleName": "MapboxDirections",
-                "isFromExtension": true,
-                "accessorKind": "get"
-              }
-            ]
           }
         ],
         "declKind": "Struct",
@@ -35043,20 +34172,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -35457,7 +34572,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -35485,7 +34600,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -35508,12 +34623,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Array",
-                "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "RouteLegRefreshSource",
-                    "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                    "printedName": "MapboxDirections.RouteLegRefreshSource",
                     "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                   }
                 ],
@@ -35537,12 +34652,12 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Array",
-                    "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                    "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                     "children": [
                       {
                         "kind": "TypeNominal",
                         "name": "RouteLegRefreshSource",
-                        "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                        "printedName": "MapboxDirections.RouteLegRefreshSource",
                         "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                       }
                     ],
@@ -35568,20 +34683,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -36182,7 +35283,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -36210,7 +35311,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -36425,20 +35526,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -36831,20 +35918,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -37191,7 +36264,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -37218,7 +36291,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -37276,20 +36349,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -37811,20 +36870,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Equatable",
@@ -38542,7 +37587,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -38571,7 +37616,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -38596,20 +37641,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "OptionSet",
@@ -39054,9 +38085,6 @@
                 "moduleName": "MapboxDirections",
                 "static": true,
                 "implicit": true,
-                "declAttributes": [
-                  "Nonisolated"
-                ],
                 "accessors": [
                   {
                     "kind": "Accessor",
@@ -39098,20 +38126,6 @@
             ],
             "enumRawTypeName": "String",
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Equatable",
@@ -40365,7 +39379,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -40393,7 +39407,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -40627,12 +39641,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Array",
-                "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "RouteLegRefreshSource",
-                    "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                    "printedName": "MapboxDirections.RouteLegRefreshSource",
                     "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                   }
                 ],
@@ -40656,12 +39670,12 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Array",
-                    "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                    "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                     "children": [
                       {
                         "kind": "TypeNominal",
                         "name": "RouteLegRefreshSource",
-                        "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                        "printedName": "MapboxDirections.RouteLegRefreshSource",
                         "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                       }
                     ],
@@ -40687,20 +39701,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "DirectionsResult",
@@ -41827,9 +40827,6 @@
                 "moduleName": "MapboxDirections",
                 "static": true,
                 "implicit": true,
-                "declAttributes": [
-                  "Nonisolated"
-                ],
                 "accessors": [
                   {
                     "kind": "Accessor",
@@ -41871,20 +40868,6 @@
             ],
             "enumRawTypeName": "String",
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Equatable",
@@ -42070,7 +41053,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -42098,7 +41081,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -44725,7 +43708,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Decoder",
-                    "printedName": "any Swift.Decoder",
+                    "printedName": "Swift.Decoder",
                     "usr": "s:s7DecoderP"
                   }
                 ],
@@ -44752,7 +43735,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Encoder",
-                    "printedName": "any Swift.Encoder",
+                    "printedName": "Swift.Encoder",
                     "usr": "s:s7EncoderP"
                   }
                 ],
@@ -44809,20 +43792,6 @@
             ],
             "isFromExtension": true,
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Decodable",
@@ -46115,7 +45084,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Decoder",
-                    "printedName": "any Swift.Decoder",
+                    "printedName": "Swift.Decoder",
                     "usr": "s:s7DecoderP"
                   }
                 ],
@@ -46143,7 +45112,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Encoder",
-                    "printedName": "any Swift.Encoder",
+                    "printedName": "Swift.Encoder",
                     "usr": "s:s7EncoderP"
                   }
                 ],
@@ -46169,20 +45138,6 @@
             ],
             "isFromExtension": true,
             "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
               {
                 "kind": "Conformance",
                 "name": "Equatable",
@@ -46420,20 +45375,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -46764,7 +45705,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -46773,7 +45714,6 @@
             "mangledName": "$s16MapboxDirections12RouteOptionsC6encode2toys7Encoder_p_tKF",
             "moduleName": "MapboxDirections",
             "overriding": true,
-            "isOpen": true,
             "declAttributes": [
               "AccessControl",
               "Override"
@@ -46795,7 +45735,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -48658,20 +47598,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Decodable",
             "printedName": "Decodable",
             "usr": "s:Se",
@@ -49412,7 +48338,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -49440,7 +48366,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -49465,20 +48391,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -49536,12 +48448,12 @@
               {
                 "kind": "TypeNominal",
                 "name": "Array",
-                "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                 "children": [
                   {
                     "kind": "TypeNominal",
                     "name": "RouteLegRefreshSource",
-                    "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                    "printedName": "MapboxDirections.RouteLegRefreshSource",
                     "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                   }
                 ],
@@ -49562,12 +48474,12 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Array",
-                    "printedName": "[any MapboxDirections.RouteLegRefreshSource]",
+                    "printedName": "[MapboxDirections.RouteLegRefreshSource]",
                     "children": [
                       {
                         "kind": "TypeNominal",
                         "name": "RouteLegRefreshSource",
-                        "printedName": "any MapboxDirections.RouteLegRefreshSource",
+                        "printedName": "MapboxDirections.RouteLegRefreshSource",
                         "usr": "s:16MapboxDirections21RouteLegRefreshSourceP"
                       }
                     ],
@@ -49594,22 +48506,6 @@
         "declAttributes": [
           "AccessControl",
           "RawDocComment"
-        ],
-        "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          }
         ]
       },
       {
@@ -49967,22 +48863,6 @@
         "declAttributes": [
           "AccessControl",
           "RawDocComment"
-        ],
-        "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          }
         ]
       },
       {
@@ -50113,20 +48993,6 @@
           "AccessControl"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Sendable",
@@ -51179,7 +50045,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -51207,7 +50073,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -51429,20 +50295,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "ForeignMemberContainer",
@@ -51793,7 +50645,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -51891,20 +50743,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -52734,20 +51572,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Hashable",
             "printedName": "Hashable",
             "usr": "s:SH",
@@ -53181,7 +52005,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -53278,20 +52102,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -53519,20 +52329,6 @@
         ],
         "enumRawTypeName": "String",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -54383,7 +53179,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -54411,7 +53207,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -56541,20 +55337,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Decodable",
             "printedName": "Decodable",
             "usr": "s:Se",
@@ -57128,20 +55910,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -57517,7 +56285,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -57544,7 +56312,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -57600,20 +56368,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -57876,7 +56630,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -57903,7 +56657,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -58097,20 +56851,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -58382,7 +57122,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -58407,7 +57147,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -58461,20 +57201,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -58839,20 +57565,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -59148,7 +57860,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -59175,7 +57887,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -59233,20 +57945,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -59550,20 +58248,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -59983,20 +58667,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -60465,20 +59135,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Equatable",
             "printedName": "Equatable",
             "usr": "s:SQ",
@@ -60857,9 +59513,6 @@
             "moduleName": "MapboxDirections",
             "static": true,
             "implicit": true,
-            "declAttributes": [
-              "Nonisolated"
-            ],
             "accessors": [
               {
                 "kind": "Accessor",
@@ -60902,20 +59555,6 @@
         ],
         "enumRawTypeName": "Int",
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Hashable",
@@ -61282,7 +59921,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -61310,7 +59949,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -62544,20 +61183,6 @@
                 "conformances": [
                   {
                     "kind": "Conformance",
-                    "name": "Copyable",
-                    "printedName": "Copyable",
-                    "usr": "s:s8CopyableP",
-                    "mangledName": "$ss8CopyableP"
-                  },
-                  {
-                    "kind": "Conformance",
-                    "name": "Escapable",
-                    "printedName": "Escapable",
-                    "usr": "s:s9EscapableP",
-                    "mangledName": "$ss9EscapableP"
-                  },
-                  {
-                    "kind": "Conformance",
                     "name": "Equatable",
                     "printedName": "Equatable",
                     "usr": "s:SQ",
@@ -62745,20 +61370,6 @@
                     ],
                     "enumRawTypeName": "String",
                     "conformances": [
-                      {
-                        "kind": "Conformance",
-                        "name": "Copyable",
-                        "printedName": "Copyable",
-                        "usr": "s:s8CopyableP",
-                        "mangledName": "$ss8CopyableP"
-                      },
-                      {
-                        "kind": "Conformance",
-                        "name": "Escapable",
-                        "printedName": "Escapable",
-                        "usr": "s:s9EscapableP",
-                        "mangledName": "$ss9EscapableP"
-                      },
                       {
                         "kind": "Conformance",
                         "name": "Equatable",
@@ -63065,20 +61676,6 @@
                 "conformances": [
                   {
                     "kind": "Conformance",
-                    "name": "Copyable",
-                    "printedName": "Copyable",
-                    "usr": "s:s8CopyableP",
-                    "mangledName": "$ss8CopyableP"
-                  },
-                  {
-                    "kind": "Conformance",
-                    "name": "Escapable",
-                    "printedName": "Escapable",
-                    "usr": "s:s9EscapableP",
-                    "mangledName": "$ss9EscapableP"
-                  },
-                  {
-                    "kind": "Conformance",
                     "name": "Equatable",
                     "printedName": "Equatable",
                     "usr": "s:SQ",
@@ -63338,7 +61935,7 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Decoder",
-                        "printedName": "any Swift.Decoder",
+                        "printedName": "Swift.Decoder",
                         "usr": "s:s7DecoderP"
                       }
                     ],
@@ -63365,7 +61962,7 @@
                       {
                         "kind": "TypeNominal",
                         "name": "Encoder",
-                        "printedName": "any Swift.Encoder",
+                        "printedName": "Swift.Encoder",
                         "usr": "s:s7EncoderP"
                       }
                     ],
@@ -63424,20 +62021,6 @@
                 "conformances": [
                   {
                     "kind": "Conformance",
-                    "name": "Copyable",
-                    "printedName": "Copyable",
-                    "usr": "s:s8CopyableP",
-                    "mangledName": "$ss8CopyableP"
-                  },
-                  {
-                    "kind": "Conformance",
-                    "name": "Escapable",
-                    "printedName": "Escapable",
-                    "usr": "s:s9EscapableP",
-                    "mangledName": "$ss9EscapableP"
-                  },
-                  {
-                    "kind": "Conformance",
                     "name": "Equatable",
                     "printedName": "Equatable",
                     "usr": "s:SQ",
@@ -63480,7 +62063,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Decoder",
-                    "printedName": "any Swift.Decoder",
+                    "printedName": "Swift.Decoder",
                     "usr": "s:s7DecoderP"
                   }
                 ],
@@ -63508,7 +62091,7 @@
                   {
                     "kind": "TypeNominal",
                     "name": "Encoder",
-                    "printedName": "any Swift.Encoder",
+                    "printedName": "Swift.Encoder",
                     "usr": "s:s7EncoderP"
                   }
                 ],
@@ -63571,20 +62154,6 @@
             "conformances": [
               {
                 "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              },
-              {
-                "kind": "Conformance",
                 "name": "Equatable",
                 "printedName": "Equatable",
                 "usr": "s:SQ",
@@ -63623,20 +62192,6 @@
           "RawDocComment"
         ],
         "conformances": [
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
           {
             "kind": "Conformance",
             "name": "Decodable",
@@ -63940,7 +62495,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -63968,7 +62523,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -64388,20 +62943,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Decodable",
             "printedName": "Decodable",
             "usr": "s:Se",
@@ -64604,20 +63145,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Equatable",
             "printedName": "Equatable",
             "usr": "s:SQ",
@@ -64817,7 +63344,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Decoder",
-                "printedName": "any Swift.Decoder",
+                "printedName": "Swift.Decoder",
                 "usr": "s:s7DecoderP"
               }
             ],
@@ -64845,7 +63372,7 @@
               {
                 "kind": "TypeNominal",
                 "name": "Encoder",
-                "printedName": "any Swift.Encoder",
+                "printedName": "Swift.Encoder",
                 "usr": "s:s7EncoderP"
               }
             ],
@@ -66342,20 +64869,6 @@
         "conformances": [
           {
             "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
-          },
-          {
-            "kind": "Conformance",
             "name": "Decodable",
             "printedName": "Decodable",
             "usr": "s:Se",
@@ -66795,20 +65308,6 @@
             "printedName": "Sendable",
             "usr": "s:s8SendableP",
             "mangledName": "$ss8SendableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
           }
         ]
       },
@@ -66872,20 +65371,6 @@
             "printedName": "Sendable",
             "usr": "s:s8SendableP",
             "mangledName": "$ss8SendableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
           },
           {
             "kind": "Conformance",
@@ -66976,7 +65461,6 @@
         "genericSig": "<τ_0_0>",
         "sugared_genericSig": "<Element>",
         "declAttributes": [
-          "EagerMove",
           "Frozen"
         ],
         "isExternal": true,
@@ -66987,20 +65471,6 @@
             "printedName": "_DestructorSafeContainer",
             "usr": "s:s24_DestructorSafeContainerP",
             "mangledName": "$ss24_DestructorSafeContainerP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Copyable",
-            "printedName": "Copyable",
-            "usr": "s:s8CopyableP",
-            "mangledName": "$ss8CopyableP"
-          },
-          {
-            "kind": "Conformance",
-            "name": "Escapable",
-            "printedName": "Escapable",
-            "usr": "s:s9EscapableP",
-            "mangledName": "$ss9EscapableP"
           },
           {
             "kind": "Conformance",
@@ -69823,399 +68293,399 @@
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 15342,
+      "offset": 15344,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "Array",
-      "offset": 15358,
+      "offset": 15360,
       "length": 2,
       "value": "[]"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 16781,
+      "offset": 16783,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "Array",
-      "offset": 17852,
+      "offset": 17854,
       "length": 2,
       "value": "[]"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 19147,
+      "offset": 19149,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 20190,
+      "offset": 20192,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 20998,
+      "offset": 21000,
       "length": 46,
       "value": "\"abridgedPath should be overriden by subclass\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21061,
+      "offset": 21063,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21243,
+      "offset": 21245,
       "length": 10,
       "value": "\"No query\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21274,
+      "offset": 21276,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 21317,
+      "offset": 21319,
       "length": 1,
       "value": "2"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21340,
+      "offset": 21342,
       "length": 17,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21356,
+      "offset": 21358,
       "length": 1,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21384,
+      "offset": 21386,
       "length": 32,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21400,
+      "offset": 21402,
       "length": 1,
       "value": "\"\/\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21415,
+      "offset": 21417,
       "length": 1,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21729,
+      "offset": 21731,
       "length": 12,
       "value": "\"geometries\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21804,
+      "offset": 21806,
       "length": 10,
       "value": "\"overview\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21887,
+      "offset": 21889,
       "length": 7,
       "value": "\"steps\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 21958,
+      "offset": 21960,
       "length": 10,
       "value": "\"language\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22225,
+      "offset": 22227,
       "length": 14,
       "value": "\"unrestricted\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22242,
+      "offset": 22244,
       "length": 6,
       "value": "\"curb\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22300,
+      "offset": 22302,
       "length": 12,
       "value": "\"approaches\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22350,
+      "offset": 22352,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22457,
+      "offset": 22459,
       "length": 20,
       "value": "\"voice_instructions\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22572,
+      "offset": 22574,
       "length": 13,
       "value": "\"voice_units\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22731,
+      "offset": 22733,
       "length": 21,
       "value": "\"banner_instructions\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 22978,
+      "offset": 22980,
       "length": 10,
       "value": "\"bearings\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23188,
+      "offset": 23190,
       "length": 10,
       "value": "\"radiuses\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23307,
+      "offset": 23309,
       "length": 13,
       "value": "\"annotations\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23436,
+      "offset": 23438,
       "length": 11,
       "value": "\"waypoints\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23573,
+      "offset": 23575,
       "length": 16,
       "value": "\"waypoint_names\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23710,
+      "offset": 23712,
       "length": 27,
       "value": "\"snapping_include_closures\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 23856,
+      "offset": 23858,
       "length": 34,
       "value": "\"snapping_include_static_closures\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 24051,
+      "offset": 24053,
       "length": 2,
       "value": "-1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 24057,
+      "offset": 24059,
       "length": 1,
       "value": "0"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24171,
+      "offset": 24173,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 24278,
+      "offset": 24280,
       "length": 2,
       "value": "-1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 24284,
+      "offset": 24286,
       "length": 1,
       "value": "0"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 24467,
+      "offset": 24469,
       "length": 1,
       "value": "0"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24499,
+      "offset": 24501,
       "length": 11,
       "value": "\"unlimited\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24615,
+      "offset": 24617,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24839,
+      "offset": 24841,
       "length": 14,
       "value": "\"unrestricted\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24856,
+      "offset": 24858,
       "length": 6,
       "value": "\"curb\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 24883,
+      "offset": 24885,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 25273,
+      "offset": 25275,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 25450,
+      "offset": 25452,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 25574,
+      "offset": 25576,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 25662,
+      "offset": 25664,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 25685,
+      "offset": 25687,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 25808,
+      "offset": 25810,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26343,
+      "offset": 26345,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26352,
+      "offset": 26354,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26375,
+      "offset": 26377,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26458,
+      "offset": 26460,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26585,
+      "offset": 26587,
       "length": 13,
       "value": "\"coordinates\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/DirectionsOptions.swift",
       "kind": "StringLiteral",
-      "offset": 26680,
+      "offset": 26682,
       "length": 2,
       "value": "\"\""
     },
@@ -72161,42 +70631,42 @@
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 4173,
+      "offset": 4175,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "StringLiteral",
-      "offset": 5539,
+      "offset": 5541,
       "length": 6,
       "value": "\"tidy\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "StringLiteral",
-      "offset": 5728,
+      "offset": 5730,
       "length": 11,
       "value": "\"waypoints\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "StringLiteral",
-      "offset": 5841,
+      "offset": 5843,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "StringLiteral",
-      "offset": 5947,
+      "offset": 5949,
       "length": 43,
       "value": "\"matching\/v5\/\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/MapMatching\/MatchOptions.swift",
       "kind": "StringLiteral",
-      "offset": 5989,
+      "offset": 5991,
       "length": 1,
       "value": "\"\""
     },
@@ -73230,34 +71700,6 @@
       "value": "\"mapbox\/walking\""
     },
     {
-      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/ProfileIdentifier.swift",
-      "kind": "StringLiteral",
-      "offset": 2645,
-      "length": 17,
-      "value": "\"driving-traffic\""
-    },
-    {
-      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/ProfileIdentifier.swift",
-      "kind": "StringLiteral",
-      "offset": 2734,
-      "length": 9,
-      "value": "\"driving\""
-    },
-    {
-      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/ProfileIdentifier.swift",
-      "kind": "StringLiteral",
-      "offset": 2812,
-      "length": 9,
-      "value": "\"walking\""
-    },
-    {
-      "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/ProfileIdentifier.swift",
-      "kind": "StringLiteral",
-      "offset": 2890,
-      "length": 9,
-      "value": "\"cycling\""
-    },
-    {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/QuickLook.swift",
       "kind": "StringLiteral",
       "offset": 1059,
@@ -74135,490 +72577,490 @@
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 2172,
+      "offset": 2183,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 2226,
+      "offset": 2237,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 2327,
+      "offset": 2338,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 2386,
+      "offset": 2397,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 3241,
+      "offset": 3252,
       "length": 3,
       "value": "\",\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 3512,
+      "offset": 3523,
       "length": 3,
       "value": "\",\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 3668,
+      "offset": 3679,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 3751,
+      "offset": 3794,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 4102,
+      "offset": 4145,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 4571,
+      "offset": 4614,
       "length": 3,
       "value": "\",\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 4627,
+      "offset": 4670,
       "length": 1,
       "value": "2"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 6459,
+      "offset": 6502,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 7343,
+      "offset": 7386,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 7390,
+      "offset": 7433,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10462,
+      "offset": 10505,
       "length": 19,
       "value": "\"continue_straight\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10523,
+      "offset": 10566,
       "length": 14,
       "value": "\"alternatives\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10584,
+      "offset": 10627,
       "length": 18,
       "value": "\"roundabout_exits\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10637,
+      "offset": 10680,
       "length": 9,
       "value": "\"exclude\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10681,
+      "offset": 10724,
       "length": 9,
       "value": "\"include\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10724,
+      "offset": 10767,
       "length": 16,
       "value": "\"enable_refresh\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10787,
+      "offset": 10830,
       "length": 23,
       "value": "\"avoid_maneuver_radius\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10840,
+      "offset": 10883,
       "length": 12,
       "value": "\"max_height\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10881,
+      "offset": 10924,
       "length": 11,
       "value": "\"max_width\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10922,
+      "offset": 10965,
       "length": 12,
       "value": "\"max_weight\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10964,
+      "offset": 11007,
       "length": 12,
       "value": "\"alley_bias\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11008,
+      "offset": 11051,
       "length": 14,
       "value": "\"walkway_bias\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11044,
+      "offset": 11087,
       "length": 15,
       "value": "\"walking_speed\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11091,
+      "offset": 11134,
       "length": 18,
       "value": "\"waypoint_targets\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11134,
+      "offset": 11177,
       "length": 11,
       "value": "\"arrive_by\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11170,
+      "offset": 11213,
       "length": 11,
       "value": "\"depart_at\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11236,
+      "offset": 11279,
       "length": 19,
       "value": "\"compute_toll_cost\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10462,
+      "offset": 10505,
       "length": 19,
       "value": "\"continue_straight\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10523,
+      "offset": 10566,
       "length": 14,
       "value": "\"alternatives\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10584,
+      "offset": 10627,
       "length": 18,
       "value": "\"roundabout_exits\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10637,
+      "offset": 10680,
       "length": 9,
       "value": "\"exclude\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10681,
+      "offset": 10724,
       "length": 9,
       "value": "\"include\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10724,
+      "offset": 10767,
       "length": 16,
       "value": "\"enable_refresh\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10787,
+      "offset": 10830,
       "length": 23,
       "value": "\"avoid_maneuver_radius\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10840,
+      "offset": 10883,
       "length": 12,
       "value": "\"max_height\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10881,
+      "offset": 10924,
       "length": 11,
       "value": "\"max_width\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10922,
+      "offset": 10965,
       "length": 12,
       "value": "\"max_weight\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 10964,
+      "offset": 11007,
       "length": 12,
       "value": "\"alley_bias\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11008,
+      "offset": 11051,
       "length": 14,
       "value": "\"walkway_bias\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11044,
+      "offset": 11087,
       "length": 15,
       "value": "\"walking_speed\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11091,
+      "offset": 11134,
       "length": 18,
       "value": "\"waypoint_targets\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11134,
+      "offset": 11177,
       "length": 11,
       "value": "\"arrive_by\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11170,
+      "offset": 11213,
       "length": 11,
       "value": "\"depart_at\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 11236,
+      "offset": 11279,
       "length": 19,
       "value": "\"compute_toll_cost\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 15393,
+      "offset": 15438,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 16396,
+      "offset": 16441,
       "length": 45,
       "value": "\"directions\/v5\/\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 16440,
+      "offset": 16485,
       "length": 1,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "Array",
-      "offset": 18076,
+      "offset": 18121,
       "length": 2,
       "value": "[]"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "Array",
-      "offset": 18368,
+      "offset": 18413,
       "length": 2,
       "value": "[]"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 23382,
+      "offset": 23427,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 24132,
+      "offset": 24177,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 24790,
+      "offset": 24835,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "BooleanLiteral",
-      "offset": 27739,
+      "offset": 27784,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 29909,
+      "offset": 29956,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 29932,
+      "offset": 29979,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 30186,
+      "offset": 30233,
       "length": 2,
       "value": "\"\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 30209,
+      "offset": 30256,
       "length": 3,
       "value": "\";\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 32386,
+      "offset": 32442,
       "length": 6,
       "value": "\"true\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 32395,
+      "offset": 32451,
       "length": 7,
       "value": "\"false\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "FloatLiteral",
-      "offset": 32680,
+      "offset": 32736,
       "length": 4,
       "value": "1.42"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "FloatLiteral",
-      "offset": 32881,
+      "offset": 32937,
       "length": 4,
       "value": "0.14"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "FloatLiteral",
-      "offset": 33082,
+      "offset": 33138,
       "length": 4,
       "value": "6.94"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 33271,
+      "offset": 33327,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 33417,
+      "offset": 33473,
       "length": 4,
       "value": "1000"
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "StringLiteral",
-      "offset": 33742,
+      "offset": 33798,
       "length": 20,
       "value": "\"yyyy-MM-dd'T'HH:mm\""
     },
     {
       "filePath": "\/Users\/distiller\/code\/projects\/mapbox-navigation-ios-internal\/mapbox-navigation-ios\/Sources\/MapboxDirections\/RouteOptions.swift",
       "kind": "IntegerLiteral",
-      "offset": 33817,
+      "offset": 33873,
       "length": 1,
       "value": "0"
     },

@@ -14,6 +14,8 @@ __attribute__((visibility ("default")))
 // This class provides custom init which should be called
 + (nonnull instancetype)new NS_UNAVAILABLE;
 
+- (nonnull instancetype)initWithAlerts:(nonnull NSArray<MBNNUpcomingRouteAlert *> *)alerts;
 
+@property (nonatomic, readonly, nonnull, copy) NSArray<MBNNUpcomingRouteAlert *> *alerts;
 
 @end
