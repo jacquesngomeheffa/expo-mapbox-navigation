@@ -1,0 +1,17 @@
+// This file is generated and will be overwritten automatically.
+
+#import "MBNNSpeedLimitType_Internal.h"
+#import "MBNNWeather_Internal.h"
+#import "MBNNWeatherDetail_Internal.h"
+#import "MBNNVehicleType_Internal.h"
+#import "MBNNRoadItemType_Internal.h"
+#import "MBNNRoadItemLocation_Internal.h"
+#import "MBNNFormOfWay_Internal.h"
+#import "MBNNETC2RoadType_Internal.h"
+#import "MBNNSpeedLimitRestriction_Internal.h"
+#import "MBNNSpeedLimitCondition_Internal.h"
+#import "MBNNSpeedLimitInfo_Internal.h"
+#import "MBNNValueOnEdge_Internal.h"
+#import "MBNNRoadItem_Internal.h"
+#import "MBNNRoadItemOnEdge_Internal.h"
+#import "MBNNEdgeAdasAttributes_Internal.h"

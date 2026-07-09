@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BuildMachineOSBuild</key>
+	<string>24G222</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>MapboxMaps</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.mapbox.MapboxMaps</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>MapboxMaps</string>
+	<key>CFBundlePackageType</key>
+	<string>FMWK</string>
+	<key>CFBundleShortVersionString</key>
+	<string>11.20.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>XROS</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>356</string>
+	<key>DTCompiler</key>
+	<string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key>
+	<string>22N799</string>
+	<key>DTPlatformName</key>
+	<string>xros</string>
+	<key>DTPlatformVersion</key>
+	<string>2.2</string>
+	<key>DTSDKBuild</key>
+	<string>22N799</string>
+	<key>DTSDKName</key>
+	<string>xros2.2</string>
+	<key>DTXcode</key>
+	<string>1620</string>
+	<key>DTXcodeBuild</key>
+	<string>16C5032a</string>
+	<key>MBXBuildInfo</key>
+	<dict>
+		<key>BuildDate</key>
+		<string>2026-03-13T12:33:47Z</string>
+		<key>Git Branch</key>
+		<string>release/v0.20</string>
+		<key>Git SHA</key>
+		<string>88b06d4952b6a262f2a69a4e10809a5cc74e162c</string>
+		<key>SDK version</key>
+		<string>11.20.0</string>
+		<key>Swift version</key>
+		<string>6.0.3</string>
+		<key>Xcode version</key>
+		<string>16.2</string>
+	</dict>
+	<key>MBXBundleVersion</key>
+	<string>11.20.0</string>
+	<key>MinimumOSVersion</key>
+	<string>1.0</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>7</integer>
+	</array>
+</dict>
+</plist>
