@@ -63,7 +63,53 @@ FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 # be updated to the exact matching MapboxMaps version from that new
 # Navigation release's own "Packaging" changelog section — this script has
 # no way to enforce or verify that pairing itself.
-MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.11.0}"
+# FIX (confirmed via a real screenshot of mapbox-navigation-ios's own
+# CHANGELOG.md, not guessed): downgraded from 3.11.0 to 3.8.0.
+#
+# Root cause established over a long investigation: 3.11.0 requires
+# MapboxMaps 11.14.0 per its own release notes, and CocoaPods correctly
+# resolved exactly that version (confirmed via a real `pod install` log) —
+# yet the app still crashed at launch with DYLD "Symbol not found:
+# GestureType.singleTap". Leading hypothesis: `mapbox-navigation-ios-
+# build-artifacts`'s own precompiled build of MapboxNavigationCore isn't
+# guaranteed to be ABI-identical to the MapboxMaps binary CocoaPods
+# distributes at the same version *number* — two different distribution
+# channels for "the same" release.
+#
+# This package originates as a fork of youssefhenna/expo-mapbox-navigation,
+# whose own docs state it was "developed and tested for Mapbox Maps
+# version 11.11.0" — a pairing that's ACTUALLY BEEN RUN, not just
+# theoretically compatible per release notes. Confirmed directly from
+# mapbox-navigation-ios's own CHANGELOG.md: MapboxMaps v11.11.0 is
+# required by Navigation Core **3.8.0** specifically (paired with
+# MapboxNavigationNative v324.0.0) — NOT 3.8.2, the version this project
+# was on when the ORIGINAL crash first occurred (see 3.1.6 changelog).
+# 3.8.2 likely bumped the required MapboxMaps version past 11.11.0 without
+# this being re-verified at the time — a real, unverified assumption that
+# may have been this whole investigation's actual starting mistake.
+#
+# ⚠️ MAINTAINER: `RNMapboxMapsVersion` in the consuming app's
+# @rnmapbox/maps config MUST be set to exactly "11.11.0" to match — see
+# ExpoMapboxNavigation.podspec's `s.dependency 'MapboxMaps'` line, which
+# must also be kept in sync with this value.
+MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.8.0}"
+
+# Reference-only constant — NOT used by this script to fetch anything (this
+# script only fetches Navigation-specific frameworks; MapboxMaps itself
+# comes from CocoaPods, per ../ExpoMapboxNavigation.podspec's `s.dependency
+# 'MapboxMaps', ...` line). Exists purely so this exact required pairing is
+# recorded in ONE place a maintainer will actually look when bumping
+# MAPBOX_NAV_VERSION above — previously this pairing was only discoverable
+# by manually checking Mapbox's release notes each time, with nothing in
+# the repo itself recording what the CURRENT vendored build actually
+# requires. Confirmed exact for 3.8.0 directly from a real screenshot of
+# mapbox-navigation-ios's own CHANGELOG.md ("## 3.8.0" / "Packaging" /
+# "MapboxNavigationCore now requires MapboxMaps v11.11.0"). ⚠️ MUST be
+# updated together with the podspec's hardcoded `s.dependency 'MapboxMaps',
+# ...` value AND the consuming app's `RNMapboxMapsVersion` whenever
+# MAPBOX_NAV_VERSION above is bumped — see "Upgrading the vendored iOS SDK
+# version" in README.md.
+MAPBOX_MAPS_VERSION="11.11.0"
 
 echo "🔧 Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"
 echo "   Output: $FRAMEWORKS_DIR"
