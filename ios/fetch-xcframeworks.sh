@@ -217,7 +217,26 @@ git clone --branch "release/v$MAPBOX_MAPS_VERSION" --depth 1 \
 cd "$TMPDIR/maps-binary"
 
 echo "⬇️  Resolving and downloading the precompiled MapboxMaps binary..."
-swift build -c release
+# ⚠️ CONFIRMED (no longer the unverified assumption flagged in the file
+# header — this was hit on a real run): unlike
+# mapbox-navigation-ios-build-artifacts in Step 1, mapbox-maps-ios-binary's
+# MapboxMapsWrapper target does an unconditional `@_exported import
+# MapboxMaps`. MapboxMaps.xcframework has NO macOS slice (Maps SDK is
+# iOS-only; mapbox-maps-ios's own Package.swift comment says the macOS
+# platform minimum is declared only "to enable `swift run` cli tools" for
+# its dependents, not because MapboxMaps itself builds there). `swift build
+# -c release` on this macOS runner targets the host (macOS) by default, so
+# compiling that wrapper fails with "error: no such module 'MapboxMaps'".
+#
+# This is harmless for us: by the time that compile step runs, SwiftPM has
+# already resolved the package graph AND fetched + unpacked every binary
+# artifact we need into .build/artifacts (confirmed from a real run's
+# "Fetching/Fetched binary artifact ... MapboxMaps.xcframework.zip" log
+# lines, which complete before the wrapper-compile step even starts). We
+# don't need a successful host build of the wrapper module — we only need
+# the .xcframework it already downloaded — so tolerate this specific
+# failure instead of letting `set -e` abort the whole script.
+swift build -c release || echo "   ⚠️  swift build failed compiling MapboxMapsWrapper for macOS (expected — MapboxMaps has no macOS slice); continuing, since the binary artifacts were already resolved and downloaded above."
 
 MAPS_ARTIFACTS_DIR="$TMPDIR/maps-binary/.build/artifacts"
 found=$(find "$MAPS_ARTIFACTS_DIR" -iname "MapboxMaps.xcframework" -type d | head -1)
