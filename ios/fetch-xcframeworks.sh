@@ -210,7 +210,7 @@ done
 # binary built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES.
 echo ""
 echo "📦 [2/2] Cloning mapbox-maps-ios-binary v$MAPBOX_MAPS_VERSION..."
-git clone --branch "$MAPBOX_MAPS_VERSION" --depth 1 \
+git clone --branch "release/v$MAPBOX_MAPS_VERSION" --depth 1 \
   https://github.com/mapbox/mapbox-maps-ios-binary.git \
   "$TMPDIR/maps-binary"
 
