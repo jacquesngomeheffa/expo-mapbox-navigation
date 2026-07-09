@@ -1,10 +1,11 @@
 // swift-interface-format-version: 1.0
-// swift-compiler-version: Apple Swift version 6.0 effective-5.10 (swiftlang-6.0.0.9.10 clang-1600.0.26.2)
-// swift-module-flags: -target arm64-apple-ios15.1 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-bare-slash-regex -module-name _MapboxNavigationHelpers -package-name mapbox_navigation_ios
-// swift-module-flags-ignorable: -no-verify-emitted-module-interface
+// swift-compiler-version: Apple Swift version 5.9.2 (swiftlang-5.9.2.2.56 clang-1500.1.0.2.5)
+// swift-module-flags: -target arm64-apple-ios15.1 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -module-name _MapboxNavigationHelpers
+// swift-module-flags-ignorable: -enable-bare-slash-regex
 import Combine
 import Foundation
 import Swift
+import SwiftUI
 import UIKit
 import _Concurrency
 import _StringProcessing
@@ -18,34 +19,41 @@ final public class AsyncStreamBridge<Element> {
   final public func yield(_ value: Element)
   final public func finish()
 }
+#if compiler(>=5.3) && $RethrowsProtocol
 extension _MapboxNavigationHelpers.AsyncStreamBridge : _Concurrency.AsyncSequence {
   final public func makeAsyncIterator() -> _Concurrency.AsyncStream<Element>.AsyncIterator
-  @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
   public typealias AsyncIterator = _Concurrency.AsyncStream<Element>.AsyncIterator
-  #if compiler(>=5.3) && $AssociatedTypeImplements
-  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
-  @_implements(_Concurrency.AsyncSequence, Failure) public typealias __AsyncSequence_Failure = _Concurrency.AsyncStream<Element>.Iterator.__AsyncIteratorProtocol_Failure
-  #else
-  @available(iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, macOS 15.0, *)
-  public typealias __AsyncSequence_Failure = _Concurrency.AsyncStream<Element>.Iterator.__AsyncIteratorProtocol_Failure
-  #endif
 }
+#endif
 extension _MapboxNavigationHelpers.AsyncStreamBridge : Swift.Sendable where Element : Swift.Sendable {
 }
 extension _MapboxNavigationHelpers.AsyncStreamBridge where Element == () {
   final public func yield()
 }
+#if compiler(>=5.3) && $Actors
 extension _Concurrency.MainActor {
+  #if compiler(>=5.3) && $UnavailableFromAsync
   @discardableResult
   @_unavailableFromAsync(message: "await the call to the @MainActor closure directly") public static func assumingIsolated<T>(_ operation: @_Concurrency.MainActor () throws -> T, file: Swift.StaticString = #fileID, line: Swift.UInt = #line) rethrows -> T
+  #else
+  @discardableResult
+  public static func assumingIsolated<T>(_ operation: @_Concurrency.MainActor () throws -> T, file: Swift.StaticString = #fileID, line: Swift.UInt = #line) rethrows -> T
+  #endif
 }
+#endif
 extension Foundation.URLSessionTask : _MapboxNavigationHelpers.CancellableAsyncStateValue {
 }
 @available(iOS, deprecated: 15.0, message: "Use iOS 15 API instead.")
 extension Foundation.URLSession {
+  #if compiler(>=5.3) && $AsyncAwait
   public func data(from url: Foundation.URL) async throws -> (data: Foundation.Data, response: Foundation.URLResponse)
+  #endif
+  #if compiler(>=5.3) && $AsyncAwait
   public func data(for request: Foundation.URLRequest) async throws -> (data: Foundation.Data, response: Foundation.URLResponse)
+  #endif
+  #if compiler(>=5.3) && $AsyncAwait
   public func download(with request: Foundation.URLRequest) async throws -> (cacheUrl: Foundation.URL, response: Foundation.URLResponse)
+  #endif
 }
 public protocol CancellableAsyncStateValue {
   func cancel()
@@ -106,13 +114,21 @@ public typealias NSLocked<Value> = _MapboxNavigationHelpers.Locked<Value, Founda
 extension _MapboxNavigationHelpers.Locked where Lock == Foundation.NSLock {
   convenience public init(_ wrappedValue: Value)
 }
+#if compiler(>=5.3) && $Sendable
 public func onMainAsync(_ work: @escaping @_Concurrency.MainActor @Sendable () -> Swift.Void)
+#endif
 public func onMainQueueSync<T>(execute work: @_Concurrency.MainActor () throws -> T) rethrows -> T
 final public class QueueGuard<Value> : @unchecked Swift.Sendable {
   public init(_ initialValue: Value, queueLabel: Swift.String, target: Dispatch.DispatchQueue? = nil)
+  #if compiler(>=5.3) && $AsyncAwait && $Sendable
   final public func async<Output>(_ exclusiveAccessBlock: @escaping @Sendable (inout Value) -> Output) async -> Output
+  #endif
+  #if compiler(>=5.3) && $AsyncAwait && $Sendable
   final public func async<Output>(_ exclusiveAccessBlock: @escaping @Sendable (inout Value) throws -> Output) async throws -> Output
+  #endif
+  #if compiler(>=5.3) && $Sendable
   final public func sync<Output>(_ exclusiveAccessBlock: @Sendable (inout Value) throws -> Output) rethrows -> Output
+  #endif
   @objc deinit
 }
 @dynamicMemberLookup public struct UncheckedSendable<Value> : @unchecked Swift.Sendable {
@@ -128,13 +144,8 @@ final public class UnfairLock : Foundation.NSLocking, Swift.Sendable {
   @objc final public func lock()
   @objc final public func unlock()
 }
-#if compiler(>=5.3) && $NoncopyableGenerics
 extension Swift.UnsafeMutablePointer : @unchecked Swift.Sendable where Pointee == Darwin.os_unfair_lock_s {
 }
-#else
-extension Swift.UnsafeMutablePointer : @unchecked Swift.Sendable where Pointee == Darwin.os_unfair_lock_s {
-}
-#endif
 public typealias UnfairLocked<Value> = _MapboxNavigationHelpers.Locked<Value, _MapboxNavigationHelpers.UnfairLock>
 extension _MapboxNavigationHelpers.Locked where Lock == _MapboxNavigationHelpers.UnfairLock {
   convenience public init(_ wrappedValue: Value)
@@ -158,12 +169,12 @@ extension Swift.String {
   public func firstCapitalized() -> Swift.String
 }
 extension UIKit.UIView {
-  @_Concurrency.MainActor @preconcurrency public func autoresizing() -> Self
-  @_Concurrency.MainActor @preconcurrency public func pinEdgesToSuperview(padding: CoreFoundation.CGFloat = 0, respectingSafeArea safeArea: Swift.Bool = false)
+  @_Concurrency.MainActor(unsafe) public func autoresizing() -> Self
+  @_Concurrency.MainActor(unsafe) public func pinEdgesToSuperview(padding: CoreFoundation.CGFloat = 0, respectingSafeArea safeArea: Swift.Bool = false)
 }
 extension UIKit.NSLayoutConstraint {
   @discardableResult
-  @_Concurrency.MainActor @preconcurrency public func assign(to variable: inout UIKit.NSLayoutConstraint!) -> Self
+  @_Concurrency.MainActor(unsafe) public func assign(to variable: inout UIKit.NSLayoutConstraint!) -> Self
 }
 @_documentation(visibility: internal) public protocol Anchorable {
   @_Concurrency.MainActor var topAnchor: UIKit.NSLayoutYAxisAnchor { get }
@@ -178,6 +189,7 @@ extension UIKit.UIView : _MapboxNavigationHelpers.Anchorable {
 extension UIKit.UILayoutGuide : _MapboxNavigationHelpers.Anchorable {
 }
 extension UIKit.UIColor {
+  convenience public init(rgb: Swift.Int, alpha: CoreFoundation.CGFloat = 1.0)
   public var hexString: Swift.String? {
     get
   }
@@ -185,8 +197,18 @@ extension UIKit.UIColor {
 extension UIKit.UIColor {
   public func image(_ size: CoreFoundation.CGSize = .zero) -> UIKit.UIImage
 }
+extension SwiftUI.ColorScheme {
+  public var traitCollection: UIKit.UITraitCollection {
+    get
+  }
+}
+extension UIKit.UITraitCollection {
+  public var colorScheme: SwiftUI.ColorScheme {
+    get
+  }
+}
 extension UIKit.UIView {
-  @inlinable @inline(__always) @_Concurrency.MainActor @preconcurrency public func forEachSubview(action: @escaping (UIKit.UIView) -> Swift.Void) {
+  @inlinable @inline(__always) @_Concurrency.MainActor(unsafe) public func forEachSubview(action: @escaping (UIKit.UIView) -> Swift.Void) {
         var queue: [UIView] = [self]
 
         while !queue.isEmpty {

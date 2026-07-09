@@ -15,6 +15,17 @@ __attribute__((visibility ("default")))
 // This class provides custom init which should be called
 + (nonnull instancetype)new NS_UNAVAILABLE;
 
+- (nonnull instancetype)initWithType:(nonnull NSString *)type
+                                text:(nonnull NSString *)text
+                                abbr:(nullable NSString *)abbr
+                        abbrPriority:(nullable NSNumber *)abbrPriority
+                        imageBaseUrl:(nullable NSString *)imageBaseUrl
+                              active:(nullable NSNumber *)active
+                          directions:(nullable NSArray<NSString *> *)directions
+                     activeDirection:(nullable NSString *)activeDirection
+                            imageURL:(nullable NSString *)imageURL
+                             subType:(nullable NSNumber *)subType
+                              shield:(nullable MBNNShield *)shield;
 
 @property (nonatomic, readonly, nonnull, copy) NSString *type;
 @property (nonatomic, readonly, nonnull, copy) NSString *text;
@@ -29,6 +40,9 @@ __attribute__((visibility ("default")))
 
 /** Provides more context about the component guidance view that may help in visual markup and display choices. */
 @property (nonatomic, readonly, nullable) NSNumber *subType;
+
+/** Provides shield info for type=icon */
+@property (nonatomic, readonly, nullable) MBNNShield *shield;
 
 
 - (BOOL)isEqualToBannerComponent:(nonnull MBNNBannerComponent *)other;

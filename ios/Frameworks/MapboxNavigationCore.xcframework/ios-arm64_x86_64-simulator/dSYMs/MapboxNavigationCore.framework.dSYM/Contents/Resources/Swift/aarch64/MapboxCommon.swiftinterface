@@ -1,12 +1,11 @@
 // swift-interface-format-version: 1.0
-// swift-compiler-version: Apple Swift version 6.0.3 effective-5.10 (swiftlang-6.0.3.1.10 clang-1600.0.30.1)
+// swift-compiler-version: Apple Swift version 5.10 (swiftlang-5.10.0.13 clang-1500.3.9.4)
 // swift-module-flags: -target arm64-apple-ios12.0-simulator -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-bare-slash-regex -module-name MapboxCommon
-// swift-module-flags-ignorable: -no-verify-emitted-module-interface
 import CoreLocation
 import Foundation
 @_exported import MapboxCommon
 import Swift
-@_spi(Marshalling) import Turf
+import Turf
 import UIKit
 import _Concurrency
 import _StringProcessing
@@ -31,22 +30,10 @@ extension MapboxCommon.NSExceptionHandler {
   @_spi(Experimental) @_documentation(visibility: public) public var timestamp: Swift.Optional<Foundation.Date>
   @_spi(Experimental) public init(feature: Turf.Feature, timestamp: Swift.Optional<Foundation.Date>)
 }
-@_spi(Experimental) extension MapboxCommon.GeofenceState {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.GeofenceState) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.GeofenceState
-  }
-}
 @_spi(Experimental) @_documentation(visibility: public) public struct GeofencingError : Swift.Error {
   @_spi(Experimental) public var type: MapboxCommon.GeofencingErrorType
   @_spi(Experimental) public var message: Swift.String
   @_spi(Experimental) public init(type: MapboxCommon.GeofencingErrorType, message: Swift.String)
-}
-@_spi(Experimental) extension MapboxCommon.GeofencingError {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.GeofencingError) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.GeofencingError
-  }
 }
 @_spi(Experimental) @_documentation(visibility: public) public enum GeofencingErrorType : Swift.Int {
   @_spi(Experimental) @_documentation(visibility: public) case generic
@@ -69,34 +56,10 @@ extension MapboxCommon.NSExceptionHandler {
     @_spi(Experimental) get
   }
 }
-@_spi(Experimental) extension MapboxCommon.GeofencingErrorType {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.GeofencingErrorType) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.GeofencingErrorType
-  }
-}
 @_spi(Experimental) @_documentation(visibility: public) public struct GeofencingEvent {
   @_spi(Experimental) @_documentation(visibility: public) public var feature: Turf.Feature
   @_spi(Experimental) @_documentation(visibility: public) public var timestamp: Foundation.Date
   @_spi(Experimental) public init(feature: Turf.Feature, timestamp: Foundation.Date)
-}
-@_spi(Experimental) extension MapboxCommon.GeofencingEvent {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.GeofencingEvent) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.GeofencingEvent
-  }
-}
-@_spi(Marshalling) public enum GeofencingExpectedMarshallers {
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<Swift.Void, MapboxCommon.GeofencingError>
-  @_spi(Marshalling) public static func toObjc<T>(_ subject: Swift.Result<Swift.Void, MapboxCommon.GeofencingError>) -> T
-  @_spi(Marshalling) public static func toObjc<T>(_ subject: Swift.Result<MapboxCommon.GeofencingOptions, MapboxCommon.GeofencingError>) -> T
-  @_spi(Marshalling) public static func toObjc<T>(_ subject: Swift.Result<Swift.String, MapboxCommon.GeofencingError>) -> T
-  @_spi(Marshalling) public static func toObjc<T>(_ subject: Swift.Result<MapboxCommon.GeofenceState, MapboxCommon.GeofencingError>) -> T
-  @_spi(Marshalling) public static func toObjc<T>(_ subject: Swift.Result<Swift.UInt32, MapboxCommon.GeofencingError>) -> T
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<MapboxCommon.GeofencingOptions, MapboxCommon.GeofencingError>
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<Swift.String, MapboxCommon.GeofencingError>
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<MapboxCommon.GeofenceState, MapboxCommon.GeofencingError>
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<Swift.UInt32, MapboxCommon.GeofencingError>
 }
 @_spi(Experimental) @_hasMissingDesignatedInitializers @_documentation(visibility: public) final public class GeofencingFactory {
   @_spi(Experimental) @_documentation(visibility: public) public static func getOrCreate() -> any MapboxCommon.GeofencingService
@@ -120,12 +83,6 @@ extension MapboxCommon.NSExceptionHandler {
     @_spi(Experimental) get
   }
 }
-@_spi(Experimental) extension MapboxCommon.GeofencingOptions {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.GeofencingOptions) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.GeofencingOptions
-  }
-}
 @_spi(Experimental) @_documentation(visibility: public) public enum GeofencingPropertiesKeys {
   @_spi(Experimental) @_documentation(visibility: public) public static let dwellTimeKey: Swift.String
   @_spi(Experimental) @_documentation(visibility: public) public static let pointRadiusKey: Swift.String
@@ -140,11 +97,11 @@ extension MapboxCommon.NSExceptionHandler {
   @_spi(Experimental) @_documentation(visibility: public) func addObserver(observer: any MapboxCommon.GeofencingObserver, callback: @escaping (Swift.Result<Swift.Void, MapboxCommon.GeofencingError>) -> Swift.Void)
   @_spi(Experimental) @_documentation(visibility: public) func removeObserver(observer: any MapboxCommon.GeofencingObserver, callback: @escaping (Swift.Result<Swift.Void, MapboxCommon.GeofencingError>) -> Swift.Void)
 }
-@_spi(Experimental) @_hasMissingDesignatedInitializers final public class GeofencingUtils {
+@_spi(Experimental) @_spi(Internal) @_hasMissingDesignatedInitializers final public class GeofencingUtils {
   @_spi(Experimental) @_spi(Internal) public static func setUserConsent(isConsentGiven: Swift.Bool, callback: @escaping (Swift.Result<Swift.Void, MapboxCommon.GeofencingError>) -> Swift.Void)
   @_spi(Experimental) @_documentation(visibility: public) public static func getUserConsent() -> Swift.Bool
   @_spi(Experimental) @_documentation(visibility: public) public static func isActive() -> Swift.Bool
-  @_spi(Experimental) @objc deinit
+  @_spi(Experimental) @_spi(Internal) @objc deinit
 }
 extension MapboxCommon.Location {
   convenience public init(coordinate: CoreLocation.CLLocationCoordinate2D, timestamp: Foundation.Date = Date(), altitude: CoreLocation.CLLocationDistance? = nil, horizontalAccuracy: CoreLocation.CLLocationAccuracy? = nil, verticalAccuracy: CoreLocation.CLLocationAccuracy? = nil, speed: CoreLocation.CLLocationSpeed? = nil, speedAccuracy: CoreLocation.CLLocationSpeedAccuracy? = nil, bearing: CoreLocation.CLLocationDirection? = nil, bearingAccuracy: CoreLocation.CLLocationDirectionAccuracy? = nil, floor: Swift.Int? = nil, source: Swift.String? = nil, extra: Any? = nil)
@@ -179,12 +136,6 @@ extension MapboxCommon.Location {
     get
   }
 }
-extension MapboxCommon.Location {
-  @_spi(Marshalling) public struct Marshaller {
-    @_spi(Marshalling) public static func toObjc<T>(_ value: MapboxCommon.Location) -> T
-    @_spi(Marshalling) public static func toSwift(_ value: Any) -> MapboxCommon.Location
-  }
-}
 extension MapboxCommon.HttpRequestError : Foundation.LocalizedError {
   public var errorDescription: Swift.String? {
     get
@@ -214,15 +165,6 @@ extension MapboxCommon.SettingsService {
 }
 extension MapboxCommon.SettingsServiceFactory {
   public static func getInstance(storageType: MapboxCommon.SettingsServiceStorageType) -> MapboxCommon.SettingsService
-}
-@_spi(Experimental) @_hasMissingDesignatedInitializers @_documentation(visibility: public) final public class MapboxSupport {
-  @_spi(Experimental) @_documentation(visibility: public) public static func getSupportPackageData() -> Swift.Result<MapboxCommon.DataRef, any Swift.Error>
-  @_spi(Experimental) @_documentation(visibility: public) public static func saveSupportPackageToFile(fileName: Swift.String) -> Swift.Result<Swift.Void, any Swift.Error>
-  @_spi(Experimental) @objc deinit
-}
-@_spi(Marshalling) public enum MapboxSupportExpectedMarshallers {
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<MapboxCommon.DataRef, any Swift.Error>
-  @_spi(Marshalling) public static func toSwift(_ subject: Any) -> Swift.Result<Swift.Void, any Swift.Error>
 }
 @_spi(Experimental) extension MapboxCommon.GeofencingErrorType : Swift.Equatable {}
 @_spi(Experimental) extension MapboxCommon.GeofencingErrorType : Swift.Hashable {}
