@@ -331,6 +331,24 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 3.3.5
+**⚠️ Still not confirmed fixed, but this time with a real, documented, exact-match root cause — not another guess. Adds `s.user_target_xcconfig` with `SWIFT_INCLUDE_PATHS` to `ios/MapboxMaps.podspec`.**
+
+- **Root cause, confirmed via two independent, credible sources, not this project's own theory**:
+  1. [CocoaPods/CocoaPods#10058](https://github.com/CocoaPods/CocoaPods/issues/10058) — a real, matching CocoaPods issue: a pure-Swift `.xcframework` vendored via `vendored_frameworks`, correctly appearing in a consuming target's Library/Framework Search Paths (confirmed working in this project's own case too, via 3.3.4's extended diagnostic), but Xcode still fails with `no such module 'X'` — because CocoaPods sets up `FRAMEWORK_SEARCH_PATHS`/`HEADER_SEARCH_PATHS` automatically for vendored xcframeworks, but not `SWIFT_INCLUDE_PATHS` — the specific setting the Swift compiler (not the linker) uses to resolve `import ModuleName`.
+  2. CocoaPods' own official documentation for `Pod::Target::BuildSettings` confirms `PODS_XCFRAMEWORKS_BUILD_DIR` ("the configuration intermediate frameworks directory used for building pod targets that contain vendored xcframeworks") is a real, intentional, documented CocoaPods mechanism — not a workaround.
+  - This directly explains why 3.3.2/3.3.3's `DEFINES_MODULE=YES` fix, confirmed correctly applied by 3.3.2's own diagnostic, did nothing: that setting affects how *this* pod's own (nonexistent, vendored-only) source gets compiled, not what a *dependent* target like `rnmapbox-maps` needs to find this pod's already-compiled `.swiftmodule`.
+- **The fix**: `ios/MapboxMaps.podspec` gains `s.user_target_xcconfig = { 'SWIFT_INCLUDE_PATHS' => '"${PODS_XCFRAMEWORKS_BUILD_DIR}/MapboxMaps"' }` — `s.user_target_xcconfig` (not `s.pod_target_xcconfig`) specifically applies to every target that *depends on* this pod (`rnmapbox-maps`, and this project's own `ExpoMapboxNavigation` target), matching exactly what CocoaPods issue #10058 documents as the fix for the identical symptom.
+- **Not yet verified on a real device** — this is the most directly-evidenced fix attempted in this specific "no such module" sub-investigation (two independent, credible external sources matching the exact symptom, versus 3.3.2's single inference), but still unconfirmed until a real build.
+
+### 3.3.4
+**⚠️ Still not confirmed fixed. Extends the diagnostic after a real device build confirmed `DEFINES_MODULE=YES` (3.3.2/3.3.3's fix) did NOT resolve `no such module 'MapboxMaps'` in `rnmapbox-maps`'s own Swift source — same error, identical, on a real `iPhoneOS18.5.sdk` device archive build.**
+
+- **What a real build showed**: `pod install` succeeded (no regression, 3.3.3's fix holds), and the diagnostic confirmed `DEFINES_MODULE = "YES"` was already correctly set on the `MapboxMaps` target. The archive still failed identically: `SwiftEmitModule ... rnmapbox_maps ... no such module 'MapboxMaps'`.
+- **What this rules out**: `DEFINES_MODULE` on the vendored `MapboxMaps` target itself was never the missing piece. For a `vendored_frameworks`-only pod, the xcframework's own embedded module map is what actually exposes it as importable — this setting on the wrapping pod target may simply not be the relevant lever at all.
+- **What was done**: the diagnostic now also inspects the `rnmapbox-maps` pod target directly — the one actually failing to `import MapboxMaps` — printing its `FRAMEWORK_SEARCH_PATHS`, `HEADER_SEARCH_PATHS`, `OTHER_SWIFT_FLAGS`, and its actual Xcode-level target dependency list (specifically checking whether `'MapboxMaps'` appears in it at all). Verified against a simulated Podfile: still exactly one `post_install` block, `do`/`if`/`end` balance confirmed (9 openers, 9 closers).
+- **Not yet verified** — this is diagnostic-only this time, no new fix attempted, since guessing a third fix without seeing `rnmapbox-maps`'s own build settings first would repeat the same mistake as 3.3.2.
+
 ### 3.3.3
 **⚠️ Fixes a real regression introduced in 3.3.2: a real `pod install` run failed immediately with `[!] Invalid Podfile file: Specifying multiple post_install hooks is unsupported.` — 3.3.2's own assumption that CocoaPods runs multiple Podfile-level `post_install do |installer|` blocks in declaration order was wrong. It hard-rejects more than one.**
 

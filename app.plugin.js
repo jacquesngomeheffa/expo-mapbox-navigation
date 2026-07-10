@@ -411,6 +411,26 @@ ext {
         `      puts "[@jacques_gordon/expo-mapbox-navigation] ✅ Re-asserted DEFINES_MODULE=YES on the MapboxMaps target (in case @rnmapbox/maps' own install hook reset it for this vendored-only target)"\n` +
         `    else\n` +
         `      puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'MapboxMaps' in installer.pods_project.targets — the Podfile override may not have taken effect. Check the 'Fetching podspec for MapboxMaps' line earlier in this same pod install log."\n` +
+        `    end\n` +
+        `    # EXTENDED after DEFINES_MODULE alone did not fix a real "no such module\n` +
+        `    # 'MapboxMaps'" compile error in rnmapbox-maps' own Swift source — inspecting\n` +
+        `    # the CONSUMING target (rnmapbox-maps) directly this time, not just our own\n` +
+        `    # vendored MapboxMaps target, since the missing piece is more likely on the\n` +
+        `    # consumer's side (FRAMEWORK_SEARCH_PATHS, or whether it even has a real\n` +
+        `    # target dependency / link relationship pointing at our override at all).\n` +
+        `    rnmapbox_target = installer.pods_project.targets.find { |t| t.name == 'rnmapbox-maps' }\n` +
+        `    if rnmapbox_target\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — 'rnmapbox-maps' pod target (the one failing to import MapboxMaps):"\n` +
+        `      rnmapbox_target.build_configurations.each do |config|\n` +
+        `        %w[FRAMEWORK_SEARCH_PATHS HEADER_SEARCH_PATHS OTHER_SWIFT_FLAGS].each do |key|\n` +
+        `          puts "  [#{config.name}] #{key} = #{config.build_settings[key].inspect}"\n` +
+        `        end\n` +
+        `      end\n` +
+        `      dep_names = rnmapbox_target.dependencies.map { |d| d.name } rescue []\n` +
+        `      puts "  target_dependencies (Xcode-level) = #{dep_names.inspect}"\n` +
+        `      puts "  includes 'MapboxMaps' as a target dependency? #{dep_names.include?('MapboxMaps')}"\n` +
+        `    else\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'rnmapbox-maps' in installer.pods_project.targets — check the actual target name (case/hyphenation may differ) in the Xcode project directly."\n` +
         `    end\n`;
 
       // Anchor on the exact line @rnmapbox/maps' own plugin injects, per
