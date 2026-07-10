@@ -331,6 +331,21 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 3.3.2
+**⚠️ Still not confirmed fixed on a real device. Adds a `post_install` safety net + real diagnostics for the `MapboxMaps` vendored pod target, after a real `pod install` log showed the Podfile override from 3.3.0 working correctly at the resolution level, but `@rnmapbox/maps` separately touching a pod target literally named "MapboxMaps" afterward.**
+
+- **What a real build showed**: the Podfile override from 3.3.0 does work as intended — a real `pod install` log confirmed `Fetching podspec for 'MapboxMaps' from .../ios/MapboxMaps.podspec` and `Installing MapboxMaps (11.20.0)`, i.e. CocoaPods correctly used this package's local override, not trunk. But the very next lines of that same log showed `* [RNMapbox] Changed MapboxMaps to dynamic framework` — `@rnmapbox/maps` separately touches a pod target by that name regardless of where it came from — followed immediately by a real compile error: `no such module 'MapboxMaps'` in `@rnmapbox/maps`'s own `Array+asExpressions.swift`.
+- **Working hypothesis, not confirmed**: `@rnmapbox/maps` most likely registers this via CocoaPods' own `Pod::HooksManager` plugin API from inside its own podspec (no visible Podfile-level `post_install` block triggers it), and that logic likely assumes a normal, source-compiled MapboxMaps pod target (the usual trunk case) — this package's own `ios/MapboxMaps.podspec` is vendored-frameworks-only (no source to compile at all), so the same adjustment applied to it may not behave as intended and could plausibly disrupt how the module gets exposed to dependent targets like `@rnmapbox/maps`'s own Swift sources.
+- **What was done**: a second Podfile injection in `plugin/src/index.js`, a `post_install do |installer| ... end` block appended to the generated Podfile. Podfile-level `post_install` callbacks run after any pod-specific `Pod::HooksManager`-registered hooks (like `@rnmapbox/maps`'s own), so this reliably runs last. It re-asserts `DEFINES_MODULE = 'YES'` on the `MapboxMaps` pod target's build configurations, and — since simply guessing again didn't work last time — also **prints that target's actual resulting build settings** (`MACH_O_TYPE`, `DEFINES_MODULE`, `FRAMEWORK_SEARCH_PATHS`, `BUILD_LIBRARY_FOR_DISTRIBUTION`) for every configuration, so the next attempt has real data instead of another blind patch if this doesn't fully fix it.
+- **Not yet verified** — untested whether `DEFINES_MODULE` alone is the missing piece; the diagnostic output is there specifically in case it isn't.
+
+### 3.3.1
+**Three small corrections to 3.3.0's new `ios/MapboxMaps.podspec`, found before any build was attempted:**
+
+- `s.vendored_frameworks`: changed from `File.join(__dir__, 'Frameworks/MapboxMaps.xcframework')` (an absolute path) to `'Frameworks/MapboxMaps.xcframework'` (relative to the podspec's own location, as CocoaPods requires for this field).
+- `s.summary`: shortened to 101 characters (CocoaPods enforces a practical limit here); the original, more detailed text moved to `s.description` instead, which has no strict length limit.
+- The GitHub Actions workflow name referenced in this podspec's own warning message updated to match its actual current name.
+
 ### 3.3.0
 **⚠️ INCOMPLETE — `ios/Frameworks/` is currently EMPTY, cannot be built or run until the "Build Mapbox Navigation xcframeworks" GitHub Actions workflow is run. The most significant milestone in this entire investigation: the actual, Mapbox-confirmed root cause of the recurring DYLD `Symbol not found: GestureType.singleTap` launch crash, and a real structural fix — not another version pairing guess.**
 
