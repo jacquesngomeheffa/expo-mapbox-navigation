@@ -53,4 +53,36 @@ Pod::Spec.new do |s|
   # binary (which is already compiled) and could reintroduce linkage
   # inconsistencies with @rnmapbox/maps' own expectations for this pod.
   s.static_framework = false
+
+  # FIX for a real, confirmed compile error: "no such module 'MapboxMaps'"
+  # in @rnmapbox/maps' own Swift source, on a real device archive build,
+  # AFTER confirming (via a Podfile post_install diagnostic) that this
+  # pod's own DEFINES_MODULE was already correctly 'YES' — so that was
+  # never the actual missing piece.
+  #
+  # Root cause, confirmed via a real, matching CocoaPods issue
+  # (CocoaPods/CocoaPods#10058 — same symptom: a pure-Swift xcframework
+  # vendored via `vendored_frameworks`, correctly appearing in the
+  # consuming target's Library/Framework Search Paths, but Xcode still
+  # can't find its .swiftmodule) and CocoaPods' own official
+  # documentation for `Pod::Target::BuildSettings` (confirming
+  # `PODS_XCFRAMEWORKS_BUILD_DIR` — "the configuration intermediate
+  # frameworks directory used for building pod targets that contain
+  # vendored xcframeworks" — is a real, intentional CocoaPods mechanism,
+  # not a workaround): CocoaPods sets up FRAMEWORK_SEARCH_PATHS/
+  # HEADER_SEARCH_PATHS automatically for vendored xcframeworks, but NOT
+  # SWIFT_INCLUDE_PATHS — the specific setting the Swift compiler (not
+  # the linker) actually uses to resolve `import ModuleName` for a
+  # dependent target's own Swift source files. This is exactly why
+  # `rnmapbox-maps`'s own `Array+asExpressions.swift` (`import
+  # MapboxMaps`) failed to compile despite CocoaPods otherwise correctly
+  # resolving and linking this pod.
+  #
+  # `s.user_target_xcconfig` (not `s.pod_target_xcconfig`) applies this
+  # to every target that DEPENDS ON this pod — i.e. `rnmapbox-maps` and
+  # this project's own `ExpoMapboxNavigation` target — not to this pod's
+  # own (nonexistent — vendored_frameworks only, no source) build.
+  s.user_target_xcconfig = {
+    'SWIFT_INCLUDE_PATHS' => '"${PODS_XCFRAMEWORKS_BUILD_DIR}/MapboxMaps"',
+  }
 end
