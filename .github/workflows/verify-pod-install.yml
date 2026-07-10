@@ -1,0 +1,107 @@
+name: Verify pod install fetches xcframeworks
+
+# Manual trigger only. This directly answers a real, open question from a
+# real debugging session: does ExpoMapboxNavigation.podspec's own
+# s.prepare_command actually run and populate ios/Frameworks/ during a
+# real `pod install`? A real Navio build log showed zero visible output
+# from this step either way, leaving genuine ambiguity. This workflow
+# builds a minimal synthetic Xcode project (via the `xcodeproj` Ruby gem,
+# already installed alongside CocoaPods on every macOS runner) that
+# includes this package via `pod 'ExpoMapboxNavigation', :path => '.'`,
+# then runs a real `pod install` against it and checks the actual
+# resulting ios/Frameworks/ contents - independent of Navio's own
+# ~184-pod complexity, isolating this one specific question.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: package-under-test
+
+      - name: Select Xcode 16.4
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.4'
+
+      - name: Configure Mapbox downloads credentials
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        run: |
+          if [ -z "$MAPBOX_DOWNLOADS_TOKEN" ]; then
+            echo "::error::MAPBOX_DOWNLOADS_TOKEN secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          cat > ~/.netrc << EOF
+          machine api.mapbox.com
+          login mapbox
+          password $MAPBOX_DOWNLOADS_TOKEN
+          EOF
+          chmod 600 ~/.netrc
+
+      - name: Generate a minimal synthetic Xcode project
+        run: |
+          mkdir -p test-harness
+          cd test-harness
+          ruby -e '
+            require "xcodeproj"
+            require "fileutils"
+
+            project_path = "TestHarness.xcodeproj"
+            project = Xcodeproj::Project.new(project_path)
+
+            target = project.new_target(:application, "TestHarness", :ios, "15.1", nil, :swift)
+
+            group = project.main_group.new_group("TestHarness")
+            source_path = "TestHarness/main.swift"
+            FileUtils.mkdir_p("TestHarness")
+            File.write(source_path, "import UIKit\nprint(\"hello\")\n")
+            file_ref = group.new_file(source_path)
+            target.add_file_references([file_ref])
+
+            project.save
+            puts "Generated #{project_path}"
+          '
+
+      - name: Write Podfile referencing this package via :path
+        run: |
+          cat > test-harness/Podfile << 'EOF'
+          platform :ios, '15.1'
+          use_frameworks! :linkage => :static
+
+          target 'TestHarness' do
+            pod 'ExpoMapboxNavigation', :path => '../package-under-test'
+          end
+          EOF
+          cat test-harness/Podfile
+
+      - name: Run real pod install (verbose, to settle the visibility question directly)
+        working-directory: test-harness
+        run: |
+          pod install --verbose 2>&1 | tee pod_install_full.log
+
+      - name: Check whether ios/Frameworks was actually populated
+        run: |
+          FRAMEWORKS_DIR="package-under-test/ios/Frameworks"
+          echo "Contents of $FRAMEWORKS_DIR:"
+          ls -la "$FRAMEWORKS_DIR" 2>&1 || echo "(directory does not exist)"
+          echo ""
+          if [ -d "$FRAMEWORKS_DIR/MapboxNavigationCore.xcframework" ]; then
+            echo "::notice::MapboxNavigationCore.xcframework was fetched successfully - prepare_command works as intended."
+          else
+            echo "::error::MapboxNavigationCore.xcframework is missing after a real pod install. prepare_command did not do what it was supposed to."
+            exit 1
+          fi
+
+      - name: Upload full pod install log as an artifact (for inspection regardless of pass/fail)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pod-install-verbose-log
+          path: test-harness/pod_install_full.log
+          retention-days: 14

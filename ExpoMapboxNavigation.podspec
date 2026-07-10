@@ -174,22 +174,40 @@ Pod::Spec.new do |s|
   # own Expo config plugin from its `downloadsToken` option (see
   # plugin/src/index.js), which runs during `expo prebuild`, always
   # before `pod install`.
+  # CHANGED from a conditional check (only fetch if ios/Frameworks looks
+  # empty) to an unconditional fetch every time. The conditional's own
+  # bash logic was verified correct (tested directly: `[ -z "$(ls -A
+  # ios/Frameworks 2>/dev/null)" ]` evaluates true for a directory that
+  # doesn't exist at all, which is this package's actual real-world state
+  # - ios/Frameworks isn't committed at all, not even as an empty
+  # directory, per .gitignore), so this wasn't a confirmed bug - but a
+  # real `pod install` log showed zero visible output from this command
+  # either way (nothing between "Installing ExpoMapboxNavigation" and the
+  # next pod), leaving genuine uncertainty about whether it ran at all.
+  # Removing the conditional removes one possible point of failure
+  # outright rather than trying to prove a negative from an ambiguous
+  # log. `ios/fetch-xcframeworks.sh` itself is safe to run repeatedly -
+  # `rm -rf` before each `cp -R` inside it - so this doesn't risk leaving
+  # stale mixed content behind on a second run.
   s.prepare_command = <<-CMD
-    if [ -z "$(ls -A ios/Frameworks 2>/dev/null)" ]; then
-      echo "[ExpoMapboxNavigation] ios/Frameworks is empty - fetching Mapbox Navigation xcframeworks now (this can take several minutes)..."
-      if [ ! -f "ios/fetch-xcframeworks.sh" ]; then
-        echo "error: [ExpoMapboxNavigation] ios/fetch-xcframeworks.sh not found - cannot fetch required binaries."
-        exit 1
-      fi
-      chmod +x ios/fetch-xcframeworks.sh
-      if ! ios/fetch-xcframeworks.sh; then
-        echo ""
-        echo "error: [ExpoMapboxNavigation] Failed to fetch required Mapbox Navigation xcframeworks."
-        echo "       This requires a valid Mapbox DOWNLOADS:READ token in ~/.netrc and network access."
-        echo "       Make sure the downloadsToken option is set in your app.json config plugin entry."
-        echo "       See this package's README for the exact syntax."
-        exit 1
-      fi
+    echo ""
+    echo "================================================================"
+    echo "[ExpoMapboxNavigation] prepare_command starting - fetching Mapbox"
+    echo "Navigation xcframeworks now (this can take several minutes)..."
+    echo "================================================================"
+    if [ ! -f "ios/fetch-xcframeworks.sh" ]; then
+      echo "error: [ExpoMapboxNavigation] ios/fetch-xcframeworks.sh not found - cannot fetch required binaries."
+      exit 1
     fi
+    chmod +x ios/fetch-xcframeworks.sh
+    if ! ios/fetch-xcframeworks.sh; then
+      echo ""
+      echo "error: [ExpoMapboxNavigation] Failed to fetch required Mapbox Navigation xcframeworks."
+      echo "       This requires a valid Mapbox DOWNLOADS:READ token in ~/.netrc and network access."
+      echo "       Make sure the downloadsToken option is set in your app.json config plugin entry."
+      echo "       See this package's README for the exact syntax."
+      exit 1
+    fi
+    echo "[ExpoMapboxNavigation] prepare_command finished successfully."
   CMD
 end
