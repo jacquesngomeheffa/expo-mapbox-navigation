@@ -53,8 +53,19 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
-      - name: Create a real, minimal Expo app
-        run: npx --yes create-expo-app@latest test-harness
+      # CHANGED to pin SDK 53 explicitly, matching Navio's own exact SDK
+      # version. `create-expo-app@latest` (used previously) pulls
+      # whatever the CURRENT latest SDK is - a real, previously
+      # overlooked structural difference: a real Navio build log shows
+      # "Detected expo=53.0.27; not enabling precompiled modules use
+      # because precompiled modules require expo>=55.0.26", while this
+      # workflow's own earlier runs (on a newer default SDK) showed
+      # "[Expo-precompiled] Looking for ExpoModulesCore.xcframework
+      # at..." - meaning this workflow had been validating a
+      # "precompiled modules" build path Navio doesn't even use. Pinning
+      # to SDK 53 makes this an actual apples-to-apples comparison.
+      - name: Create a real, minimal Expo app (pinned to SDK 53, matching Navio)
+        run: npx --yes create-expo-app@latest test-harness --template default@sdk-53
 
       # CHANGED after a real run confirmed `expo prebuild` failed with
       # "PluginError: Cannot find module '@expo/config-plugins'" trying to
