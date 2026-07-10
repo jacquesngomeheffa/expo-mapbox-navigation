@@ -81,7 +81,22 @@ jobs:
           echo "Installing $TARBALL"
           npm install "$TARBALL"
 
-      - name: Configure app.json with this package's plugin
+      # CHANGED after a real run failed with a real, concrete version
+      # conflict: "ExpoMapboxNavigation... depends on MapboxMaps (=
+      # 11.20.2)" vs "rnmapbox-maps (10.3.2)... depends on MapboxMaps (~>
+      # 11.23.1)". This package's own package.json declares
+      # `"@rnmapbox/maps": ">=10.1.0"` as a peerDependency, which is why
+      # npm auto-installed it (the latest satisfying version) even though
+      # this workflow never explicitly added it - but without also
+      # configuring @rnmapbox/maps' own `RNMapboxMapsVersion` plugin
+      # option (its own official mechanism for overriding its default/
+      # latest-compatible MapboxMaps requirement), it fell back to
+      # whatever its own latest default is, which no longer matches our
+      # exact pin. A correctly configured real app (this one's own
+      # RNMapboxMapsVersion should match ExpoMapboxNavigation.podspec's
+      # own MapboxMaps pin exactly) needs this override - this workflow
+      # was missing it, not necessarily Navio.
+      - name: Configure app.json with this package's plugin AND @rnmapbox/maps' RNMapboxMapsVersion override
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
         working-directory: test-harness
@@ -93,11 +108,21 @@ jobs:
             config.expo.ios.bundleIdentifier = "com.example.testharness";
             config.expo.plugins = config.expo.plugins || [];
             config.expo.plugins.push([
+              "@rnmapbox/maps",
+              {
+                RNMapboxMapsVersion: "11.20.2",
+              },
+            ]);
+            config.expo.plugins.push([
               "@jacques_gordon/expo-mapbox-navigation",
               {
                 accessToken: "pk.placeholder",
                 downloadsToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
               },
+            ]);
+            fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
+            console.log(JSON.stringify(config, null, 2));
+          '
             ]);
             fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
             console.log(JSON.stringify(config, null, 2));
