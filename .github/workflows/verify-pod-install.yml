@@ -4,13 +4,17 @@ name: Verify pod install fetches xcframeworks
 # real debugging session: does ExpoMapboxNavigation.podspec's own
 # s.prepare_command actually run and populate ios/Frameworks/ during a
 # real `pod install`? A real Navio build log showed zero visible output
-# from this step either way, leaving genuine ambiguity. This workflow
-# builds a minimal synthetic Xcode project (via the `xcodeproj` Ruby gem,
-# already installed alongside CocoaPods on every macOS runner) that
-# includes this package via `pod 'ExpoMapboxNavigation', :path => '.'`,
-# then runs a real `pod install` against it and checks the actual
-# resulting ios/Frameworks/ contents - independent of Navio's own
-# ~184-pod complexity, isolating this one specific question.
+# from this step either way, leaving genuine ambiguity.
+#
+# REDESIGNED after two failed attempts at hand-reconstructing a minimal
+# Podfile from scratch, each revealing another missing piece of Expo's
+# own CocoaPods integration (ExpoModulesCore isn't a public CocoaPods
+# trunk pod; its own podspec needs a custom `Pod::Expo` Ruby constant
+# that only `use_expo_modules!` sets up). Rather than continue chasing
+# these one at a time, this now generates a REAL, minimal Expo app via
+# `create-expo-app` and runs REAL `expo prebuild`, so Expo's own tooling
+# produces the Podfile - guaranteed to match what EAS Build actually
+# does, not this project's own approximation of it.
 on:
   workflow_dispatch:
 
@@ -49,63 +53,47 @@ jobs:
           EOF
           chmod 600 ~/.netrc
 
-      - name: Generate a minimal synthetic Xcode project
+      - name: Create a real, minimal Expo app
+        run: npx --yes create-expo-app@latest test-harness
+
+      - name: Add this package as a local dependency
+        working-directory: test-harness
+        run: npm install ../package-under-test
+
+      - name: Configure app.json with this package's plugin
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        working-directory: test-harness
         run: |
-          mkdir -p test-harness
-          cd test-harness
-          ruby -e '
-            require "xcodeproj"
-            require "fileutils"
-
-            project_path = "TestHarness.xcodeproj"
-            project = Xcodeproj::Project.new(project_path)
-
-            target = project.new_target(:application, "TestHarness", :ios, "15.1", nil, :swift)
-
-            group = project.main_group.new_group("TestHarness")
-            source_path = "TestHarness/main.swift"
-            FileUtils.mkdir_p("TestHarness")
-            File.write(source_path, "import UIKit\nprint(\"hello\")\n")
-            file_ref = group.new_file(source_path)
-            target.add_file_references([file_ref])
-
-            project.save
-            puts "Generated #{project_path}"
+          node -e '
+            const fs = require("fs");
+            const config = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            config.expo.ios = config.expo.ios || {};
+            config.expo.ios.bundleIdentifier = "com.example.testharness";
+            config.expo.plugins = config.expo.plugins || [];
+            config.expo.plugins.push([
+              "@jacques_gordon/expo-mapbox-navigation",
+              {
+                accessToken: "pk.placeholder",
+                downloadsToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
+              },
+            ]);
+            fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
+            console.log(JSON.stringify(config, null, 2));
           '
 
-      # CHANGED after a real run confirmed `pod install` failed at
-      # dependency resolution, before ever reaching prepare_command:
-      # "[!] Unable to find a specification for `ExpoModulesCore`
-      # depended upon by `ExpoMapboxNavigation`". ExpoModulesCore isn't a
-      # public CocoaPods trunk pod - a real Expo project only resolves it
-      # via `use_expo_modules!`, which points at the real podspec inside
-      # `node_modules/expo-modules-core`. The minimal Podfile below needs
-      # that same real file to test anything meaningful past this point.
-      - name: npm install expo-modules-core (for its real .podspec)
+      - name: Run expo prebuild (generates the real Podfile, exactly like EAS Build)
         working-directory: test-harness
-        run: npm install expo-modules-core --no-save
-
-      - name: Write Podfile referencing this package via :path
-        run: |
-          cat > test-harness/Podfile << 'EOF'
-          platform :ios, '15.1'
-          use_frameworks! :linkage => :static
-
-          target 'TestHarness' do
-            pod 'ExpoModulesCore', :path => 'node_modules/expo-modules-core'
-            pod 'ExpoMapboxNavigation', :path => '../package-under-test'
-          end
-          EOF
-          cat test-harness/Podfile
+        run: npx expo prebuild --platform ios --no-install
 
       - name: Run real pod install (verbose, to settle the visibility question directly)
-        working-directory: test-harness
+        working-directory: test-harness/ios
         run: |
           pod install --verbose 2>&1 | tee pod_install_full.log
 
       - name: Check whether ios/Frameworks was actually populated
         run: |
-          FRAMEWORKS_DIR="package-under-test/ios/Frameworks"
+          FRAMEWORKS_DIR="test-harness/node_modules/@jacques_gordon/expo-mapbox-navigation/ios/Frameworks"
           echo "Contents of $FRAMEWORKS_DIR:"
           ls -la "$FRAMEWORKS_DIR" 2>&1 || echo "(directory does not exist)"
           echo ""
@@ -121,5 +109,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pod-install-verbose-log
-          path: test-harness/pod_install_full.log
+          path: test-harness/ios/pod_install_full.log
           retention-days: 14
