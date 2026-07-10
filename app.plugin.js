@@ -399,38 +399,64 @@ ext {
 
       const ourLines =
         `    ${MARKER}\n` +
-        `    mapboxmaps_target = installer.pods_project.targets.find { |t| t.name == 'MapboxMaps' }\n` +
-        `    if mapboxmaps_target\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — 'MapboxMaps' pod target build settings after all install hooks have run:"\n` +
-        `      mapboxmaps_target.build_configurations.each do |config|\n` +
-        `        config.build_settings['DEFINES_MODULE'] = 'YES'\n` +
-        `        %w[MACH_O_TYPE DEFINES_MODULE FRAMEWORK_SEARCH_PATHS BUILD_LIBRARY_FOR_DISTRIBUTION].each do |key|\n` +
-        `          puts "  [#{config.name}] #{key} = #{config.build_settings[key].inspect}"\n` +
+        `    # REDESIGNED after a real pod install log showed FRAMEWORK_SEARCH_PATHS = nil\n` +
+        `    # on BOTH the 'MapboxMaps' and 'rnmapbox-maps' targets via the previous\n` +
+        `    # version of this diagnostic (target.build_configurations.each { |c|\n` +
+        `    # c.build_settings[...] }). That's very likely a flaw in the diagnostic\n` +
+        `    # itself, not a real bug: CocoaPods typically delivers these settings via a\n` +
+        `    # separate GENERATED .xcconfig FILE the target references (a\n` +
+        `    # baseConfigurationReference), not by writing them directly into the\n` +
+        `    # target's own build_settings hash — so reading that hash was very likely\n` +
+        `    # never going to show the real, effective values Xcode actually uses.\n` +
+        `    # This version reads the REAL generated .xcconfig file content from disk\n` +
+        `    # instead, via Pod::PodTarget#xcconfig_path (a real CocoaPods API), which\n` +
+        `    # is what Xcode itself actually includes at build time.\n` +
+        `    mapboxmaps_pod_target = installer.pod_targets.find { |t| t.pod_name == 'MapboxMaps' }\n` +
+        `    rnmapbox_pod_target = installer.pod_targets.find { |t| t.pod_name == 'rnmapbox-maps' }\n` +
+        `    [['MapboxMaps', mapboxmaps_pod_target], ['rnmapbox-maps', rnmapbox_pod_target]].each do |label, pod_target|\n` +
+        `      if pod_target.nil?\n` +
+        `        puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a Pod::PodTarget named '#{label}' via installer.pod_targets."\n` +
+        `        next\n` +
+        `      end\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — real generated .xcconfig content for '#{label}':"\n` +
+        `      pod_target.user_build_configurations.each_key do |config_name|\n` +
+        `        xcconfig_path = pod_target.xcconfig_path(config_name) rescue nil\n` +
+        `        if xcconfig_path && File.exist?(xcconfig_path)\n` +
+        `          puts "  [#{config_name}] #{xcconfig_path}:"\n` +
+        `          File.readlines(xcconfig_path).each do |line|\n` +
+        `            if line =~ /FRAMEWORK_SEARCH_PATHS|HEADER_SEARCH_PATHS|SWIFT_INCLUDE_PATHS|DEFINES_MODULE|#include/\n` +
+        `              puts "    #{line.strip}"\n` +
+        `            end\n` +
+        `          end\n` +
+        `        else\n` +
+        `          puts "  [#{config_name}] no xcconfig file found at #{xcconfig_path.inspect}"\n` +
         `        end\n` +
         `      end\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] ✅ Re-asserted DEFINES_MODULE=YES on the MapboxMaps target (in case @rnmapbox/maps' own install hook reset it for this vendored-only target)"\n` +
-        `    else\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'MapboxMaps' in installer.pods_project.targets — the Podfile override may not have taken effect. Check the 'Fetching podspec for MapboxMaps' line earlier in this same pod install log."\n` +
         `    end\n` +
-        `    # EXTENDED after DEFINES_MODULE alone did not fix a real "no such module\n` +
-        `    # 'MapboxMaps'" compile error in rnmapbox-maps' own Swift source — inspecting\n` +
-        `    # the CONSUMING target (rnmapbox-maps) directly this time, not just our own\n` +
-        `    # vendored MapboxMaps target, since the missing piece is more likely on the\n` +
-        `    # consumer's side (FRAMEWORK_SEARCH_PATHS, or whether it even has a real\n` +
-        `    # target dependency / link relationship pointing at our override at all).\n` +
-        `    rnmapbox_target = installer.pods_project.targets.find { |t| t.name == 'rnmapbox-maps' }\n` +
-        `    if rnmapbox_target\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — 'rnmapbox-maps' pod target (the one failing to import MapboxMaps):"\n` +
-        `      rnmapbox_target.build_configurations.each do |config|\n` +
-        `        %w[FRAMEWORK_SEARCH_PATHS HEADER_SEARCH_PATHS OTHER_SWIFT_FLAGS].each do |key|\n` +
-        `          puts "  [#{config.name}] #{key} = #{config.build_settings[key].inspect}"\n` +
+        `    # FIX, based on the diagnostic above: a real pod install log confirmed\n` +
+        `    # 'MapboxMaps' never appears anywhere in rnmapbox-maps' own real, generated\n` +
+        `    # FRAMEWORK_SEARCH_PATHS (Turf, a sibling Mapbox pod, DOES appear there —\n` +
+        `    # via \"\${PODS_XCFRAMEWORKS_BUILD_DIR}/Turf\" — confirming this IS the correct\n` +
+        `    # variable/pattern in this exact project; MapboxMaps specifically is just\n` +
+        `    # missing from it). CocoaPods normally wires this up automatically for a\n` +
+        `    # pod's dependents, but apparently doesn't for this :podspec-overridden pod\n` +
+        `    # — rather than continue guessing why, this directly appends the missing\n` +
+        `    # entry to rnmapbox-maps' own real xcconfig file(s) on disk.\n` +
+        `    if rnmapbox_pod_target\n` +
+        `      rnmapbox_pod_target.user_build_configurations.each_key do |config_name|\n` +
+        `        xcconfig_path = rnmapbox_pod_target.xcconfig_path(config_name) rescue nil\n` +
+        `        next unless xcconfig_path && File.exist?(xcconfig_path)\n` +
+        `        contents = File.read(xcconfig_path)\n` +
+        `        if contents =~ /^FRAMEWORK_SEARCH_PATHS\\s*=.*MapboxMaps/\n` +
+        `          puts "[@jacques_gordon/expo-mapbox-navigation] ✅ [#{config_name}] rnmapbox-maps' xcconfig already references MapboxMaps — no patch needed."\n` +
+        `        elsif contents =~ /^FRAMEWORK_SEARCH_PATHS\\s*=.*$/\n` +
+        `          patched = contents.sub(/^(FRAMEWORK_SEARCH_PATHS\\s*=.*)$/) { "#{$1} \\"\${PODS_XCFRAMEWORKS_BUILD_DIR}/MapboxMaps\\"" }\n` +
+        `          File.write(xcconfig_path, patched)\n` +
+        `          puts "[@jacques_gordon/expo-mapbox-navigation] ✅ [#{config_name}] Patched rnmapbox-maps' xcconfig — appended MapboxMaps to FRAMEWORK_SEARCH_PATHS."\n` +
+        `        else\n` +
+        `          puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  [#{config_name}] No FRAMEWORK_SEARCH_PATHS line found in rnmapbox-maps' xcconfig at all — could not patch. File: #{xcconfig_path}"\n` +
         `        end\n` +
         `      end\n` +
-        `      dep_names = rnmapbox_target.dependencies.map { |d| d.name } rescue []\n` +
-        `      puts "  target_dependencies (Xcode-level) = #{dep_names.inspect}"\n` +
-        `      puts "  includes 'MapboxMaps' as a target dependency? #{dep_names.include?('MapboxMaps')}"\n` +
-        `    else\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'rnmapbox-maps' in installer.pods_project.targets — check the actual target name (case/hyphenation may differ) in the Xcode project directly."\n` +
         `    end\n`;
 
       // Anchor on the exact line @rnmapbox/maps' own plugin injects, per
