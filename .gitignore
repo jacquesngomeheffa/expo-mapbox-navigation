@@ -1,1 +1,17 @@
 node_modules
+
+# Mapbox iOS xcframeworks — deliberately NOT committed to this repo.
+#
+# Mapbox's Product Terms ("1.10. No Redistribution") prohibit redistributing
+# their SDK binaries to third parties who haven't authenticated with their
+# own Mapbox account/token. Since this repository is public, committing
+# these binaries (fetched using OUR OWN Mapbox DOWNLOADS:READ token) would
+# make them freely downloadable by anyone via `git clone`, without their
+# own token — a real compliance risk, not just a repo-size concern.
+#
+# Instead, the CONSUMING app fetches them itself, using its own token, at
+# `pod install` time — see ExpoMapboxNavigation.podspec's
+# `s.prepare_command` and ios/fetch-xcframeworks.sh. This matches the
+# same approach used by other public Mapbox Navigation + React Native
+# packages (e.g. pawan-pk/react-native-mapbox-navigation).
+ios/Frameworks/*.xcframework

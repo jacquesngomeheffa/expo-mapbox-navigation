@@ -14,15 +14,14 @@ Pod::Spec.new do |s|
   # Confirmed directly from a Mapbox engineer on their own issue tracker
   # (mapbox/mapbox-maps-ios#1669): MapboxMaps 11.20.0 requires iOS 15.1 —
   # our own target must match or exceed that, since our vendored
-  # MapboxNavigationCore/UIKit/MapboxMaps frameworks all require it.
+  # MapboxNavigationCore/UIKit frameworks require it.
   s.platforms      = { :ios => '15.1' }
   s.swift_version  = '5.9'
   s.source         = { git: package['repository']['url'], tag: "v#{s.version}" }
 
   s.dependency 'ExpoModulesCore'
 
-  # ── Sibling Mapbox pods — MapboxCommon/MapboxCoreMaps/Turf still come
-  #    from CocoaPods (via @rnmapbox/maps); MapboxMaps does NOT anymore ────
+  # ── Sibling Mapbox pods — all come from CocoaPods (via @rnmapbox/maps) ────
   #
   # Our vendored MapboxNavigationCore/MapboxDirections frameworks' private
   # Swift interfaces (.private.swiftinterface) import MapboxCommon_Private
@@ -32,62 +31,76 @@ Pod::Spec.new do |s|
   # against our vendored frameworks — even though @rnmapbox/maps already
   # installs these same pods elsewhere in the project.
   #
-  # `MapboxMaps` is intentionally NOT declared here anymore. It is vendored
-  # directly (see s.vendored_frameworks below, and ios/MapboxMaps.podspec /
-  # plugin/src/index.js for the Podfile override that makes @rnmapbox/maps'
-  # own dependency resolve to that same vendored copy) — confirmed directly
-  # from a Mapbox engineer on their own issue tracker
-  # (mapbox/mapbox-maps-ios#1669): MapboxMaps as distributed via CocoaPods
-  # trunk is built WITHOUT BUILD_LIBRARY_FOR_DISTRIBUTION=YES, so "some
-  # symbols are stripped from the binary" — causing a real, confirmed DYLD
-  # "Symbol not found: GestureType.singleTap" launch crash whenever a
-  # separately-compiled framework (our own vendored MapboxNavigationCore)
-  # depends on it, regardless of version pairing or which channel built
-  # MapboxNavigationCore itself (proven with real crash-report binary
-  # UUIDs — even a from-source Scipio build hit this identically). The fix
-  # is to vendor MapboxMaps from mapbox-maps-ios-binary instead — a
-  # separate, official Mapbox repo built WITH that flag — and to make sure
-  # it's the only copy of MapboxMaps that ends up in the app (see the
-  # Podfile override).
+  # ⚠️ REVERTED from vendoring MapboxMaps.xcframework directly (from
+  # mapbox-maps-ios-binary) + a Podfile-level override forcing
+  # @rnmapbox/maps to use that copy. That approach targeted a real,
+  # confirmed root cause (mapbox/mapbox-maps-ios#1669: CocoaPods-trunk
+  # MapboxMaps lacks BUILD_LIBRARY_FOR_DISTRIBUTION, causing a DYLD
+  # missing-symbol crash) — but the override itself broke CocoaPods'
+  # automatic `[CP] Copy XCFrameworks` build phase generation for that
+  # specific pod (confirmed via a real build log: the phase ran for every
+  # sibling Mapbox pod except the overridden one), causing a persistent
+  # "no such module 'MapboxMaps'" compile error that several rounds of
+  # manual xcconfig patching couldn't fully resolve.
   #
-  # ⚠️ MAINTAINER: MAPBOX_NAV_VERSION/MAPBOX_MAPS_VERSION in
-  # ios/fetch-xcframeworks.sh, ios/MapboxMaps.podspec's own `s.version`,
-  # and s.platforms above must all be updated together whenever the
-  # vendored SDK version is bumped — see "Upgrading the vendored iOS SDK
-  # version" in README.md.
+  # Reverted to a plain `s.dependency` here instead, relying on
+  # CocoaPods' own natural pod-name deduplication with @rnmapbox/maps'
+  # own dependency on 'MapboxMaps' — matching a real, confirmed-working
+  # reference implementation
+  # (stefanpavlovic-tech/react-native-mapbox-navigation, commit 6ede7e1 —
+  # "Verified: headless xcodebuild link BUILD SUCCEEDED, zero duplicate
+  # symbols, all 10 Mapbox/nav frameworks embedded exactly once").
+  #
+  # ⚠️ HONEST CAVEAT: that reference implementation's own verification
+  # was about the BUILD succeeding, not about confirmed crash-free
+  # behavior on a real device. The original DYLD "Symbol not found:
+  # GestureType.singleTap" launch crash this whole investigation started
+  # from was never confirmed fixed by this specific change, and this
+  # reversion could plausibly reintroduce it. This reversion's goal is
+  # narrower: get past the currently-blocking compile-time error first.
+  #
+  # ⚠️ MAINTAINER: this value MUST be updated together with
+  # MAPBOX_NAV_VERSION in ios/fetch-xcframeworks.sh, the consuming app's
+  # `RNMapboxMapsVersion`, and s.platforms above, whenever the vendored
+  # SDK version is bumped — see "Upgrading the vendored iOS SDK version"
+  # in README.md.
   s.dependency 'MapboxCommon'
   s.dependency 'MapboxCoreMaps'
+  s.dependency 'MapboxMaps', '11.20.0'
   s.dependency 'Turf'
 
-  # ── iOS: Mapbox Navigation SDK v3 + MapboxMaps, via VENDORED XCFRAMEWORKS ──
+  # ── iOS: Mapbox Navigation SDK v3, via VENDORED XCFRAMEWORKS ───────────────
   #
   # Mapbox Navigation SDK v3 is distributed as SOURCE CODE via SPM only — it
   # has no CocoaPods support. So: ios/Frameworks/*.xcframework are fetched
   # ONCE (see ios/fetch-xcframeworks.sh — downloads official precompiled
-  # binaries from mapbox-navigation-ios-build-artifacts for the
-  # Navigation-specific frameworks, and from mapbox-maps-ios-binary for
-  # MapboxMaps itself) and committed to this package.
+  # binaries from mapbox-navigation-ios-build-artifacts) and committed to
+  # this package.
   #
-  # MapboxMaps.xcframework is fetched into this same ios/Frameworks/
-  # directory (see ios/fetch-xcframeworks.sh) but is deliberately EXCLUDED
-  # from this glob — it's vendored exclusively by the separate
-  # ios/MapboxMaps.podspec (pod name 'MapboxMaps', not 'ExpoMapboxNavigation'),
-  # activated via the Podfile override in plugin/src/index.js. Letting
-  # BOTH this pod's own vendored_frameworks AND the separate MapboxMaps
-  # pod vendor the exact same physical .xcframework file would link it
-  # twice into the final app — reintroducing the exact duplicate-symbol
-  # problem this whole architecture exists to avoid. See the comment on
-  # the removed `s.dependency 'MapboxMaps'` line above for the full
-  # reasoning on why MapboxMaps is handled this way at all.
-  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework'))
-    .reject { |f| File.basename(f) == 'MapboxMaps.xcframework' }
-    .map { |f| f.sub("#{__dir__}/", '') }
+  # IMPORTANT — do NOT vendor MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf
+  # here. @rnmapbox/maps already installs those via CocoaPods, and
+  # MapboxNavigationCore.xcframework is built to link against that SAME
+  # version (kept in sync — see ios/fetch-xcframeworks.sh for the
+  # version-alignment requirement). Vendoring a second copy of those
+  # specific frameworks would reintroduce duplicate-symbol errors, per the
+  # exact guidance a Mapbox engineer gave for this same scenario on
+  # mapbox/mapbox-navigation-ios#4703.
+  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework')).map { |f| f.sub("#{__dir__}/", '') }
 
-  s.source_files = 'ios/**/*.{swift,h,m,mm}'
-  s.exclude_files = [
-    'ios/fetch-xcframeworks.sh',
-    'ios/Frameworks/*.xcframework/**/*.h',
-  ]
+  # ⚠️ CHANGED from a recursive glob (`ios/**/*.{swift,h,m,mm}`) to a
+  # non-recursive one, matching a real, confirmed-working reference
+  # implementation's own fix for a real bug: a recursive source_files
+  # glob COMBINED WITH an exclude_files pattern targeting
+  # ios/Frameworks/*.xcframework/**/*.h can cause CocoaPods to strip the
+  # vendored frameworks themselves too (it applies exclude_files broadly),
+  # producing a "no such module" error for a vendored framework —
+  # confirmed by stefanpavlovic-tech/react-native-mapbox-navigation's own
+  # commit 6ede7e1 fixing exactly this. This project's own Swift/ObjC
+  # source all lives directly under ios/ (not nested in subdirectories),
+  # so a non-recursive glob covers everything needed without ever
+  # descending into ios/Frameworks/ at all — removing the need for
+  # exclude_files entirely.
+  s.source_files = 'ios/*.{swift,h,m,mm}'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'             => 'YES',
@@ -127,11 +140,41 @@ Pod::Spec.new do |s|
     'ENABLE_TESTABILITY' => 'NO',
   }
 
+  # ⚠️ CHANGED: this now actually FETCHES the required xcframeworks (via
+  # ios/fetch-xcframeworks.sh) instead of just warning that they're
+  # missing. ios/Frameworks/*.xcframework is no longer committed to this
+  # package's repo or npm tarball (see .gitignore and package.json's
+  # "files" — both updated together with this change) — Mapbox's own
+  # Product Terms ("1.10. No Redistribution") prohibit redistributing
+  # their SDK binaries to third parties who haven't authenticated with
+  # their own Mapbox account/token, and this repository is public.
+  # Instead, whichever app actually consumes this package fetches these
+  # binaries itself, using ITS OWN Mapbox DOWNLOADS:READ token, right here
+  # at `pod install` time — matching the same approach used by other
+  # public Mapbox Navigation + React Native packages (e.g.
+  # pawan-pk/react-native-mapbox-navigation).
+  #
+  # Requires: network access, and a valid ~/.netrc with Mapbox
+  # DOWNLOADS:READ credentials — written automatically by this package's
+  # own Expo config plugin from its `downloadsToken` option (see
+  # plugin/src/index.js), which runs during `expo prebuild`, always
+  # before `pod install`.
   s.prepare_command = <<-CMD
     if [ -z "$(ls -A ios/Frameworks 2>/dev/null)" ]; then
-      echo "warning: ios/Frameworks is empty — the xcframeworks have not been built yet."
-      echo "         Run the 'Build Mapbox Navigation xcframeworks' GitHub Actions"
-      echo "         workflow and merge its output branch before publishing this package."
+      echo "[ExpoMapboxNavigation] ios/Frameworks is empty — fetching Mapbox Navigation xcframeworks now (this can take several minutes)..."
+      if [ ! -f "ios/fetch-xcframeworks.sh" ]; then
+        echo "error: [ExpoMapboxNavigation] ios/fetch-xcframeworks.sh not found — cannot fetch required binaries."
+        exit 1
+      fi
+      chmod +x ios/fetch-xcframeworks.sh
+      if ! ios/fetch-xcframeworks.sh; then
+        echo ""
+        echo "error: [ExpoMapboxNavigation] Failed to fetch required Mapbox Navigation xcframeworks."
+        echo "       This requires a valid Mapbox DOWNLOADS:READ token in ~/.netrc and network access."
+        echo "       Make sure the downloadsToken option is set in your app.json config plugin entry."
+        echo "       See this package's README for the exact syntax."
+        exit 1
+      fi
     fi
   CMD
 end

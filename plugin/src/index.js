@@ -13,13 +13,12 @@ const withMapboxNavigation = (config, options = {}) => {
   const {
     accessToken,
     downloadsToken,
-    // Android-only, and even more strictly so now than before: iOS's
-    // MapboxMaps version is fully determined by ios/fetch-xcframeworks.sh's
-    // own MAPBOX_MAPS_VERSION constant (vendored directly — see
-    // ExpoMapboxNavigation.podspec and ios/MapboxMaps.podspec) and is not
-    // affected by this option in any way. Left at its historical default;
-    // Android's own version story is separate and untouched by the
-    // MapboxMaps-vendoring work described elsewhere in this file.
+    // Android-only. iOS's MapboxMaps version is hardcoded directly in
+    // ExpoMapboxNavigation.podspec's own `s.dependency 'MapboxMaps', ...`
+    // line, independent of this option — see that podspec's own comments
+    // for why (a consumer overriding this to an arbitrary value could
+    // request a version incompatible with this package's vendored
+    // Navigation binaries).
     mapboxMapsVersion = '11.11.0',
     // Android only (see calculateAndroidNavVersion below / withProjectBuildGradle
     // mod). If set, used EXACTLY as given — no auto-calculation, no safety
@@ -211,12 +210,14 @@ ext {
   });
 
   // ── iOS: .netrc for Mapbox downloads authentication ───────────────────────
-  // NOTE: as of the vendored-xcframeworks architecture, this is no longer
-  // needed at app-build time (the Mapbox Navigation binaries are pre-built
-  // once via GitHub Actions and committed to this package — no live SPM
-  // resolution happens during `pod install` or `xcodebuild` anymore).
-  // Left in place, harmless, in case other tooling still expects it, and to
-  // avoid a breaking change to the `downloadsToken` option's behavior.
+  // REQUIRED again as of the on-demand-fetch architecture: this package's
+  // own xcframeworks are no longer committed to its npm package/git repo
+  // (see ExpoMapboxNavigation.podspec's s.prepare_command and
+  // ios/fetch-xcframeworks.sh) — they're downloaded directly into the
+  // CONSUMING app's own ios/Frameworks/ during that app's own `pod
+  // install`, which needs valid Mapbox DOWNLOADS:READ credentials at that
+  // point. Written during `expo prebuild`, which always runs before `pod
+  // install` in a normal build flow, so this is in place in time.
   config = withDangerousMod(config, [
     'ios',
     (mod) => {
@@ -231,272 +232,6 @@ ext {
         fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
         console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote Mapbox credentials to ~/.netrc');
       }
-      return mod;
-    },
-  ]);
-
-  // ── iOS: Podfile override — force MapboxMaps to resolve to our vendored
-  //    copy project-wide, not CocoaPods trunk ─────────────────────────────
-  //
-  // THE ACTUAL FIX for a DYLD "Symbol not found: GestureType.singleTap"
-  // launch crash that this whole investigation chased for a very long
-  // time, through many wrong turns (different SDK version pairings,
-  // rewriting this project's own Swift source, building MapboxNavigationCore
-  // from source via Scipio instead of downloading it — none of which
-  // touched the real cause).
-  //
-  // Confirmed directly from a Mapbox engineer on their own issue tracker
-  // (mapbox/mapbox-maps-ios#1669), not this project's own theory: MapboxMaps
-  // as distributed via CocoaPods trunk is built WITHOUT
-  // BUILD_LIBRARY_FOR_DISTRIBUTION=YES, so "some symbols are stripped from
-  // the binary" — and "In the scenario where a third party compiled
-  // framework would also depend on the MapboxMaps module, the build would
-  // fail (missing symbols)... a runtime error if the framework is dynamic."
-  // Our own vendored MapboxNavigationCore.xcframework (see
-  // ExpoMapboxNavigation.podspec) is exactly that "third party compiled
-  // framework" — it depends on MapboxMaps' full witness tables (library
-  // evolution). This was proven with real crash-report binary UUIDs: even
-  // a from-source Scipio build of MapboxNavigationCore, linked against the
-  // EXACT same MapboxMaps version CocoaPods installs, crashed identically —
-  // the mismatch was never about how MapboxNavigationCore itself gets
-  // built, only about which MapboxMaps binary it links against at runtime.
-  //
-  // ios/fetch-xcframeworks.sh now ALSO vendors MapboxMaps.xcframework
-  // itself, from mapbox-maps-ios-binary — a separate, official Mapbox repo
-  // built WITH BUILD_LIBRARY_FOR_DISTRIBUTION=YES specifically for this
-  // kind of use case. But vendoring it in THIS package alone isn't
-  // sufficient: @rnmapbox/maps' own podspec unconditionally declares its
-  // own `s.dependency 'MapboxMaps'`, which CocoaPods would otherwise
-  // resolve from trunk regardless of what we vendor — producing a SECOND,
-  // different MapboxMaps binary linked into the same app (a duplicate-
-  // symbol risk, not the missing-symbol crash this specific fix targets,
-  // but a real problem of its own).
-  //
-  // The fix: CocoaPods resolves exactly ONE version/source per pod name
-  // across an entire Podfile. An explicit `pod 'MapboxMaps', :podspec =>
-  // '...'` declaration in the Podfile itself takes precedence over what
-  // any dependency (including @rnmapbox/maps) implicitly requests from
-  // trunk — so inserting this line, pointing at ios/MapboxMaps.podspec
-  // (a small local podspec in THIS package that vendors the same
-  // fetch-xcframeworks.sh-downloaded binary), makes @rnmapbox/maps'
-  // own dependency resolve to our vendored copy too. One MapboxMaps
-  // binary in the final app, not two.
-  //
-  // Inserted right before `use_expo_modules!`/`use_native_modules!` — the
-  // standard entry point in Expo-generated Podfiles, and early enough that
-  // CocoaPods locks onto this declaration before any other pod (including
-  // @rnmapbox/maps itself) gets a chance to request its own resolution.
-  config = withDangerousMod(config, [
-    'ios',
-    (mod) => {
-      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
-      if (!fs.existsSync(podfilePath)) {
-        console.warn(
-          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Podfile not found at ' +
-            podfilePath +
-            ' — could not insert the MapboxMaps override. This will likely cause a ' +
-            'duplicate-symbol or missing-symbol crash — see this mod\'s own comment for why.'
-        );
-        return mod;
-      }
-
-      let podfileContent = fs.readFileSync(podfilePath, 'utf8');
-      const MARKER = '# @jacques_gordon/expo-mapbox-navigation: MapboxMaps override';
-      if (podfileContent.includes(MARKER)) {
-        // Already inserted by a previous prebuild — idempotent, do nothing.
-        return mod;
-      }
-
-      const overrideLine =
-        `${MARKER}\n` +
-        `  pod 'MapboxMaps', :podspec => '../node_modules/@jacques_gordon/expo-mapbox-navigation/ios/MapboxMaps.podspec'\n`;
-
-      const anchorPattern = /^\s*use_(expo|native)_modules!.*$/m;
-      if (anchorPattern.test(podfileContent)) {
-        podfileContent = podfileContent.replace(anchorPattern, (match) => `${overrideLine}${match}`);
-      } else {
-        console.warn(
-          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find use_expo_modules!/' +
-            'use_native_modules! in the generated Podfile to anchor the MapboxMaps override — ' +
-            'the Podfile\'s own structure may have changed. Inspect ' +
-            podfilePath +
-            ' manually and update this mod\'s anchorPattern accordingly.'
-        );
-        return mod;
-      }
-
-      fs.writeFileSync(podfilePath, podfileContent);
-      console.log(
-        '[@jacques_gordon/expo-mapbox-navigation] ✅ Inserted MapboxMaps Podfile override — ' +
-          '@rnmapbox/maps will now resolve MapboxMaps to our vendored copy instead of CocoaPods trunk'
-      );
-      return mod;
-    },
-  ]);
-
-  // ── iOS: post_install safety net for the vendored MapboxMaps target ──────
-  //
-  // Confirmed via a real `pod install` log: the Podfile override above DOES
-  // work as intended — CocoaPods correctly fetches our local
-  // `ios/MapboxMaps.podspec` ("Fetching podspec for `MapboxMaps` from
-  // .../ios/MapboxMaps.podspec", "Installing MapboxMaps (11.20.0)").
-  //
-  // But `@rnmapbox/maps` still separately touches a pod target literally
-  // NAMED "MapboxMaps" — confirmed in that same log: "[RNMapbox] Changed
-  // MapboxMaps to dynamic framework". This almost certainly isn't a
-  // Podfile-level `post_install do |installer|` block the app itself
-  // defines (none is visible in the generated Podfile) — @rnmapbox/maps
-  // most likely registers this via CocoaPods' own `Pod::HooksManager`
-  // plugin API from inside its own podspec, which runs automatically
-  // during `pod install` regardless of where — or whether — MapboxMaps
-  // itself came from trunk or a local override. It only looks for a pod
-  // target by NAME.
-  //
-  // UNVERIFIED HYPOTHESIS, not confirmed: that hook likely assumes it's
-  // adjusting a NORMAL, source-compiled MapboxMaps pod target (the usual
-  // trunk case) — e.g. toggling MACH_O_TYPE / CocoaPods' build_type
-  // concept. Our own ios/MapboxMaps.podspec is vendored_frameworks-only
-  // (no source files to compile at all), so applying that same logic to
-  // OUR target may not behave as intended, and could plausibly disrupt
-  // how the module gets exposed to dependent targets like
-  // @rnmapbox/maps' own Swift sources — which would explain the "no such
-  // module 'MapboxMaps'" compile error seen right after this exact log
-  // line in a real build.
-  //
-  // ⚠️ CORRECTED after a real regression: an earlier version of this mod
-  // added a SEPARATE `post_install do |installer| ... end` block, on the
-  // (wrong) assumption that CocoaPods executes multiple such blocks in
-  // declaration order. A real `pod install` run immediately failed with:
-  //   "[!] Invalid `Podfile` file: Specifying multiple `post_install`
-  //   hooks is unsupported."
-  // CocoaPods hard-rejects more than one Podfile-level `post_install do
-  // |installer|` block outright — it does not run them in sequence. The
-  // fix has to be INSERTED into the one, existing `post_install` block
-  // that @rnmapbox/maps' own Expo config plugin already injects (the one
-  // that calls `$RNMapboxMaps.post_install(installer)` — confirmed via
-  // @rnmapbox/maps' own installation docs: this isn't a hidden CocoaPods
-  // hook, it's an explicit Ruby global object their plugin wires into the
-  // Podfile the same way this package's own plugin does), not appended
-  // as a whole separate block.
-  //
-  // This mod finds the exact `$RNMapboxMaps.post_install(installer)` line
-  // and inserts our own lines immediately after it — same block, later
-  // statement, so it still runs after @rnmapbox/maps' own logic without
-  // violating CocoaPods' one-post_install-block rule.
-  config = withDangerousMod(config, [
-    'ios',
-    (mod) => {
-      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
-      if (!fs.existsSync(podfilePath)) {
-        return mod;
-      }
-
-      let podfileContent = fs.readFileSync(podfilePath, 'utf8');
-      const MARKER = '# @jacques_gordon/expo-mapbox-navigation: MapboxMaps post_install safety net';
-      if (podfileContent.includes(MARKER)) {
-        return mod;
-      }
-
-      const ourLines =
-        `    ${MARKER}\n` +
-        `    # REDESIGNED after a real pod install log showed FRAMEWORK_SEARCH_PATHS = nil\n` +
-        `    # on BOTH the 'MapboxMaps' and 'rnmapbox-maps' targets via the previous\n` +
-        `    # version of this diagnostic (target.build_configurations.each { |c|\n` +
-        `    # c.build_settings[...] }). That's very likely a flaw in the diagnostic\n` +
-        `    # itself, not a real bug: CocoaPods typically delivers these settings via a\n` +
-        `    # separate GENERATED .xcconfig FILE the target references (a\n` +
-        `    # baseConfigurationReference), not by writing them directly into the\n` +
-        `    # target's own build_settings hash — so reading that hash was very likely\n` +
-        `    # never going to show the real, effective values Xcode actually uses.\n` +
-        `    # This version reads the REAL generated .xcconfig file content from disk\n` +
-        `    # instead, via Pod::PodTarget#xcconfig_path (a real CocoaPods API), which\n` +
-        `    # is what Xcode itself actually includes at build time.\n` +
-        `    mapboxmaps_pod_target = installer.pod_targets.find { |t| t.pod_name == 'MapboxMaps' }\n` +
-        `    rnmapbox_pod_target = installer.pod_targets.find { |t| t.pod_name == 'rnmapbox-maps' }\n` +
-        `    [['MapboxMaps', mapboxmaps_pod_target], ['rnmapbox-maps', rnmapbox_pod_target]].each do |label, pod_target|\n` +
-        `      if pod_target.nil?\n` +
-        `        puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a Pod::PodTarget named '#{label}' via installer.pod_targets."\n` +
-        `        next\n` +
-        `      end\n` +
-        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — real generated .xcconfig content for '#{label}':"\n` +
-        `      pod_target.user_build_configurations.each_key do |config_name|\n` +
-        `        xcconfig_path = pod_target.xcconfig_path(config_name) rescue nil\n` +
-        `        if xcconfig_path && File.exist?(xcconfig_path)\n` +
-        `          puts "  [#{config_name}] #{xcconfig_path}:"\n` +
-        `          File.readlines(xcconfig_path).each do |line|\n` +
-        `            if line =~ /FRAMEWORK_SEARCH_PATHS|HEADER_SEARCH_PATHS|SWIFT_INCLUDE_PATHS|DEFINES_MODULE|#include/\n` +
-        `              puts "    #{line.strip}"\n` +
-        `            end\n` +
-        `          end\n` +
-        `        else\n` +
-        `          puts "  [#{config_name}] no xcconfig file found at #{xcconfig_path.inspect}"\n` +
-        `        end\n` +
-        `      end\n` +
-        `    end\n` +
-        `    # FIX, based on the diagnostic above: a real pod install log confirmed\n` +
-        `    # 'MapboxMaps' never appears anywhere in rnmapbox-maps' own real, generated\n` +
-        `    # FRAMEWORK_SEARCH_PATHS (Turf, a sibling Mapbox pod, DOES appear there —\n` +
-        `    # via \"\${PODS_XCFRAMEWORKS_BUILD_DIR}/Turf\" — confirming this IS the correct\n` +
-        `    # variable/pattern in this exact project; MapboxMaps specifically is just\n` +
-        `    # missing from it). CocoaPods normally wires this up automatically for a\n` +
-        `    # pod's dependents, but apparently doesn't for this :podspec-overridden pod\n` +
-        `    # — rather than continue guessing why, this directly appends the missing\n` +
-        `    # entry to rnmapbox-maps' own real xcconfig file(s) on disk.\n` +
-        `    if rnmapbox_pod_target\n` +
-        `      rnmapbox_pod_target.user_build_configurations.each_key do |config_name|\n` +
-        `        xcconfig_path = rnmapbox_pod_target.xcconfig_path(config_name) rescue nil\n` +
-        `        next unless xcconfig_path && File.exist?(xcconfig_path)\n` +
-        `        contents = File.read(xcconfig_path)\n` +
-        `        if contents =~ /^FRAMEWORK_SEARCH_PATHS\\s*=.*MapboxMaps/\n` +
-        `          puts "[@jacques_gordon/expo-mapbox-navigation] ✅ [#{config_name}] rnmapbox-maps' xcconfig already references MapboxMaps — no patch needed."\n` +
-        `        elsif contents =~ /^FRAMEWORK_SEARCH_PATHS\\s*=.*$/\n` +
-        `          patched = contents.sub(/^(FRAMEWORK_SEARCH_PATHS\\s*=.*)$/) { "#{$1} \\"\${PODS_XCFRAMEWORKS_BUILD_DIR}/MapboxMaps\\"" }\n` +
-        `          File.write(xcconfig_path, patched)\n` +
-        `          puts "[@jacques_gordon/expo-mapbox-navigation] ✅ [#{config_name}] Patched rnmapbox-maps' xcconfig — appended MapboxMaps to FRAMEWORK_SEARCH_PATHS."\n` +
-        `        else\n` +
-        `          puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  [#{config_name}] No FRAMEWORK_SEARCH_PATHS line found in rnmapbox-maps' xcconfig at all — could not patch. File: #{xcconfig_path}"\n` +
-        `        end\n` +
-        `      end\n` +
-        `    end\n`;
-
-      // Anchor on the exact line @rnmapbox/maps' own plugin injects, per
-      // their own documented installation instructions. If this doesn't
-      // match (e.g. a future @rnmapbox/maps version changes its own
-      // Podfile snippet), fall back to inserting into ANY existing
-      // `post_install do |installer|` block rather than creating a new
-      // one, since CocoaPods only tolerates a single one — a missing fix
-      // is recoverable, a Podfile that fails to parse at all is not.
-      const rnmapboxAnchor = /^(\s*)\$RNMapboxMaps\.post_install\(installer\)\s*$/m;
-      const genericPostInstallAnchor = /^(\s*)post_install do \|installer\|\s*$/m;
-
-      if (rnmapboxAnchor.test(podfileContent)) {
-        podfileContent = podfileContent.replace(rnmapboxAnchor, (match) => `${match}\n${ourLines}`);
-      } else if (genericPostInstallAnchor.test(podfileContent)) {
-        console.warn(
-          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find the expected ' +
-            '"$RNMapboxMaps.post_install(installer)" line — @rnmapbox/maps may have changed its ' +
-            'own Podfile snippet. Falling back to inserting into the first `post_install do |installer|` ' +
-            'block found instead, to stay within CocoaPods\' one-block limit.'
-        );
-        podfileContent = podfileContent.replace(
-          genericPostInstallAnchor,
-          (match) => `${match}\n${ourLines}`
-        );
-      } else {
-        console.warn(
-          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  No existing `post_install do |installer|` ' +
-            'block found in the generated Podfile at all — could not insert the MapboxMaps ' +
-            'diagnostic/fix. Skipping rather than adding a new block, since CocoaPods rejects ' +
-            'more than one post_install block per Podfile.'
-        );
-        return mod;
-      }
-
-      fs.writeFileSync(podfilePath, podfileContent);
-      console.log(
-        '[@jacques_gordon/expo-mapbox-navigation] ✅ Inserted MapboxMaps post_install safety net + diagnostics ' +
-          'into the existing post_install block'
-      );
       return mod;
     },
   ]);
