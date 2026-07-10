@@ -97,36 +97,31 @@ jobs:
       # own MapboxMaps pin exactly) needs this override - this workflow
       # was missing it, not necessarily Navio.
       - name: Configure app.json with this package's plugin AND @rnmapbox/maps' RNMapboxMapsVersion override
-        env:
-          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
         working-directory: test-harness
         run: |
-          node -e '
-            const fs = require("fs");
-            const config = JSON.parse(fs.readFileSync("app.json", "utf8"));
-            config.expo.ios = config.expo.ios || {};
-            config.expo.ios.bundleIdentifier = "com.example.testharness";
-            config.expo.plugins = config.expo.plugins || [];
-            config.expo.plugins.push([
-              "@rnmapbox/maps",
-              {
-                RNMapboxMapsVersion: "11.20.2",
-              },
-            ]);
-            config.expo.plugins.push([
-              "@jacques_gordon/expo-mapbox-navigation",
-              {
-                accessToken: "pk.placeholder",
-                downloadsToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
-              },
-            ]);
-            fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
-            console.log(JSON.stringify(config, null, 2));
-          '
-            ]);
-            fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
-            console.log(JSON.stringify(config, null, 2));
-          '
+          cat > configure-app-json.js << 'EOF'
+          const fs = require("fs");
+          const config = JSON.parse(fs.readFileSync("app.json", "utf8"));
+          config.expo.ios = config.expo.ios || {};
+          config.expo.ios.bundleIdentifier = "com.example.testharness";
+          config.expo.plugins = config.expo.plugins || [];
+          config.expo.plugins.push([
+            "@rnmapbox/maps",
+            { RNMapboxMapsVersion: "11.20.2" },
+          ]);
+          config.expo.plugins.push([
+            "@jacques_gordon/expo-mapbox-navigation",
+            {
+              accessToken: "pk.placeholder",
+              downloadsToken: process.env.MAPBOX_DOWNLOADS_TOKEN,
+            },
+          ]);
+          fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
+          console.log(JSON.stringify(config, null, 2));
+          EOF
+          node configure-app-json.js
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
 
       - name: Run expo prebuild (generates the real Podfile, exactly like EAS Build)
         working-directory: test-harness
