@@ -61,6 +61,24 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRAMEWORKS_DIR="$SCRIPT_DIR/Frameworks"
 
+# NEW: persist this script's own output to a log file, in addition to
+# stdout/stderr. Needed because CocoaPods' own Executable.execute_command
+# (which runs prepare_command) only DISPLAYS a command's output when
+# `pod install` is run with --verbose - on a successful (exit 0) run, the
+# output is captured and simply discarded, never shown, regardless of how
+# much this script itself echoes. EAS Build's own "Install pods" step runs
+# a plain `pod install` (no --verbose - confirmed against Expo's own iOS
+# build process docs), so this is not an EAS-specific quirk - it is
+# CocoaPods' own default behavior, and it is why this output has never
+# been visible there, independent of the Dir.glob/exit-code bugs fixed
+# earlier. `tee -a` appends (not overwrites) so a full history across
+# repeated invocations is kept - each invocation is already timestamped by
+# CocoaPods/EAS around it in the surrounding build log context.
+LOG_FILE="$SCRIPT_DIR/.fetch-xcframeworks.log"
+echo "" >> "$LOG_FILE" 2>/dev/null || true
+echo "===== fetch-xcframeworks.sh run: $(date -u +%Y-%m-%dT%H:%M:%SZ) =====" >> "$LOG_FILE" 2>/dev/null || true
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 # Aligned to stefanpavlovic-tech/react-native-mapbox-navigation's own
 # interlocked version set (branch feat/nav-v3-spm, its own podspec
 # comment): nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon
@@ -153,6 +171,16 @@ NEEDED_NAV_FRAMEWORKS=(
   "_MapboxNavigationLocalization"
   "MapboxNavigationNative"
 )
+# FIXED: a missing framework previously only echoed "FAILED" and kept
+# going - `set -e` never fired because `find ... | head -1` itself exits 0
+# even when it finds nothing - so this script could report overall
+# success (echoing "Done!" at the end, exit code 0) while having copied an
+# incomplete set. That silent gap then only surfaced much later, as a much
+# less legible Xcode compile-time "no such module" error. Now counts
+# misses and aborts with exit 1, so ExpoMapboxNavigation.podspec's own
+# `if ! ios/fetch-xcframeworks.sh; then exit 1; fi` wrapper (which checks
+# this script's exit code) can actually catch it.
+MISSING_COUNT=0
 for fw in "${NEEDED_NAV_FRAMEWORKS[@]}"; do
   found=$(find "$ARTIFACTS_DIR" -iname "${fw}.xcframework" -type d | head -1)
   if [ -n "$found" ]; then
@@ -161,8 +189,14 @@ for fw in "${NEEDED_NAV_FRAMEWORKS[@]}"; do
     cp -R "$found" "$FRAMEWORKS_DIR/"
   else
     echo "FAILED: $fw.xcframework not found under $ARTIFACTS_DIR"
+    MISSING_COUNT=$((MISSING_COUNT + 1))
   fi
 done
+if [ "$MISSING_COUNT" -gt 0 ]; then
+  echo ""
+  echo "error: $MISSING_COUNT required xcframework(s) missing after fetch - aborting."
+  exit 1
+fi
 
 # --- Deployment target patch for the vendored .swiftinterface files --------
 # See README changelog for the full history of this specific fix. Kept as

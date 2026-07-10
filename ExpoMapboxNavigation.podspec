@@ -100,7 +100,25 @@ Pod::Spec.new do |s|
   # specific frameworks would reintroduce duplicate-symbol errors, per the
   # exact guidance a Mapbox engineer gave for this same scenario on
   # mapbox/mapbox-navigation-ios#4703.
-  s.vendored_frameworks = Dir.glob(File.join(__dir__, 'ios/Frameworks/*.xcframework')).map { |f| f.sub("#{__dir__}/", '') }
+  # FIXED: this was previously a Ruby `Dir.glob(...)` expression, which
+  # executes AT PODSPEC PARSE TIME - i.e. during CocoaPods' dependency
+  # analysis, BEFORE prepare_command (or any other fetch mechanism) has
+  # downloaded anything into ios/Frameworks/. Since these frameworks are
+  # deliberately never committed (see prepare_command below), that glob
+  # deterministically returned an empty array on every fresh install,
+  # freezing `s.vendored_frameworks = []` into the parsed spec - so even
+  # when the fetch itself succeeded afterward, nothing was ever linked.
+  # `pod install` does not treat an empty vendored_frameworks list as an
+  # error, which is why this passed silently and only surfaced later as
+  # "no such module 'MapboxNavigationCore'" at Xcode compile time.
+  #
+  # Fix: a plain glob PATTERN STRING instead of a pre-resolved Ruby array.
+  # CocoaPods natively supports wildcards in file-pattern attributes and
+  # resolves them later in its own install flow, after pod sources are
+  # downloaded - so frameworks fetched by prepare_command (or by the
+  # Podfile-level fetch, if configured - see plugin/src/index.js) are
+  # actually visible when this pattern gets expanded.
+  s.vendored_frameworks = 'ios/Frameworks/*.xcframework'
 
   # WARNING: CHANGED from a recursive glob (`ios/**/*.{swift,h,m,mm}`) to a
   # non-recursive one, matching a real, confirmed-working reference
