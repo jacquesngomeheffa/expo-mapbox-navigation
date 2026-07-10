@@ -56,9 +56,30 @@ jobs:
       - name: Create a real, minimal Expo app
         run: npx --yes create-expo-app@latest test-harness
 
-      - name: Add this package as a local dependency
+      # CHANGED after a real run confirmed `expo prebuild` failed with
+      # "PluginError: Cannot find module '@expo/config-plugins'" trying to
+      # load this package's own plugin. Root cause: `npm install
+      # ../package-under-test` (a local path) installs via a SYMLINK
+      # pointing OUTSIDE test-harness/ entirely (at the sibling
+      # package-under-test/ checkout) - so when Node resolves `require()`
+      # calls from inside the plugin, it walks up the symlink TARGET's
+      # real directory tree (which has no node_modules of its own), not
+      # test-harness/node_modules where @expo/config-plugins actually
+      # lives (hoisted there via the `expo` package's own dependencies).
+      # `npm pack` + installing the resulting tarball copies the package
+      # instead of symlinking it - exactly how a real `npm install` from
+      # the registry behaves, avoiding this entire class of local-path
+      # resolution quirk.
+      - name: Pack this package into a real tarball
+        working-directory: package-under-test
+        run: npm pack --pack-destination /tmp
+
+      - name: Install this package from that tarball (not a symlinked local path)
         working-directory: test-harness
-        run: npm install ../package-under-test
+        run: |
+          TARBALL=$(ls /tmp/jacques_gordon-expo-mapbox-navigation-*.tgz)
+          echo "Installing $TARBALL"
+          npm install "$TARBALL"
 
       - name: Configure app.json with this package's plugin
         env:
