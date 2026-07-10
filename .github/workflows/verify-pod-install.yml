@@ -29,6 +29,11 @@ jobs:
         with:
           xcode-version: '16.4'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Configure Mapbox downloads credentials
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
@@ -68,6 +73,18 @@ jobs:
             puts "Generated #{project_path}"
           '
 
+      # CHANGED after a real run confirmed `pod install` failed at
+      # dependency resolution, before ever reaching prepare_command:
+      # "[!] Unable to find a specification for `ExpoModulesCore`
+      # depended upon by `ExpoMapboxNavigation`". ExpoModulesCore isn't a
+      # public CocoaPods trunk pod - a real Expo project only resolves it
+      # via `use_expo_modules!`, which points at the real podspec inside
+      # `node_modules/expo-modules-core`. The minimal Podfile below needs
+      # that same real file to test anything meaningful past this point.
+      - name: npm install expo-modules-core (for its real .podspec)
+        working-directory: test-harness
+        run: npm install expo-modules-core --no-save
+
       - name: Write Podfile referencing this package via :path
         run: |
           cat > test-harness/Podfile << 'EOF'
@@ -75,6 +92,7 @@ jobs:
           use_frameworks! :linkage => :static
 
           target 'TestHarness' do
+            pod 'ExpoModulesCore', :path => 'node_modules/expo-modules-core'
             pod 'ExpoMapboxNavigation', :path => '../package-under-test'
           end
           EOF
