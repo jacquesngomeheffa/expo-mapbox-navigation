@@ -363,15 +363,26 @@ ext {
   // module 'MapboxMaps'" compile error seen right after this exact log
   // line in a real build.
   //
-  // This post_install block runs LAST (Podfile-level post_install
-  // callbacks execute after any Pod::HooksManager-registered ones from
-  // individual pods' own podspecs) and re-asserts DEFINES_MODULE on the
-  // MapboxMaps target's own build configurations, in case @rnmapbox/maps'
-  // hook reset or never set it for a vendored-only target. It ALSO prints
-  // that target's actual resulting build settings — untested whether
-  // DEFINES_MODULE alone is sufficient, so if this doesn't fix it, the
-  // printed values below are meant to replace guessing with real data on
-  // the next attempt, rather than another blind patch.
+  // ⚠️ CORRECTED after a real regression: an earlier version of this mod
+  // added a SEPARATE `post_install do |installer| ... end` block, on the
+  // (wrong) assumption that CocoaPods executes multiple such blocks in
+  // declaration order. A real `pod install` run immediately failed with:
+  //   "[!] Invalid `Podfile` file: Specifying multiple `post_install`
+  //   hooks is unsupported."
+  // CocoaPods hard-rejects more than one Podfile-level `post_install do
+  // |installer|` block outright — it does not run them in sequence. The
+  // fix has to be INSERTED into the one, existing `post_install` block
+  // that @rnmapbox/maps' own Expo config plugin already injects (the one
+  // that calls `$RNMapboxMaps.post_install(installer)` — confirmed via
+  // @rnmapbox/maps' own installation docs: this isn't a hidden CocoaPods
+  // hook, it's an explicit Ruby global object their plugin wires into the
+  // Podfile the same way this package's own plugin does), not appended
+  // as a whole separate block.
+  //
+  // This mod finds the exact `$RNMapboxMaps.post_install(installer)` line
+  // and inserts our own lines immediately after it — same block, later
+  // statement, so it still runs after @rnmapbox/maps' own logic without
+  // violating CocoaPods' one-post_install-block rule.
   config = withDangerousMod(config, [
     'ios',
     (mod) => {
@@ -386,34 +397,59 @@ ext {
         return mod;
       }
 
-      const postInstallBlock = `
-${MARKER}
-post_install do |installer|
-  mapboxmaps_target = installer.pods_project.targets.find { |t| t.name == 'MapboxMaps' }
-  if mapboxmaps_target
-    puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — 'MapboxMaps' pod target build settings after all install hooks have run:"
-    mapboxmaps_target.build_configurations.each do |config|
-      config.build_settings['DEFINES_MODULE'] = 'YES'
-      %w[MACH_O_TYPE DEFINES_MODULE FRAMEWORK_SEARCH_PATHS BUILD_LIBRARY_FOR_DISTRIBUTION].each do |key|
-        puts "  [#{config.name}] #{key} = #{config.build_settings[key].inspect}"
-      end
-    end
-    puts "[@jacques_gordon/expo-mapbox-navigation] ✅ Re-asserted DEFINES_MODULE=YES on the MapboxMaps target (in case @rnmapbox/maps' own install hook reset it for this vendored-only target)"
-  else
-    puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'MapboxMaps' in installer.pods_project.targets — the Podfile override may not have taken effect. Check the 'Fetching podspec for MapboxMaps' line earlier in this same pod install log."
-  end
-end
-`;
+      const ourLines =
+        `    ${MARKER}\n` +
+        `    mapboxmaps_target = installer.pods_project.targets.find { |t| t.name == 'MapboxMaps' }\n` +
+        `    if mapboxmaps_target\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] Diagnostic — 'MapboxMaps' pod target build settings after all install hooks have run:"\n` +
+        `      mapboxmaps_target.build_configurations.each do |config|\n` +
+        `        config.build_settings['DEFINES_MODULE'] = 'YES'\n` +
+        `        %w[MACH_O_TYPE DEFINES_MODULE FRAMEWORK_SEARCH_PATHS BUILD_LIBRARY_FOR_DISTRIBUTION].each do |key|\n` +
+        `          puts "  [#{config.name}] #{key} = #{config.build_settings[key].inspect}"\n` +
+        `        end\n` +
+        `      end\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] ✅ Re-asserted DEFINES_MODULE=YES on the MapboxMaps target (in case @rnmapbox/maps' own install hook reset it for this vendored-only target)"\n` +
+        `    else\n` +
+        `      puts "[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find a pod target named 'MapboxMaps' in installer.pods_project.targets — the Podfile override may not have taken effect. Check the 'Fetching podspec for MapboxMaps' line earlier in this same pod install log."\n` +
+        `    end\n`;
 
-      // Podfile-level post_install blocks are simply appended anywhere in
-      // the file — CocoaPods collects every `post_install do |installer|`
-      // block regardless of position and runs them all, in declaration
-      // order, after every pod-specific Pod::HooksManager-registered hook
-      // (like @rnmapbox/maps' own) has already executed.
-      podfileContent = podfileContent + postInstallBlock;
+      // Anchor on the exact line @rnmapbox/maps' own plugin injects, per
+      // their own documented installation instructions. If this doesn't
+      // match (e.g. a future @rnmapbox/maps version changes its own
+      // Podfile snippet), fall back to inserting into ANY existing
+      // `post_install do |installer|` block rather than creating a new
+      // one, since CocoaPods only tolerates a single one — a missing fix
+      // is recoverable, a Podfile that fails to parse at all is not.
+      const rnmapboxAnchor = /^(\s*)\$RNMapboxMaps\.post_install\(installer\)\s*$/m;
+      const genericPostInstallAnchor = /^(\s*)post_install do \|installer\|\s*$/m;
+
+      if (rnmapboxAnchor.test(podfileContent)) {
+        podfileContent = podfileContent.replace(rnmapboxAnchor, (match) => `${match}\n${ourLines}`);
+      } else if (genericPostInstallAnchor.test(podfileContent)) {
+        console.warn(
+          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  Could not find the expected ' +
+            '"$RNMapboxMaps.post_install(installer)" line — @rnmapbox/maps may have changed its ' +
+            'own Podfile snippet. Falling back to inserting into the first `post_install do |installer|` ' +
+            'block found instead, to stay within CocoaPods\' one-block limit.'
+        );
+        podfileContent = podfileContent.replace(
+          genericPostInstallAnchor,
+          (match) => `${match}\n${ourLines}`
+        );
+      } else {
+        console.warn(
+          '[@jacques_gordon/expo-mapbox-navigation] ⚠️  No existing `post_install do |installer|` ' +
+            'block found in the generated Podfile at all — could not insert the MapboxMaps ' +
+            'diagnostic/fix. Skipping rather than adding a new block, since CocoaPods rejects ' +
+            'more than one post_install block per Podfile.'
+        );
+        return mod;
+      }
+
       fs.writeFileSync(podfilePath, podfileContent);
       console.log(
-        '[@jacques_gordon/expo-mapbox-navigation] ✅ Inserted MapboxMaps post_install safety net + diagnostics'
+        '[@jacques_gordon/expo-mapbox-navigation] ✅ Inserted MapboxMaps post_install safety net + diagnostics ' +
+          'into the existing post_install block'
       );
       return mod;
     },

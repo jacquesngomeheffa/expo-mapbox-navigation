@@ -331,6 +331,14 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 3.3.3
+**⚠️ Fixes a real regression introduced in 3.3.2: a real `pod install` run failed immediately with `[!] Invalid Podfile file: Specifying multiple post_install hooks is unsupported.` — 3.3.2's own assumption that CocoaPods runs multiple Podfile-level `post_install do |installer|` blocks in declaration order was wrong. It hard-rejects more than one.**
+
+- **What broke**: 3.3.2 added a second, separate `post_install do |installer| ... end` block to the generated Podfile, alongside the one `@rnmapbox/maps`' own Expo config plugin already injects (confirmed, from their own installation docs, to be an explicit `$RNMapboxMaps.post_install(installer)` call — not a hidden CocoaPods hook, as an earlier version of this changelog incorrectly guessed). CocoaPods parses the Podfile and immediately fails if it finds more than one `post_install` block, rather than executing both — this was never actually tested against a real `pod install` before 3.3.2 shipped.
+- **The fix**: the diagnostic/`DEFINES_MODULE` logic is now inserted directly INTO the existing `post_install` block — specifically, right after the exact `$RNMapboxMaps.post_install(installer)` line @rnmapbox/maps' own plugin adds — rather than as a separate block. Verified against a simulated realistic Podfile snippet: the result has exactly one `post_install do |installer|` block, with this package's own lines correctly indented and positioned to run after `@rnmapbox/maps`' own logic within that same block.
+- **Fallback added**: if a future `@rnmapbox/maps` version changes its own injected line (breaking the exact-match anchor), this mod now falls back to inserting into the first `post_install do |installer|` block found by itself, rather than either creating a second block (which would break the Podfile) or silently doing nothing.
+- **Not yet verified on a real device** — this specific regression is fixed and tested against a simulated Podfile, but the underlying question (does re-asserting `DEFINES_MODULE` actually resolve `no such module 'MapboxMaps'`?) is still unconfirmed pending a real build.
+
 ### 3.3.2
 **⚠️ Still not confirmed fixed on a real device. Adds a `post_install` safety net + real diagnostics for the `MapboxMaps` vendored pod target, after a real `pod install` log showed the Podfile override from 3.3.0 working correctly at the resolution level, but `@rnmapbox/maps` separately touching a pod target literally named "MapboxMaps" afterward.**
 
