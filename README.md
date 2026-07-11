@@ -13,6 +13,9 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 - **Both platforms** — 7 events, 19 props, full feature and API parity
 - NDK 27 + 16 KB page size compliant (Android 15+)
 
+**✅ Tested on iOS**: real EAS production build, real device - launch crash confirmed gone.
+**✅ Tested on Android**: no regressions from the iOS-only changes in 4.0.0 (that release touched iOS exclusively - `ios/fetch-xcframeworks.sh`, `ios/patch-mapbox-library-evolution.sh`, README/changelog only).
+
 ---
 
 ## Installation
@@ -44,10 +47,21 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ### 3. iOS only — enable static frameworks
 
 ```json
-["expo-build-properties", { "ios": { "useFrameworks": "static" } }]
+["expo-build-properties", {
+  "ios": {
+    "useFrameworks": "static",
+    "forceStaticLinking": ["MapboxMaps", "MapboxCommon", "MapboxCoreMaps", "Turf"]
+  }
+}]
 ```
 
-This is required by the vendored xcframework approach (same requirement as the original `youssefhenna/expo-mapbox-navigation` this package builds on). Note that `@rnmapbox/maps` itself still forces `MapboxCommon`/`MapboxCoreMaps`/`MapboxMaps`/`Turf` specifically to dynamic linkage regardless of this setting (see its own `rnmapbox-maps.podspec`) — that's expected and unrelated.
+`forceStaticLinking` is required as of 4.0.0 — without it, `@rnmapbox/maps`'s own `post_install` hook forces these 4 pods back to dynamic linkage regardless of `useFrameworks: "static"`, which is the confirmed, evidence-backed fix for the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash (see the `4.0.0` changelog entry for the full investigation).
+
+Confirmed working version set (interlocked — lift from the matching build-artifacts tag on bump):
+```
+nav 3.20.1 / MapboxNavigationNative 324.20.2 (bucket dash-native) /
+MapboxCommon 24.20.2 / MapboxMaps 11.20.2 (matches @rnmapbox/maps@10.3.1).
+```
 
 ---
 
@@ -57,24 +71,20 @@ This is required by the vendored xcframework approach (same requirement as the o
 |--------|----------|---------|-------------|
 | `accessToken` | ✅ | — | Public Mapbox token (`pk.*`). Used for map tiles and routing. |
 | `downloadsToken` | ✅ | — | Secret Mapbox token (`sk.*`) with **Downloads:Read** scope. Same token as `RNMapboxMapsDownloadToken`. Kept for backward compatibility with app.json configs from earlier versions — as of 2.3.0 it's no longer used at app-build time (the iOS SDK is vendored as prebuilt binaries; nothing downloads from `api.mapbox.com` during your `pod install`/EAS build anymore). |
-| `mapboxMapsVersion` | ✅ | `"11.11.0"` IOS fixed at **(11.14.0)** | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
+| `mapboxMapsVersion` | ✅ | `"11.11.0"` — iOS fixed at **11.20.2** | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
 | `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7 — was deprecated/unused after 2.3.0's iOS rewrite). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula (see [iOS Architecture](#ios-architecture) history) — a best-effort approximation, not a guarantee. Has no effect on iOS; the iOS SDK version is fixed by which npm package version you install. |
 | `androidColorOverrides` | — | `{}` | Override Mapbox native resource colors on Android. |
 
 ---
 
-## iOS Architecture mapboxMapsVersion = 11.14.0
+## iOS Architecture
 
-### How it works (as of 2.3.0) 
-
-Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only — Mapbox has not shipped CocoaPods support for it. Earlier versions of this package (2.2.x) tried to bridge SPM into CocoaPods live, at your app's `pod install` time, using the same `post_install` Ruby-hook technique `@rnmapbox/maps` uses for its own dependencies. That approach turned out to be fundamentally unreliable in practice: React Native's own SPM manager silently strips manually-added SPM package references during `pod install`, and the officially-sanctioned alternative (`spm_dependency()`) is documented to cause duplicate-symbol errors on statically-linked Expo modules.
-
-**2.3.0 takes a different approach: the iOS SDK binaries are prebuilt and vendored directly into this npm package.** Mapbox officially publishes `MapboxNavigationCore`/`MapboxNavigationUIKit`/`MapboxDirections` (and their transitive binary dependencies) as precompiled `.xcframework` downloads via a dedicated repository, [`mapbox-navigation-ios-build-artifacts`](https://github.com/mapbox/mapbox-navigation-ios-build-artifacts). This package's maintainer fetches those once per Navigation SDK version (via [`.github/workflows/build-xcframeworks.yml`](.github/workflows/build-xcframeworks.yml) on a free GitHub-hosted macOS runner) and commits them into `ios/Frameworks/`, which the podspec vendors via `s.vendored_frameworks`.
+Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only — Mapbox has not shipped CocoaPods support for it. This package works around that by vendoring the SDK's binaries directly. Mapbox officially publishes `MapboxNavigationCore`/`MapboxNavigationUIKit`/`MapboxDirections` (and their transitive binary dependencies) as precompiled `.xcframework` downloads via a dedicated repository, [`mapbox-navigation-ios-build-artifacts`](https://github.com/mapbox/mapbox-navigation-ios-build-artifacts) — `ios/fetch-xcframeworks.sh` fetches these directly into the consuming app's `node_modules` on its own first `pod install`.
 
 **What this means for you:**
-- No network access to `api.mapbox.com` needed during your `pod install` or EAS build.
+- No network access to `api.mapbox.com` needed during your `pod install` or EAS build for the Navigation-specific frameworks themselves — only your own `downloadsToken` at fetch time.
 - No SPM package resolution happens in your project for this SDK at all.
-- `useFrameworks: "static"` is still required (same as the original `youssefhenna/expo-mapbox-navigation` this package builds on) — see step 3 of [Installation](#installation).
+- `useFrameworks: "static"` **and** `forceStaticLinking` (see step 3 of [Installation](#installation)) are both required — the latter is what actually resolves the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash; see the `4.0.0` changelog entry for the full investigation.
 - The iOS SDK version is fixed by which version of this npm package you install (matching a specific `mapboxMapsVersion`), not something you configure per-app.
 
 **Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
@@ -341,11 +351,12 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
-### 4.0.0
-**The `DYLD 4 Symbol missing: GestureType.singleTap` launch crash - the subject of this project's entire iOS investigation since 3.1.x - is CONFIRMED RESOLVED in real production builds. Major version bump to mark this as the closing milestone of that investigation. Tested on both iOS and Android.**
+### 4.0.1
+**README-only release — no code changes.** Moves the "Tested on iOS/Android" confirmation up under Features (was buried in the 4.0.0 changelog entry). Fills in step 3 of Installation with the actual `forceStaticLinking` config and the confirmed working version set (both were only in the changelog before, not in the actual setup instructions). Fixes a stale `mapboxMapsVersion` iOS reference (`11.14.0`, never actually shipped) to the real confirmed version (`11.20.2`) in the Plugin Options table. Shortens the iOS Architecture section and drops outdated references to superseded 2.2.x/2.3.0-era approaches no longer relevant to how this package works today.
 
-- **✅ Tested on iOS**: real EAS production build, real device - launch crash confirmed gone.
-- **✅ Tested on Android**: no regressions from any of the iOS-only changes in this release (this release touches iOS exclusively - `ios/fetch-xcframeworks.sh`, `ios/patch-mapbox-library-evolution.sh`, README/changelog only).
+### 4.0.0
+**The `DYLD 4 Symbol missing: GestureType.singleTap` launch crash - the subject of this project's entire iOS investigation since 3.1.x - is CONFIRMED RESOLVED in real production builds. Major version bump to mark this as the closing milestone of that investigation. Tested on both iOS and Android (see the top of this README, under Features).**
+
 - **Confirmed working version set** (interlocked - see `ios/fetch-xcframeworks.sh`'s own header comment for the maintained copy of this): nav `3.20.1` / `MapboxNavigationNative 324.20.2` (bucket `dash-native`) / `MapboxCommon 24.20.2` / `MapboxMaps 11.20.2` - matching `@rnmapbox/maps@10.3.1`. This exact pairing is now verified against a real production "Install pods" log (`Installing rnmapbox-maps (10.3.1)` / `Installing MapboxMaps (11.20.2)` in the same build where the crash was confirmed resolved), not just cross-referenced from a reference implementation's own podspec as in earlier versions.
 - **The fix that resolved it, in the consuming app's (not this package's) `app.json`**:
   ```json
