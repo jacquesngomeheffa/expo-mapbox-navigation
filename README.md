@@ -341,6 +341,27 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 4.0.0
+**The `DYLD 4 Symbol missing: GestureType.singleTap` launch crash - the subject of this project's entire iOS investigation since 3.1.x - is CONFIRMED RESOLVED in real production builds. Major version bump to mark this as the closing milestone of that investigation. Tested on both iOS and Android.**
+
+- **✅ Tested on iOS**: real EAS production build, real device - launch crash confirmed gone.
+- **✅ Tested on Android**: no regressions from any of the iOS-only changes in this release (this release touches iOS exclusively - `ios/fetch-xcframeworks.sh`, `ios/patch-mapbox-library-evolution.sh`, README/changelog only).
+- **Confirmed working version set** (interlocked - see `ios/fetch-xcframeworks.sh`'s own header comment for the maintained copy of this): nav `3.20.1` / `MapboxNavigationNative 324.20.2` (bucket `dash-native`) / `MapboxCommon 24.20.2` / `MapboxMaps 11.20.2` - matching `@rnmapbox/maps@10.3.1`. This exact pairing is now verified against a real production "Install pods" log (`Installing rnmapbox-maps (10.3.1)` / `Installing MapboxMaps (11.20.2)` in the same build where the crash was confirmed resolved), not just cross-referenced from a reference implementation's own podspec as in earlier versions.
+- **The fix that resolved it, in the consuming app's (not this package's) `app.json`**:
+  ```json
+  ["expo-build-properties", {
+    "ios": {
+      "useFrameworks": "static",
+      "forceStaticLinking": ["MapboxMaps", "MapboxCommon", "MapboxCoreMaps", "Turf"]
+    }
+  }]
+  ```
+  combined with this package's own `ios/patch-mapbox-library-evolution.sh` (3.4.6) wired into the consuming app's `eas-build-post-install` hook.
+- **Which of the two actually did it - the honest, incomplete picture**: the maintainer's own read, based on direct A/B evidence, is that `forceStaticLinking` is the operative fix - the immediately preceding build already had the `BUILD_LIBRARY_FOR_DISTRIBUTION` patch correctly applied (confirmed via its own `patched: .../MapboxMaps.xcconfig` log lines) and still crashed identically; the only change between that build and this one was adding `forceStaticLinking`. That is real, direct before/after evidence and the strongest signal available.
+  - **What this project's own log diagnostics could NOT confirm, and want future readers to know**: on the build that turned out to fix the crash, the "Install pods" log still showed `@rnmapbox/maps`'s own `post_install` coercion as the last recorded word on all 4 targets (`* [RNMapbox] Changed MapboxMaps/MapboxCommon/MapboxCoreMaps/Turf to dynamic framework`) - and the expected `[Expo] Disabling USE_FRAMEWORKS for modules ...` confirmation line for `forceStaticLinking` taking effect never appeared anywhere in that log. Nor did `-enable-library-evolution` (the real compiler flag behind `BUILD_LIBRARY_FOR_DISTRIBUTION`) ever appear for `MapboxMaps` in the full xcodebuild archive log - only for the unrelated `AppAuth` pod.
+  - **In plain terms**: the crash is genuinely gone, confirmed on a real device - but this project cannot fully reconcile *why* from the logs alone. Both changes were present on the fixed build; the log evidence available doesn't conclusively show either one taking effect the way its own documentation describes. This could mean the confirmation log lines this project was checking for are simply not reliable indicators for this specific CocoaPods/Xcode version combination, or that some other interaction resolved it. Recorded here plainly rather than overclaiming a fully-understood mechanism - a future session revisiting this crash (should it resurface after a dependency bump) should treat "forceStaticLinking probably fixed it" as the leading, evidence-backed hypothesis, not a proven root cause.
+- **Practical takeaway for consumers**: add both the `forceStaticLinking` config above AND wire `ios/patch-mapbox-library-evolution.sh` into `eas-build-post-install` (see the `3.4.6` entry below for the exact snippet). Given the uncertainty above, both together is the only combination actually verified crash-free in production - removing either one has not been tested.
+
 ### 3.4.6
 **Adds `ios/patch-mapbox-library-evolution.sh`, a targeted (non-`post_install`) fix for the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash.**
 
