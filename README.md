@@ -29,7 +29,7 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ```json
 ["@rnmapbox/maps", {
   "RNMapboxMapsImpl": "mapbox",
-  "RNMapboxMapsVersion": "11.11.0",
+  "RNMapboxMapsVersion": "11.11.0",-- Android (editable), 11.20.2 -- IOS (fixed)
   "RNMapboxMapsDownloadToken": "sk.your_secret_token"
 }]
 ```
@@ -40,7 +40,7 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ["@jacques_gordon/expo-mapbox-navigation", {
   "accessToken": "pk.your_public_token",
   "downloadsToken": "sk.your_secret_token",
-  "mapboxMapsVersion": "11.11.0"
+  "mapboxMapsVersion": "11.11.0"-- Android (editable), 11.20.2 -- IOS (fixed)
 }]
 ```
 
