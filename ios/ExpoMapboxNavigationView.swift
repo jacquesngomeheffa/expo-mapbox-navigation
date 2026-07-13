@@ -200,11 +200,24 @@ public class ExpoMapboxNavigationView: ExpoView {
     private func fetchRoutes() {
         guard coordinates.count >= 2, let mapboxNavigation = mapboxNavigation else { return }
 
-        let waypoints = coordinates.map { coord -> Waypoint in
-            Waypoint(coordinate: CLLocationCoordinate2D(
+        // FIXED: waypointIndices was declared/settable but never applied on
+        // iOS (dead code) - Android drives MapboxDirections'
+        // waypointIndicesList(...) with it (see ExpoMapboxNavigationView.kt).
+        // On iOS, the equivalent concept is Waypoint.separatesLegs: a
+        // waypoint with separatesLegs=false is a silent "via point" the
+        // route passes through without stopping/splitting the route into a
+        // new leg. First and last waypoints always separate legs
+        // regardless (the Directions API requires this), matching the
+        // implicit behavior of Android's index list.
+        let waypoints = coordinates.enumerated().map { index, coord -> Waypoint in
+            let wp = Waypoint(coordinate: CLLocationCoordinate2D(
                 latitude:  coord["latitude"]  ?? 0.0,
                 longitude: coord["longitude"] ?? 0.0
             ))
+            if let indices = waypointIndices, !indices.isEmpty {
+                wp.separatesLegs = indices.contains(index) || index == 0 || index == coordinates.count - 1
+            }
+            return wp
         }
 
         var options = NavigationRouteOptions(waypoints: waypoints)
@@ -217,6 +230,36 @@ public class ExpoMapboxNavigationView: ExpoView {
         case "walking":         options.profileIdentifier = .walking
         case "cycling":         options.profileIdentifier = .cycling
         default:                options.profileIdentifier = .automobileAvoidingTraffic
+        }
+
+        // FIXED: excludeTypes was declared/settable but never applied on
+        // iOS (dead code) - Android drives MapboxDirections' exclude(...)
+        // request param with it. RoadClasses(descriptions:) is
+        // MapboxDirections' own confirmed public initializer for building
+        // this option set from plain strings (e.g. "toll", "motorway",
+        // "ferry" - the same values already accepted by the Android side
+        // and documented in this package's Props table).
+        if let excludes = excludeTypes, !excludes.isEmpty {
+            options.roadClassesToAvoid = RoadClasses(descriptions: excludes)
+        }
+
+        // FIXED: maxHeight/maxWidth were declared/settable but never
+        // applied on iOS (dead code) - Android drives MapboxDirections'
+        // maxHeight(...)/maxWidth(...) request params with them (vehicle
+        // dimension restrictions for truck routing, NOT view layout
+        // sizing - confirmed against Android's own usage, which passes
+        // these straight to its Directions request builder, not to any
+        // view/layout API). RouteOptions.maximumHeight/maximumWidth are
+        // typed as Measurement<UnitLength> (confirmed from
+        // mapbox-directions-swift's own RouteOptions.swift, which converts
+        // via `.converted(to: .meters)` before encoding) - Android's
+        // values are already in meters (matching its own MapboxDirections
+        // Java/Kotlin API), so no unit conversion is needed here.
+        if let h = maxHeight {
+            options.maximumHeight = Measurement(value: h, unit: UnitLength.meters)
+        }
+        if let w = maxWidth {
+            options.maximumWidth = Measurement(value: w, unit: UnitLength.meters)
         }
 
         routeRequestTask?.cancel()
@@ -298,6 +341,27 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         self.navigationViewController = vc
         isOverviewMode = false
+
+        // FIXED: mapStyle was declared/settable but never applied on iOS
+        // (dead code) - Android drives mapView.mapboxMap.loadStyle(...)
+        // with it. Confirmed real, current API from Mapbox's own
+        // mapbox-navigation-ios example source (Examples/
+        // AdditionalExamples/Examples/Advanced.swift, main branch):
+        // `navigationMapView.mapView.mapboxMap.loadStyle(StyleURI(rawValue:
+        // styleUrl)!)`. Only called when mapStyle is explicitly set -
+        // Mapbox's own "Maps for navigation" guide recommends customizing
+        // the style through a UI Style subclass (see
+        // ExpoManeuverDayStyle/NightStyle above) rather than calling
+        // loadStyle directly, specifically for day/night-switch
+        // consistency - but that mechanism has no public style-URL hook on
+        // StandardDayStyle/StandardNightStyle in this SDK version, so a
+        // direct loadStyle call is the confirmed-working option here. When
+        // mapStyle is nil, this is skipped entirely and the existing
+        // default Nav Day/Night style behavior (already working, untouched
+        // by this fix) applies exactly as before.
+        if let styleURLString = mapStyle, let styleURI = StyleURI(rawValue: styleURLString) {
+            vc.navigationView.navigationMapView.mapView.mapboxMap.loadStyle(styleURI)
+        }
 
         // Apply the current puck configuration now that navigationMapView
         // exists — picks up whatever navigationPuckColor/ImagePath/

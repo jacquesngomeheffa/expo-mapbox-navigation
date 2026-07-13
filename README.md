@@ -29,7 +29,7 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ```json
 ["@rnmapbox/maps", {
   "RNMapboxMapsImpl": "mapbox",
-  "RNMapboxMapsVersion": "11.11.0", -- Android (editable), 11.20.2 -- IOS (fixed)
+  "RNMapboxMapsVersion": "11.11.0",
   "RNMapboxMapsDownloadToken": "sk.your_secret_token"
 }]
 ```
@@ -40,7 +40,7 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ["@jacques_gordon/expo-mapbox-navigation", {
   "accessToken": "pk.your_public_token",
   "downloadsToken": "sk.your_secret_token",
-  "mapboxMapsVersion": "11.11.0" -- Android (editable), 11.20.2 -- IOS (fixed)
+  "mapboxMapsVersion": "11.11.0"
 }]
 ```
 
@@ -350,6 +350,18 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 4.0.2
+**iOS: fixes 4 props that were declared/settable but never actually applied to anything ("dead code") — `mapStyle`, `waypointIndices`, `excludeTypes`, `maxHeight`/`maxWidth`. Also flags (without touching) `useMapMatching`/`customRasterTileUrl`/`customRasterAboveLayerId` as dead on BOTH platforms, and documented as if working — a real documentation gap, not just an iOS one.**
+
+- **Context**: found while investigating a blank/white map surface reported after a real iOS device test (no crash, no console error - the app launched, the bottom sheet showed real route data, but the map itself never rendered). A full audit of every prop's setter in `ios/ExpoMapboxNavigationView.swift`, cross-referenced against the working Android implementation for intent, turned up 7 stored-but-unused props total.
+- **`mapStyle`** — Android drives a real `mapView.mapboxMap.loadStyle(...)` call with this; iOS never called anything. Fixed using a confirmed, current API from Mapbox's own `mapbox-navigation-ios` example source (`Examples/AdditionalExamples/Examples/Advanced.swift`, `main` branch): `navigationMapView.mapView.mapboxMap.loadStyle(StyleURI(rawValue: styleUrl)!)`. Only applied when `mapStyle` is explicitly set - when nil, behavior is unchanged from before (the existing default Nav Day/Night style still applies).
+- **`waypointIndices`** — Android passes this straight to MapboxDirections' `waypointIndicesList(...)`; iOS never used it. Fixed via `Waypoint.separatesLegs` (confirmed real, public, mutable property, `Waypoint` confirmed to be a class not a struct) - waypoints not in the given index list become silent via-points; first and last always separate legs regardless, matching Directions API requirements.
+- **`excludeTypes`** — Android passes this to MapboxDirections' `exclude(...)` request param; iOS never used it. Fixed via `RouteOptions.roadClassesToAvoid = RoadClasses(descriptions: excludeTypes)` - `RoadClasses(descriptions:)` confirmed as a real public initializer directly from `mapbox-directions-swift`'s own `RouteOptions.swift` source.
+- **`maxHeight`/`maxWidth`** — Android passes these to MapboxDirections' `maxHeight(...)`/`maxWidth(...)` request params (vehicle dimension restrictions for truck routing, confirmed NOT a view-layout sizing prop despite the name). iOS never used them. Fixed via `RouteOptions.maximumHeight`/`maximumWidth`, confirmed typed as `Measurement<UnitLength>` from `mapbox-directions-swift`'s own source (Android's plain numeric values are already in meters, so no unit conversion needed).
+- **Verification method, honestly stated**: no Mac/Xcode toolchain is available in the environment these fixes were written in, so none of this could be compiled or run. Every API call used above was cross-checked against Mapbox's own current source/docs (not guessed or reused from memory) before being written, and the full file was checked for balanced braces/parens/brackets - but real compilation and an on-device test are still needed to confirm these fixes are 100% correct, the same honesty standard applied throughout this project's whole iOS investigation.
+- **Left alone, deliberately**: `useMapMatching`, `customRasterTileUrl`, `customRasterAboveLayerId` are stored-but-unused on **both** iOS and Android - not an iOS-specific regression, a pre-existing shared gap. The README's Props table currently documents `useMapMatching` and `customRasterTileUrl` as if they work. Not fixed here: implementing Map Matching API support or raster tile source/layer injection correctly would need real reference material to verify against (map matching request semantics, MapboxMaps custom source/layer API) that wasn't available to cross-check confidently in this pass - noted here rather than guessed at.
+- **Did NOT resolve** (confirm separately): whether any of this actually explains the original blank-map report. `mapStyle` only being applied when explicitly set means it's unlikely to be the sole cause if the consuming app wasn't already passing a custom `mapStyle` value - the blank map may still need the console-log investigation already in progress.
 
 ### 4.0.1
 **README-only release — no code changes.** Moves the "Tested on iOS/Android" confirmation up under Features (was buried in the 4.0.0 changelog entry). Fills in step 3 of Installation with the actual `forceStaticLinking` config and the confirmed working version set (both were only in the changelog before, not in the actual setup instructions). Fixes a stale `mapboxMapsVersion` iOS reference (`11.14.0`, never actually shipped) to the real confirmed version (`11.20.2`) in the Plugin Options table. Shortens the iOS Architecture section and drops outdated references to superseded 2.2.x/2.3.0-era approaches no longer relevant to how this package works today.
