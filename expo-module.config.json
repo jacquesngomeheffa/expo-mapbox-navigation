@@ -1,9 +1,14 @@
 {
-  "platforms": ["android", "ios"],
-  "android": {
-    "modules": ["expo.modules.mapboxnavigation.ExpoMapboxNavigationModule"]
+  "platforms": ["apple", "ios", "android"],
+  "apple": {
+    "modules": ["ExpoMapboxNavigationModule"],
+    "podspecPath": "ExpoMapboxNavigation.podspec"
   },
   "ios": {
-    "modules": ["ExpoMapboxNavigationModule"]
+    "modules": ["ExpoMapboxNavigationModule"],
+    "podspecPath": "ExpoMapboxNavigation.podspec"
+  },
+  "android": {
+    "modules": ["expo.modules.mapboxnavigation.ExpoMapboxNavigationModule"]
   }
 }
