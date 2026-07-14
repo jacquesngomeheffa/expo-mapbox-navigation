@@ -1,5 +1,10 @@
 node_modules
 
+# Local Gradle build cache — machine-specific, fully regenerable, never
+# meant to be tracked or published. Found already partially committed
+# during the 4.0.3 audit.
+android/.gradle
+
 # Mapbox iOS xcframeworks — deliberately NOT committed to this repo.
 #
 # Mapbox's Product Terms ("1.10. No Redistribution") prohibit redistributing

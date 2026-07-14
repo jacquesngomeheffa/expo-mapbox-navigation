@@ -1,6 +1,6 @@
 {
   "name": "@jacques_gordon/expo-mapbox-navigation",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Expo module for Mapbox Navigation SDK with 16KB page size support, NDK27, and Mapbox Maps v11.11.0+",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -40,9 +40,6 @@
     "expo-module-scripts": "^3.5.0",
     "typescript": "^5.3.0"
   },
-  "dependencies": {
-    "expo-modules-core": ">=2.0.0"
-  },
   "expo": {
     "fyi": "https://github.com/jacques_gordon/expo-mapbox-navigation"
   },
@@ -57,7 +54,8 @@
     "expo-module.config.json",
     "README.md",
     "LICENSE",
-    "!ios/Frameworks/*.xcframework"
+    "!ios/Frameworks/*.xcframework",
+    "!android/.gradle"
   ],
   "publishConfig": {
     "access": "public"

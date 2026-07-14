@@ -1,3 +1,4 @@
+import React from 'react';
 import { ViewStyle } from 'react-native';
 export interface Coordinate {
     latitude: number;
@@ -215,5 +216,5 @@ export interface ManeuverBannerPressedEvent {
  * />
  * ```
  */
-export declare function MapboxNavigationView(props: MapboxNavigationViewProps): any;
+export declare function MapboxNavigationView(props: MapboxNavigationViewProps): React.JSX.Element;
 export default MapboxNavigationView;
