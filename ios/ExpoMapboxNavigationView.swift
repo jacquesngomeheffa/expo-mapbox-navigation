@@ -234,13 +234,20 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         // FIXED: excludeTypes was declared/settable but never applied on
         // iOS (dead code) - Android drives MapboxDirections' exclude(...)
-        // request param with it. RoadClasses(descriptions:) is
-        // MapboxDirections' own confirmed public initializer for building
-        // this option set from plain strings (e.g. "toll", "motorway",
-        // "ferry" - the same values already accepted by the Android side
-        // and documented in this package's Props table).
-        if let excludes = excludeTypes, !excludes.isEmpty {
-            options.roadClassesToAvoid = RoadClasses(descriptions: excludes)
+        // request param with it. RoadClasses(descriptions:) is a FAILABLE
+        // initializer (`init?`, verified verbatim in mapbox-navigation-ios
+        // v3.20.1's vendored Sources/MapboxDirections/RoadClasses.swift):
+        // any single unrecognized description string makes the WHOLE
+        // initializer return nil (its `default:` case is `return nil`).
+        // Recognized values at v3.20.1: "toll", "restricted", "motorway",
+        // "ferry", "tunnel", "hov2", "hov3", "hot", "unpaved",
+        // "cash_only_tolls" ("" is skipped). So: valid list -> applied;
+        // any invalid entry -> nil -> no exclusions applied (graceful
+        // no-op rather than a crash), matching this package's established
+        // never-crash-on-bad-prop-input convention (see mapboxColor above).
+        if let excludes = excludeTypes, !excludes.isEmpty,
+           let roadClasses = RoadClasses(descriptions: excludes) {
+            options.roadClassesToAvoid = roadClasses
         }
 
         // FIXED: maxHeight/maxWidth were declared/settable but never
@@ -566,12 +573,25 @@ extension ExpoMapboxNavigationView: NavigationViewControllerDelegate {
         ])
     }
 
+    // FIXED signature: this method previously declared `-> Bool` (the
+    // Navigation SDK v2 shape of this delegate callback). At v3.20.1 the
+    // protocol requirement is `-> Void` (verified verbatim in
+    // mapbox-navigation-ios v3.20.1's
+    // Sources/MapboxNavigationUIKit/NavigationViewControllerDelegate.swift:
+    // both the requirement and its default implementation return Void).
+    // With the stray `-> Bool`, this method did NOT match the protocol
+    // requirement - it still compiled (just an extra unrelated method on
+    // the extension), but the SDK dispatched to its own default no-op
+    // implementation instead, so onArrival would NEVER have fired. No
+    // compiler diagnostic catches this; found by manually diffing the
+    // delegate signatures against the SDK source. Multi-leg continuation
+    // is handled by the SDK itself in v3 - the v2-era `return true` had
+    // no v3 equivalent to preserve.
     public func navigationViewController(
         _ navigationViewController: NavigationViewController,
         didArriveAt waypoint: Waypoint
-    ) -> Bool {
+    ) {
         onArrival([:])
-        return true // continue to next waypoint if multi-stop
     }
 
     public func navigationViewControllerDidDismiss(
