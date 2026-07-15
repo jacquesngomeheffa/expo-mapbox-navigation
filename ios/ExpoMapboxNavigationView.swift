@@ -210,7 +210,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         // regardless (the Directions API requires this), matching the
         // implicit behavior of Android's index list.
         let waypoints = coordinates.enumerated().map { index, coord -> Waypoint in
-            let wp = Waypoint(coordinate: CLLocationCoordinate2D(
+            var wp = Waypoint(coordinate: CLLocationCoordinate2D(
                 latitude:  coord["latitude"]  ?? 0.0,
                 longitude: coord["longitude"] ?? 0.0
             ))
@@ -222,7 +222,7 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         var options = NavigationRouteOptions(waypoints: waypoints)
         if let langTag = language { options.locale = Locale(identifier: langTag) }
-        options.distanceUnit = resolveVoiceUnits() == "imperial" ? .mile : .kilometer
+        options.distanceMeasurementSystem = resolveVoiceUnits() == "imperial" ? .imperial : .metric
 
         switch navigationProfile ?? "driving-traffic" {
         case "driving-traffic": options.profileIdentifier = .automobileAvoidingTraffic
