@@ -181,6 +181,20 @@ public class ExpoMapboxNavigationView: ExpoView {
             let provider = MapboxNavigationProvider(coreConfig: .init())
             self.mapboxNavigationProvider = provider
             self.mapboxNavigation = provider.mapboxNavigation
+            // RACE FIX: React Native/Fabric delivers initial props (including
+            // `coordinates`) synchronously, in the same main-runloop turn that
+            // created this view — i.e. BEFORE this async block runs. That
+            // first setCoordinates() call therefore reaches fetchRoutes()
+            // while `mapboxNavigation` is still nil, and fetchRoutes()'s
+            // guard bails out silently. Nothing ever re-triggered the fetch
+            // afterwards, so the view stayed permanently empty (black
+            // screen, no Mapbox log activity at all — matching a real
+            // device Console.app capture showing zero Mapbox output).
+            // Re-running fetchRoutes() here covers that ordering: it no-ops
+            // unless valid coordinates already arrived, and prop updates
+            // arriving after this point were already handled by the setter
+            // path. No new SDK API involved — pure sequencing fix.
+            self.fetchRoutes()
         }
     }
 
@@ -273,7 +287,14 @@ public class ExpoMapboxNavigationView: ExpoView {
         routeRequestTask = Task { [weak self] in
             guard let self = self else { return }
             let request = mapboxNavigation.routingProvider().calculateRoutes(options: options)
-            switch await request.result {
+            let result = await request.result
+            // Swift Task cancellation is cooperative: cancel() only sets a
+            // flag, it does not interrupt this body. Without this check, a
+            // request superseded by newer coordinates (or cancelled by
+            // removeFromSuperview) would still fire stale events and present
+            // a NavigationViewController for an outdated route.
+            guard !Task.isCancelled else { return }
+            switch result {
             case .failure(let error):
                 self.onRoutesFailed(["message": error.localizedDescription])
             case .success(let navigationRoutes):
@@ -328,7 +349,18 @@ public class ExpoMapboxNavigationView: ExpoView {
             provider.routeVoiceController.speechSynthesizer.muted = true
         }
 
-        // Add to view hierarchy FIRST, then attach tap handler
+        // View-controller containment, in Apple's documented canonical
+        // order ("Creating a custom container view controller"):
+        // addChild FIRST, then add the child's view / constraints, then
+        // didMove(toParent:) last. The previous ordering here (addSubview
+        // before addChild) worked but violated that documented contract,
+        // which can skew appearance-callback ordering. Containment is
+        // still conditional on actually finding a parent VC — same
+        // fallback behavior as before when none is reachable.
+        let parentVC = findParentViewController()
+        if let parentVC = parentVC {
+            parentVC.addChild(vc)
+        }
         addSubview(vc.view)
         vc.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -337,9 +369,7 @@ public class ExpoMapboxNavigationView: ExpoView {
             vc.view.leadingAnchor.constraint(equalTo: leadingAnchor),
             vc.view.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
-
-        if let parentVC = findParentViewController() {
-            parentVC.addChild(vc)
+        if parentVC != nil {
             vc.didMove(toParent: parentVC)
         }
 
