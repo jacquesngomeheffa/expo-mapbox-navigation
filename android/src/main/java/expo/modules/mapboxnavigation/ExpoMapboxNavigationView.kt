@@ -30,6 +30,12 @@ import android.widget.TextView
 import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.common.location.Location
 import com.mapbox.geojson.Point
+import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.extension.style.layers.properties.generated.IconAnchor
+import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ImageHolder
 import com.mapbox.maps.MapView
@@ -123,6 +129,12 @@ private const val DEGENERATE_ROUTE_MESSAGE =
 // of the navigation view's own height. Product requirement: the list must
 // not extend all the way to the bottom of the screen.
 private const val STEPS_PANEL_MAX_HEIGHT_FRACTION = 0.86f
+
+// Degenerate-route camera (5.0.2): street-level zoom used to center the map
+// on the driver when the whole trip is a single point and no navigation
+// session will ever start (so the usual first-location camera centering,
+// which depends on the trip session's location updates, never triggers).
+private const val DEGENERATE_ROUTE_CAMERA_ZOOM = 15.0
 
 class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     ExpoView(context, appContext) {
@@ -1118,6 +1130,132 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         stepsPanelOverlay = null
     }
 
+    // ── Waypoint markers (5.0.2) ────────────────────────────────────────────
+    // A checkered destination flag at the final coordinate and numbered
+    // circular badges at intermediate leg-separating waypoints - the same
+    // markers the iOS side renders through the SDK's delegate hooks. Android
+    // uses the Maps SDK's annotation plugin (bundled with the existing
+    // com.mapbox.maps:android dependency - no new artifact) with bitmaps
+    // drawn in code, matching this file's existing Canvas-drawn-icon
+    // convention (see drawSpeakerIcon and friends). Markers are added when
+    // routes become active and fully cleared on navigation teardown.
+    private var waypointAnnotationManager: PointAnnotationManager? = null
+
+    private fun drawDestinationFlagBitmap(): Bitmap {
+        val w = (30 * dp).toInt()
+        val h = (40 * dp).toInt()
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val darkSlate = Color.rgb(46, 59, 74)
+        val ink = Color.rgb(31, 36, 43)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        // Pole: rounded vertical bar at the left, full height.
+        paint.color = darkSlate
+        canvas.drawRoundRect(
+            RectF(2 * dp, 2 * dp, 5 * dp, 38 * dp),
+            1.5f * dp, 1.5f * dp, paint
+        )
+        // Flag body: white base, 3x2 checker, thin border.
+        val flag = RectF(5 * dp, 3 * dp, 27 * dp, 18 * dp)
+        paint.color = Color.WHITE
+        canvas.drawRect(flag, paint)
+        paint.color = ink
+        val cellW = flag.width() / 3f
+        val cellH = flag.height() / 2f
+        for (row in 0 until 2) {
+            for (col in 0 until 3) {
+                if ((row + col) % 2 == 0) {
+                    canvas.drawRect(
+                        flag.left + col * cellW,
+                        flag.top + row * cellH,
+                        flag.left + (col + 1) * cellW,
+                        flag.top + (row + 1) * cellH,
+                        paint
+                    )
+                }
+            }
+        }
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1 * dp
+        canvas.drawRect(flag, paint)
+        return bmp
+    }
+
+    private fun drawWaypointBadgeBitmap(number: Int): Bitmap {
+        val size = (26 * dp).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val cx = size / 2f
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        // Disc: dark slate fill + white stroke (same palette as the flag).
+        paint.color = Color.rgb(46, 59, 74)
+        canvas.drawCircle(cx, cx, cx - 1.5f * dp, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2 * dp
+        paint.color = Color.WHITE
+        canvas.drawCircle(cx, cx, cx - 1.5f * dp, paint)
+        // Number, white, centered.
+        paint.style = Paint.Style.FILL
+        paint.textSize = 12 * dp
+        paint.textAlign = Paint.Align.CENTER
+        paint.isFakeBoldText = true
+        val textY = cx - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(number.toString(), cx, textY, paint)
+        return bmp
+    }
+
+    private fun clearWaypointMarkers() {
+        try {
+            waypointAnnotationManager?.deleteAll()
+        } catch (e: Exception) {
+            Log.e(TAG, "clearWaypointMarkers failed: ${e.message}")
+        }
+    }
+
+    private fun updateWaypointMarkers() {
+        if (coordinates.size < 2) return
+        try {
+            val manager = waypointAnnotationManager
+                ?: mapView.annotations.createPointAnnotationManager().also { waypointAnnotationManager = it }
+            manager.deleteAll()
+
+            val markers = mutableListOf<PointAnnotationOptions>()
+            var badgeNumber = 0
+            coordinates.forEachIndexed { index, coord ->
+                val lat = coord["latitude"] ?: return@forEachIndexed
+                val lng = coord["longitude"] ?: return@forEachIndexed
+                val isFinal = index == coordinates.size - 1
+                val isOrigin = index == 0
+                // Same leg-separation semantics fetchRoutes sends to the
+                // Directions API: with waypointIndices set, only listed
+                // intermediate indices are true stops; otherwise every
+                // intermediate coordinate is one.
+                val isTrueStop = waypointIndices?.let { it.contains(index) } ?: true
+                when {
+                    isFinal -> markers.add(
+                        PointAnnotationOptions()
+                            .withPoint(Point.fromLngLat(lng, lat))
+                            .withIconImage(drawDestinationFlagBitmap())
+                            .withIconAnchor(IconAnchor.BOTTOM)
+                    )
+                    !isOrigin && isTrueStop -> {
+                        badgeNumber += 1
+                        markers.add(
+                            PointAnnotationOptions()
+                                .withPoint(Point.fromLngLat(lng, lat))
+                                .withIconImage(drawWaypointBadgeBitmap(badgeNumber))
+                                .withIconAnchor(IconAnchor.CENTER)
+                        )
+                    }
+                }
+            }
+            if (markers.isNotEmpty()) manager.create(markers)
+        } catch (e: Exception) {
+            // Marker rendering is cosmetic - it must never break navigation.
+            Log.e(TAG, "updateWaypointMarkers failed: ${e.message}")
+        }
+    }
+
     private fun toggleNativeStepsPanel() {
         if (stepsPanelOverlay != null) {
             dismissNativeStepsPanel()
@@ -1219,6 +1357,8 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // (cancel, arrival teardown, etc.) - it must never outlive the
         // navigation session it lists steps for.
         dismissNativeStepsPanel()
+        // Waypoint markers belong to the torn-down route - clear them too.
+        clearWaypointMarkers()
         maneuverView?.visibility = View.INVISIBLE
         speedInfoView?.visibility = View.GONE
         etaBar?.visibility = View.INVISIBLE
@@ -1262,6 +1402,47 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             distanceResult[0] < DEGENERATE_ROUTE_THRESHOLD_METERS
         }
         if (wholeTripIsOnePoint) {
+            // Center the camera on the driver (the trip's first coordinate)
+            // instead of leaving the map at world view (5.0.2): in this
+            // branch no route is requested, so no trip session ever starts,
+            // no enhanced locations flow, and the usual first-location
+            // camera centering (safeCameraFollowing) never triggers - a
+            // real device test showed the map stuck on a whole-world view.
+            // The driver's position is already in hand as coordinates[0];
+            // no location engine or permission dependency needed.
+            val lat = firstCoord["latitude"]
+            val lng = firstCoord["longitude"]
+            if (lat != null && lng != null) {
+                try {
+                    mapView.mapboxMap.setCamera(
+                        CameraOptions.Builder()
+                            .center(Point.fromLngLat(lng, lat))
+                            .zoom(DEGENERATE_ROUTE_CAMERA_ZOOM)
+                            .build()
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "degenerate-route camera centering failed: ${e.message}")
+                }
+            }
+            // Free-drive session (5.0.2, parity with iOS's fallback map):
+            // a trip session with NO routes = Mapbox's passive free-drive
+            // mode. It makes enhanced locations flow, which animates the
+            // puck AND triggers the existing first-location camera
+            // centering (safeCameraFollowing) - so the static setCamera
+            // above is instant feedback, and live following takes over on
+            // the first GPS fix. If a real trip is requested later,
+            // fetchRoutes' normal path (setNavigationRoutes +
+            // startTripSession) transitions free drive to active guidance
+            // seamlessly - the standard Android SDK flow this file already
+            // uses. Location permission is guaranteed by the consuming
+            // app's own gate before this view mounts (same assumption the
+            // rest of this file already makes via @SuppressLint).
+            try {
+                nav.setNavigationRoutes(listOf())
+                nav.startTripSession()
+            } catch (e: Exception) {
+                Log.e(TAG, "degenerate-route free-drive start failed: ${e.message}")
+            }
             // `code` is a stable, machine-readable identifier: the consuming
             // app should switch on it to show its own LOCALIZED message
             // (the `message` string is English-only debugging text - this
@@ -1312,6 +1493,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
                 nav.setNavigationRoutes(routes)
                 nav.startTripSession()
+                updateWaypointMarkers()
             }
             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))

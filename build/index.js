@@ -31,7 +31,7 @@ const NativeView = (0, expo_modules_core_1.requireNativeViewManager)('ExpoMapbox
  * ```
  */
 function MapboxNavigationView(props) {
-    return (<NativeView {...props} style={[styles.fullSize, props.style]}/>);
+    return (react_1.default.createElement(NativeView, { ...props, style: [styles.fullSize, props.style] }));
 }
 const styles = react_native_1.StyleSheet.create({
     fullSize: { flex: 1 },

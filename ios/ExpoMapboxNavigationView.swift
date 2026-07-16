@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import UIKit
 import CoreLocation
+import Combine
 // MapboxDirections types (Waypoint, NavigationRouteOptions, etc.) are
 // re-exported by MapboxNavigationCore in Navigation SDK v3.
 import MapboxNavigationCore
@@ -134,6 +135,17 @@ public class ExpoMapboxNavigationView: ExpoView {
     private var navigationViewController: NavigationViewController?
     private var currentNavigationRoutes: NavigationRoutes?
     private var routeRequestTask: Task<Void, Never>?
+    // Free-drive fallback map (5.0.2): shown when the degenerate-route guard
+    // fires (driver already at destination) - a standalone NavigationMapView
+    // in a passive free-drive session, so the driver sees a live map
+    // centered on themselves instead of a black view.
+    private var freeDriveMapView: NavigationMapView?
+    // Waypoint markers (5.0.2): keeps the destination-flag image registered
+    // across style (re)loads on the drop-in map - style changes wipe
+    // registered images, so this observer re-adds it every time a style
+    // finishes loading (the exact pattern of Mapbox's own v3.20.1
+    // Custom-Final-Waypoint example). Cancelled on teardown.
+    private var waypointImageStyleCancelable: Cancelable?
 
     // MARK: - State (mirrors Android state vars)
     private var isMuted        = false
@@ -257,6 +269,11 @@ public class ExpoMapboxNavigationView: ExpoView {
             return location.distance(from: firstLocation) < Self.degenerateRouteThresholdMeters
         }
         if wholeTripIsOnePoint {
+            // Show a live free-drive map instead of a black view (5.0.2):
+            // without this, no NavigationViewController is ever constructed
+            // in this branch, and iOS's route-only architecture would leave
+            // the surface permanently empty.
+            startFreeDriveFallback()
             // `code` is a stable, machine-readable identifier: the consuming
             // app should switch on it to show its own LOCALIZED message
             // (the `message` string is English-only debugging text - this
@@ -368,12 +385,130 @@ public class ExpoMapboxNavigationView: ExpoView {
         }
     }
 
+    // MARK: - Waypoint markers (5.0.2)
+    // A professional destination marker (checkered "finish" flag on a pole)
+    // at the final waypoint, and numbered circular badges at intermediate
+    // waypoints - rendered through the SDK's OWN waypoint pipeline via the
+    // three NavigationViewControllerDelegate customization hooks
+    // (shapeFor/waypointCircleLayer/waypointSymbolLayer), all verified
+    // verbatim against Mapbox's own v3.20.1 Custom-Final-Waypoint example.
+    // Using the SDK pipeline (rather than manually managed annotations)
+    // means markers automatically follow rerouting, and passed waypoints
+    // fade out via the same `completed` property the SDK maintains.
+
+    static let finalWaypointImageId = "expo_mapbox_navigation_final_flag"
+
+    // Draws the checkered destination flag (pole + 3x2 checker) in code -
+    // no bundled image assets, consistent with how every icon in this
+    // package's Android UI is drawn. Size in points; rendered at screen
+    // scale by UIGraphicsImageRenderer automatically.
+    private static func makeDestinationFlagImage() -> UIImage {
+        let size = CGSize(width: 30, height: 40)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let c = ctx.cgContext
+            // Pole: rounded vertical bar, dark slate, full height, at left.
+            let poleRect = CGRect(x: 2, y: 2, width: 3, height: 36)
+            c.setFillColor(UIColor(red: 0.18, green: 0.23, blue: 0.29, alpha: 1).cgColor)
+            UIBezierPath(roundedRect: poleRect, cornerRadius: 1.5).fill()
+            // Flag body: rectangle attached to the pole top.
+            let flagRect = CGRect(x: 5, y: 3, width: 22, height: 15)
+            // White base + thin dark border, then 3x2 checker overlay.
+            c.setFillColor(UIColor.white.cgColor)
+            c.fill(flagRect)
+            let cellW = flagRect.width / 3.0
+            let cellH = flagRect.height / 2.0
+            c.setFillColor(UIColor(red: 0.12, green: 0.14, blue: 0.17, alpha: 1).cgColor)
+            for row in 0..<2 {
+                for col in 0..<3 where (row + col) % 2 == 0 {
+                    c.fill(CGRect(
+                        x: flagRect.minX + CGFloat(col) * cellW,
+                        y: flagRect.minY + CGFloat(row) * cellH,
+                        width: cellW,
+                        height: cellH
+                    ))
+                }
+            }
+            c.setStrokeColor(UIColor(red: 0.12, green: 0.14, blue: 0.17, alpha: 1).cgColor)
+            c.setLineWidth(1)
+            c.stroke(flagRect)
+        }
+    }
+
+    // Registers the flag image with the given map's style if not already
+    // present. Inlined equivalent of the v3.20.1 example's own
+    // addImageIfNotExists helper (imageExists(withId:) + addImage(_:id:...)
+    // are the public MapboxMaps APIs it wraps) - with try? instead of the
+    // example's try!, per this package's never-crash-on-style-ops rule.
+    private func registerFlagImage(on navigationMapView: NavigationMapView) {
+        guard !navigationMapView.mapView.mapboxMap.imageExists(withId: Self.finalWaypointImageId) else { return }
+        try? navigationMapView.mapView.mapboxMap.addImage(
+            Self.makeDestinationFlagImage(),
+            id: Self.finalWaypointImageId,
+            stretchX: [],
+            stretchY: []
+        )
+    }
+
+    // MARK: - Free-drive fallback map (5.0.2)
+    // Construction pattern verified VERBATIM against Mapbox's own v3.20.1
+    // example (Examples/AdditionalExamples/Examples/
+    // Custom-Navigation-Camera.swift): a standalone NavigationMapView built
+    // from the shared navigation's Combine publishers
+    // (locationMatching.map(\.enhancedLocation) /
+    // routeProgress.map(\.?.routeProgress)), plus
+    // tripSession().startFreeDrive() - all three APIs confirmed public at
+    // the exact vendored tag (SessionController.swift line 8,
+    // NavigationMapView.swift line 113, NavigationController.swift).
+    // The default puck on a NavigationMapView is already the SDK's
+    // directional arrow (.puck3D(.navigationDefault)); custom puck props
+    // deliberately do not apply here - this is a minimal passive fallback,
+    // not a navigation session.
+    private func startFreeDriveFallback() {
+        guard let mapboxNavigation = mapboxNavigation else { return }
+        // Already showing: just re-assert the following camera.
+        if let existing = freeDriveMapView {
+            existing.navigationCamera.update(cameraState: .following)
+            return
+        }
+        tearDownNavigationViewController()
+
+        let mapView = NavigationMapView(
+            location: mapboxNavigation.navigation().locationMatching.map(\.enhancedLocation)
+                .eraseToAnyPublisher(),
+            routeProgress: mapboxNavigation.navigation().routeProgress.map(\.?.routeProgress)
+                .eraseToAnyPublisher()
+        )
+        addSubview(mapView)
+        mapView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            mapView.topAnchor.constraint(equalTo: topAnchor),
+            mapView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            mapView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            mapView.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+
+        mapboxNavigation.tripSession().startFreeDrive()
+        mapView.navigationCamera.update(cameraState: .following)
+        freeDriveMapView = mapView
+    }
+
+    private func tearDownFreeDriveMapView() {
+        freeDriveMapView?.removeFromSuperview()
+        freeDriveMapView = nil
+    }
+
     // MARK: - Present NavigationViewController (drop-in: includes ETA bar,
     // speed limit, lane guidance, mute/overview/recenter buttons natively)
     private func presentNavigationViewController(with navigationRoutes: NavigationRoutes) {
         guard let provider = mapboxNavigationProvider,
               let mapboxNavigation = mapboxNavigation else { return }
 
+        // A real route replaces the free-drive fallback map, if one is up
+        // (the SDK's own examples do this exact free-drive -> active
+        // guidance transition; NavigationViewController manages the session
+        // switch itself).
+        tearDownFreeDriveMapView()
         tearDownNavigationViewController()
 
         // Custom day/night styles for the maneuver banner background color.
@@ -442,6 +577,17 @@ public class ExpoMapboxNavigationView: ExpoView {
 
         self.navigationViewController = vc
         isOverviewMode = false
+
+        // Destination flag image: register now, and re-register after every
+        // style load (style changes wipe registered images - including this
+        // package's own optional mapStyle load below). Same double coverage
+        // as Mapbox's own v3.20.1 Custom-Final-Waypoint example.
+        registerFlagImage(on: vc.navigationView.navigationMapView)
+        waypointImageStyleCancelable = vc.navigationView.navigationMapView.mapView.mapboxMap
+            .onStyleLoaded.observe { [weak self, weak vc] _ in
+                guard let self = self, let vc = vc else { return }
+                self.registerFlagImage(on: vc.navigationView.navigationMapView)
+            }
 
         // FIXED: mapStyle was declared/settable but never applied on iOS
         // (dead code) - Android drives mapView.mapboxMap.loadStyle(...)
@@ -535,6 +681,8 @@ public class ExpoMapboxNavigationView: ExpoView {
 
     // MARK: - Teardown
     private func tearDownNavigationViewController() {
+        waypointImageStyleCancelable?.cancel()
+        waypointImageStyleCancelable = nil
         guard let vc = navigationViewController else { return }
         vc.willMove(toParent: nil)
         vc.view.removeFromSuperview()
@@ -743,6 +891,17 @@ public class ExpoMapboxNavigationView: ExpoView {
     // MARK: - Lifecycle
     public override func removeFromSuperview() {
         routeRequestTask?.cancel()
+        // If the free-drive fallback was active, stop its passive session
+        // (the provider is shared and process-lived as of 5.0.1 - leaving
+        // free drive running after the view is gone would keep location
+        // processing alive in the background for nothing). Deliberately
+        // scoped to the free-drive case only: active-guidance session
+        // teardown stays owned by NavigationViewController exactly as
+        // before.
+        if freeDriveMapView != nil {
+            mapboxNavigation?.tripSession().setToIdle()
+            tearDownFreeDriveMapView()
+        }
         tearDownNavigationViewController()
         super.removeFromSuperview()
     }
@@ -798,5 +957,99 @@ extension ExpoMapboxNavigationView: NavigationViewControllerDelegate {
             onNavigationFinished([:])
             tearDownNavigationViewController()
         }
+    }
+
+    // MARK: Waypoint marker customization (5.0.2)
+    // The three SDK hooks below are adapted from Mapbox's own v3.20.1
+    // Custom-Final-Waypoint example (verified verbatim: identical method
+    // signatures on NavigationViewControllerDelegate at the vendored tag).
+    // Per-feature properties drive everything: the final waypoint renders
+    // the checkered flag (imageId -> symbol layer icon), intermediate
+    // waypoints render as numbered badges (circle layer disc + symbol
+    // layer text), and waypoints the driver has already passed fade out
+    // via the SDK-maintained legIndex.
+
+    public func navigationViewController(
+        _ navigationViewController: NavigationViewController,
+        shapeFor waypoints: [Waypoint],
+        legIndex: Int
+    ) -> FeatureCollection? {
+        var features = [Turf.Feature]()
+        for (index, waypoint) in waypoints.enumerated() {
+            var feature = Feature(geometry: .point(Point(waypoint.coordinate)))
+            let isFinal = index == waypoints.count - 1
+            let isCompleted = index <= legIndex
+            var properties: [String: JSONValue] = [:]
+            properties["completedOrFinal"] = .boolean(isCompleted || isFinal)
+            properties["completed"] = .boolean(isCompleted)
+            properties["imageId"] = isFinal ? .string(Self.finalWaypointImageId) : nil
+            // 1-based badge number for intermediate stops only.
+            properties["waypointNumber"] = (!isFinal && index > 0) ? .string(String(index)) : nil
+            feature.properties = properties
+            features.append(feature)
+        }
+        return FeatureCollection(features: features)
+    }
+
+    public func navigationViewController(
+        _ navigationViewController: NavigationViewController,
+        waypointCircleLayerWithIdentifier identifier: String,
+        sourceIdentifier: String
+    ) -> CircleLayer? {
+        // Badge disc for intermediate waypoints. Hidden for the final
+        // waypoint (the flag replaces it) and for already-passed waypoints.
+        var circleLayer = CircleLayer(id: identifier, source: sourceIdentifier)
+        let hiddenWhenCompletedOrFinal = Exp(.switchCase) {
+            Exp(.any) { Exp(.get) { "completedOrFinal" } }
+            0
+            1
+        }
+        circleLayer.circleColor = .constant(StyleColor(UIColor(red: 0.18, green: 0.23, blue: 0.29, alpha: 1)))
+        circleLayer.circleStrokeColor = .constant(StyleColor(.white))
+        circleLayer.circleRadius = .expression(Exp(.interpolate) {
+            Exp(.linear)
+            Exp(.zoom)
+            10.0; 8.0
+            18.0; 13.0
+        })
+        circleLayer.circleStrokeWidth = .constant(2.0)
+        circleLayer.circleOpacity = .expression(hiddenWhenCompletedOrFinal)
+        circleLayer.circleStrokeOpacity = .expression(hiddenWhenCompletedOrFinal)
+        circleLayer.circleEmissiveStrength = .constant(1)
+        circleLayer.circlePitchAlignment = .constant(.map)
+        return circleLayer
+    }
+
+    public func navigationViewController(
+        _ navigationViewController: NavigationViewController,
+        waypointSymbolLayerWithIdentifier identifier: String,
+        sourceIdentifier: String
+    ) -> SymbolLayer? {
+        // Flag icon at the final waypoint + white badge numbers on the
+        // intermediate discs. Features without the matching property render
+        // neither (absent imageId -> no icon; absent waypointNumber -> no
+        // text), so one layer cleanly serves both roles.
+        var symbolLayer = SymbolLayer(id: identifier, source: sourceIdentifier)
+        symbolLayer.iconImage = .expression(Exp(.get) { "imageId" })
+        symbolLayer.iconAnchor = .constant(.bottom)
+        symbolLayer.iconOffset = .constant([0, 2])
+        symbolLayer.iconAllowOverlap = .constant(true)
+        let hiddenWhenCompleted = Exp(.switchCase) {
+            Exp(.any) { Exp(.get) { "completed" } }
+            0
+            1
+        }
+        symbolLayer.iconOpacity = .expression(hiddenWhenCompleted)
+        symbolLayer.textField = .expression(Exp(.get) { "waypointNumber" })
+        symbolLayer.textColor = .constant(StyleColor(.white))
+        symbolLayer.textSize = .expression(Exp(.interpolate) {
+            Exp(.linear)
+            Exp(.zoom)
+            10.0; 10.0
+            18.0; 14.0
+        })
+        symbolLayer.textAllowOverlap = .constant(true)
+        symbolLayer.textOpacity = .expression(hiddenWhenCompleted)
+        return symbolLayer
     }
 }
