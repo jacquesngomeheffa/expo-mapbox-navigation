@@ -154,6 +154,8 @@ export default function Navigation() {
 
 ### Navigation
 
+> **Route recalculation on prop change (5.0.0+, both platforms):** changing any of `coordinates`, `waypointIndices`, `navigationProfile`, `language`, `voiceUnits`, `excludeTypes`, `maxHeight` or `maxWidth` automatically recalculates the route with the new value (multiple changes in the same render batch coalesce into a single request; re-setting an identical value does nothing). Before 5.0.0, only `coordinates` triggered recalculation — changing e.g. `language` mid-session had no effect until the next coordinates change. `mapStyle` and the color/UI props never trigger recalculation.
+
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `coordinates` | `{ latitude: number; longitude: number }[]` | **required** | Waypoints. Minimum 2. |
@@ -349,6 +351,19 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 5.0.0
+**Both platforms: route-affecting props now re-trigger route calculation when their value changes. Previously, only `coordinates` did — changing `navigationProfile`, `language`, `voiceUnits`, `excludeTypes`, `waypointIndices`, `maxHeight` or `maxWidth` after mount was silently ignored until the next coordinates change. Major version bump because this is a real behavior change consumers can observe (a route may now recalculate in situations where it previously wouldn't).**
+
+- **Concrete bug this fixes**: changing the app language mid-session left voice guidance and banner instructions in the OLD language — the Directions API returns instructions already translated inside the route response itself, so without a new route request, the new `language` value was stored but never used. Same mechanism affected all the other route-affecting props (e.g. switching `navigationProfile` from driving to walking did nothing).
+- **Props that now re-trigger `fetchRoutes()` on change** (each one verified to be actually read by both platforms' route-request builders): `coordinates` (as before), `waypointIndices`, `navigationProfile`, `language`, `voiceUnits`, `excludeTypes`, `maxHeight`, `maxWidth`.
+- **Props deliberately EXCLUDED from re-triggering** (verified to have no link to the route request): `mapStyle` (map appearance only — applied at presentation time, unchanged behavior), `mute` (live-applied already, no route impact), `useMapMatching`/`customRasterTileUrl`/`customRasterAboveLayerId` (stored-but-unused on BOTH platforms since before 4.0.2 — wiring dead props to refetch would be pure noise), and all color/puck/UI props.
+- **Two safeguards against regressions, implemented identically on both platforms**:
+  1. **Equality guard in every affected setter** — re-delivering an identical value never triggers a refetch.
+  2. **Coalescing** — all triggers within one main-loop turn merge into a single deferred `fetchRoutes()` call. This matters most at initial mount, where React Native delivers every prop in one batch: without coalescing, mounting the view would fire up to 8 simultaneous route requests. With it, exactly one. On iOS this also means the initial fetch runs after `init()`'s provider-creation block (queued earlier on the same main queue), closing the 4.0.8 startup-ordering gap from a second, independent angle — and 4.0.8's own provider-ready catch-up call now goes through the same scheduler rather than calling `fetchRoutes()` directly (caught in this release's own pre-publish audit: a direct call would have fired a first request at mount that the props' scheduled fetch immediately cancelled and re-issued — two network requests per mount, one wasted). On Android the scheduler uses a main-`Looper` `Handler` rather than `View.post()` — deliberate: `View.post()` defers queued work until the view is *attached*, and props are delivered before attachment.
+- **Cross-platform parity preserved by construction**: the exact same prop list, guards, and coalescing semantics ship on iOS and Android in this same release — at no point does one platform refetch where the other doesn't. (This was the explicit reason this change was previously rejected as an iOS-only fix — see the analysis that led to it.)
+- **What did NOT change**: `fetchRoutes()`'s own internal guards (needs ≥2 coordinates and an initialized navigation instance) still make any scheduled fetch a harmless no-op when prerequisites aren't met; Android's `mapboxNavigation` is still created synchronously in `init{}`; iOS keeps the 4.0.8 provider-ready catch-up call.
+- **Verification status**: Kotlin/Swift both syntax-checked (brace/paren balance), all call sites of `fetchRoutes()` audited on both platforms (it is now reachable only via the scheduler, plus iOS's init catch-up), setter wiring re-verified against both Module definition files, and equality semantics confirmed against both languages' structural-equality rules for the exact declared property types. As always: no local native toolchain available — a real build on each platform is the final confirmation step.
 
 ### 4.0.8
 **iOS: fixes the black-screen-after-successful-build failure — a startup race condition that silently prevented the route request (and therefore the entire navigation UI) from ever starting. Found via a full line-by-line audit of `ios/ExpoMapboxNavigationView.swift` prompted by a real on-device test: the 4.0.7 build compiles, launches, and shows a permanently black view where the map should be, with a Console.app capture showing zero Mapbox activity of any kind.**

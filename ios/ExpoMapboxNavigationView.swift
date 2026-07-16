@@ -190,11 +190,17 @@ public class ExpoMapboxNavigationView: ExpoView {
             // afterwards, so the view stayed permanently empty (black
             // screen, no Mapbox log activity at all — matching a real
             // device Console.app capture showing zero Mapbox output).
-            // Re-running fetchRoutes() here covers that ordering: it no-ops
+            // Re-triggering the fetch here covers that ordering: it no-ops
             // unless valid coordinates already arrived, and prop updates
             // arriving after this point were already handled by the setter
-            // path. No new SDK API involved — pure sequencing fix.
-            self.fetchRoutes()
+            // path. Goes through scheduleFetchRoutes() (5.0.0), NOT a direct
+            // fetchRoutes() call: at mount, the prop setters have usually
+            // already scheduled a coalesced fetch on the main queue - a
+            // direct call here would fire a first request that the scheduled
+            // one immediately cancels and re-issues (two network requests
+            // per mount, one wasted). The scheduler's guard collapses both
+            // triggers into exactly one request in every arrival order.
+            self.scheduleFetchRoutes()
         }
     }
 
@@ -473,19 +479,82 @@ public class ExpoMapboxNavigationView: ExpoView {
     }
 
     // MARK: - Prop setters (exact parity with Android setters)
-    func setCoordinates(_ coords: [[String: Double]]) {
-        coordinates = coords
-        if coords.count >= 2 { fetchRoutes() }
+    //
+    // ── Coalesced route refetching (5.0.0) ──────────────────────────────────
+    // Every prop that fetchRoutes() actually reads now re-triggers a route
+    // calculation when its value CHANGES (previously only `coordinates` did;
+    // changing e.g. navigationProfile or language after mount was silently
+    // ignored until the next coordinates change — stale-language voice
+    // guidance was a concrete consequence). Implemented identically on
+    // Android in the same release — cross-platform parity preserved. Two
+    // safeguards against request storms / regressions:
+    //   1. Equality guard in each setter — no refetch when RN re-delivers an
+    //      identical value.
+    //   2. Coalescing — triggers within the same main-runloop turn merge
+    //      into ONE deferred fetchRoutes() call (initial mount delivers all
+    //      props in a single batch; without this, up to 8 simultaneous
+    //      route requests would fire). Deferring also means the initial
+    //      batch's single fetch runs AFTER init()'s provider-creation block
+    //      (queued on the main queue first), closing the startup ordering
+    //      gap from yet another angle on top of 4.0.8's catch-up call.
+    // fetchRoutes() itself keeps its own guards (mapboxNavigation != nil,
+    // coordinates.count >= 2), so a scheduled fetch with no valid
+    // coordinates is a harmless no-op. Props NOT read by fetchRoutes
+    // (mapStyle, mute, useMapMatching, customRaster*, all color props)
+    // deliberately do NOT schedule a refetch.
+    private var fetchScheduled = false
+    private func scheduleFetchRoutes() {
+        guard !fetchScheduled else { return }
+        fetchScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.fetchScheduled = false
+            self.fetchRoutes()
+        }
     }
-    func setWaypointIndices(_ i: [Int]?)   { waypointIndices = i }
-    func setLanguage(_ l: String?)         { language = l }
-    func setVoiceUnits(_ u: String?)       { voiceUnits = u }
-    func setNavigationProfile(_ p: String?) { navigationProfile = p }
-    func setExcludeTypes(_ t: [String]?)   { excludeTypes = t }
+
+    func setCoordinates(_ coords: [[String: Double]]) {
+        guard coords != coordinates else { return }
+        coordinates = coords
+        scheduleFetchRoutes()
+    }
+    func setWaypointIndices(_ i: [Int]?) {
+        guard i != waypointIndices else { return }
+        waypointIndices = i
+        scheduleFetchRoutes()
+    }
+    func setLanguage(_ l: String?) {
+        guard l != language else { return }
+        language = l
+        scheduleFetchRoutes()
+    }
+    func setVoiceUnits(_ u: String?) {
+        guard u != voiceUnits else { return }
+        voiceUnits = u
+        scheduleFetchRoutes()
+    }
+    func setNavigationProfile(_ p: String?) {
+        guard p != navigationProfile else { return }
+        navigationProfile = p
+        scheduleFetchRoutes()
+    }
+    func setExcludeTypes(_ t: [String]?) {
+        guard t != excludeTypes else { return }
+        excludeTypes = t
+        scheduleFetchRoutes()
+    }
     func setMapStyle(_ s: String?)         { mapStyle = s }
     func setMute(_ m: Bool)                { mute = m; applyMute(m) }
-    func setMaxHeight(_ h: Double?)        { maxHeight = h }
-    func setMaxWidth(_ w: Double?)         { maxWidth = w }
+    func setMaxHeight(_ h: Double?) {
+        guard h != maxHeight else { return }
+        maxHeight = h
+        scheduleFetchRoutes()
+    }
+    func setMaxWidth(_ w: Double?) {
+        guard w != maxWidth else { return }
+        maxWidth = w
+        scheduleFetchRoutes()
+    }
     func setUseMapMatching(_ u: Bool)      { useMapMatching = u }
     func setCustomRasterTileUrl(_ u: String?)        { customRasterTileUrl = u }
     func setCustomRasterAboveLayerId(_ l: String?)   { customRasterAboveLayerId = l }

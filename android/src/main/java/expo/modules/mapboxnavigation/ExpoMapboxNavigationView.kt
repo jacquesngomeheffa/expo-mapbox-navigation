@@ -1139,16 +1139,47 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         })
     }
 
-    fun setCoordinates(coords: List<Map<String, Double>>) { coordinates = coords; if (coords.size >= 2) fetchRoutes() }
-    fun setWaypointIndices(i: List<Int>?) { waypointIndices = i }
-    fun setLanguage(l: String?) { language = l }
-    fun setVoiceUnits(u: String?) { voiceUnits = u }
-    fun setNavigationProfile(p: String?) { navigationProfile = p }
-    fun setExcludeTypes(t: List<String>?) { excludeTypes = t }
+    // ── Coalesced route refetching (5.0.0) ──────────────────────────────────
+    // Every prop that fetchRoutes() actually reads now re-triggers a route
+    // calculation when its value CHANGES (previously only `coordinates` did;
+    // changing e.g. navigationProfile or language after mount was silently
+    // ignored until the next coordinates change — stale-language voice
+    // guidance was a concrete reported consequence). Two safeguards against
+    // request storms / regressions:
+    //   1. Equality guard in each setter — no refetch when RN re-delivers an
+    //      identical value.
+    //   2. Coalescing — triggers within the same main-looper turn merge into
+    //      ONE deferred fetchRoutes() call (initial mount delivers all props
+    //      in a single batch; without this, up to 8 simultaneous route
+    //      requests would fire). Uses a main-Looper Handler, NOT View.post():
+    //      View.post() defers queued runnables until the view is ATTACHED,
+    //      and props are delivered before attachment — a Handler runs on the
+    //      next main-looper turn regardless.
+    // fetchRoutes() itself keeps its own guards (mapboxNavigation != null,
+    // coordinates.size >= 2), so a scheduled fetch with no valid coordinates
+    // is a harmless no-op. Props NOT read by fetchRoutes (mapStyle, mute,
+    // useMapMatching, customRaster*) deliberately do NOT schedule a refetch.
+    private val fetchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var fetchScheduled = false
+    private fun scheduleFetchRoutes() {
+        if (fetchScheduled) return
+        fetchScheduled = true
+        fetchHandler.post {
+            fetchScheduled = false
+            fetchRoutes()
+        }
+    }
+
+    fun setCoordinates(coords: List<Map<String, Double>>) { if (coords == coordinates) return; coordinates = coords; scheduleFetchRoutes() }
+    fun setWaypointIndices(i: List<Int>?) { if (i == waypointIndices) return; waypointIndices = i; scheduleFetchRoutes() }
+    fun setLanguage(l: String?) { if (l == language) return; language = l; scheduleFetchRoutes() }
+    fun setVoiceUnits(u: String?) { if (u == voiceUnits) return; voiceUnits = u; scheduleFetchRoutes() }
+    fun setNavigationProfile(p: String?) { if (p == navigationProfile) return; navigationProfile = p; scheduleFetchRoutes() }
+    fun setExcludeTypes(t: List<String>?) { if (t == excludeTypes) return; excludeTypes = t; scheduleFetchRoutes() }
     fun setMapStyle(s: String?) { mapStyle = s }
     fun setMute(m: Boolean) { if (m != isMuted) toggleMute() }
-    fun setMaxHeight(h: Double?) { maxHeight = h }
-    fun setMaxWidth(w: Double?) { maxWidth = w }
+    fun setMaxHeight(h: Double?) { if (h == maxHeight) return; maxHeight = h; scheduleFetchRoutes() }
+    fun setMaxWidth(w: Double?) { if (w == maxWidth) return; maxWidth = w; scheduleFetchRoutes() }
     fun setUseMapMatching(u: Boolean) { useMapMatching = u }
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
