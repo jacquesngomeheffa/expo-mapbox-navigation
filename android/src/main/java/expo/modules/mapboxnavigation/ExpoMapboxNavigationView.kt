@@ -111,6 +111,19 @@ private fun parseColorSafe(hex: String): Int? {
     }
 }
 
+// Degenerate-route guard constants (5.0.1) - kept in exact parity with the
+// iOS side (ExpoMapboxNavigationView.swift declares the same threshold and
+// the same message verbatim). See the guard inside fetchRoutes() for the
+// full rationale.
+private const val DEGENERATE_ROUTE_THRESHOLD_METERS = 25f
+private const val DEGENERATE_ROUTE_MESSAGE =
+    "Origin and destination are the same location (all waypoints within 25 m) - nothing to navigate"
+
+// Native steps panel (5.0.1): hard cap on the panel's height, as a fraction
+// of the navigation view's own height. Product requirement: the list must
+// not extend all the way to the bottom of the screen.
+private const val STEPS_PANEL_MAX_HEIGHT_FRACTION = 0.86f
+
 class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     ExpoView(context, appContext) {
 
@@ -479,6 +492,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         val root = FrameLayout(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         }
+        // Class-level handle so overlays added later (native steps panel,
+        // 5.0.1) can attach to / detach from this same FrameLayout.
+        rootLayout = root
 
         // Full-screen map
         root.addView(mapView, FrameLayout.LayoutParams(
@@ -1054,6 +1070,133 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         onManeuverBannerPressed(mapOf("steps" to stepsPayload))
     }
 
+    // ── Native upcoming-steps panel (5.0.1) ─────────────────────────────────
+    // Parity with iOS: tapping the banner there opens the SDK's own built-in
+    // list of upcoming steps. Android's custom UI had no native equivalent
+    // (the tap only emitted the event). This panel closes that gap, while
+    // onManeuverBannerPressed keeps firing on every tap exactly as before.
+    // Built entirely from framework widgets already used in this file - no
+    // new dependency. All text shown comes from the Directions API response
+    // (already localized via the `language` prop); the distance strings are
+    // numeric - this package still hardcodes no user-facing prose.
+    // Height is hard-capped at STEPS_PANEL_MAX_HEIGHT_FRACTION (86%) of the
+    // view. (The iOS SDK list cannot be safely capped the same way: its
+    // pin-to-screen-bottom constraint is internal and required-priority -
+    // documented in the changelog.)
+    private var rootLayout: FrameLayout? = null
+    private var stepsPanelOverlay: FrameLayout? = null
+
+    // ScrollView with a hard maximum height: standard onMeasure clamp. The
+    // panel wraps its content when the list is short, scrolls inside the
+    // cap when it is long.
+    private inner class MaxHeightScrollView(
+        context: Context,
+        private val maxHeightPx: Int
+    ) : android.widget.ScrollView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val capped = MeasureSpec.makeMeasureSpec(maxHeightPx, MeasureSpec.AT_MOST)
+            super.onMeasure(widthMeasureSpec, capped)
+        }
+    }
+
+    // Numeric-only distance label (no translated words, so nothing for this
+    // package to localize) - unit system follows the voiceUnits/language
+    // props via resolveVoiceUnits(), same as the route request itself.
+    private fun formatStepDistance(meters: Double): String {
+        return if (resolveVoiceUnits() == "imperial") {
+            val feet = meters * 3.28084
+            if (feet < 1000) "${feet.toInt()} ft"
+            else String.format(java.util.Locale.getDefault(), "%.1f mi", meters / 1609.344)
+        } else {
+            if (meters < 1000) "${meters.toInt()} m"
+            else String.format(java.util.Locale.getDefault(), "%.1f km", meters / 1000.0)
+        }
+    }
+
+    private fun dismissNativeStepsPanel() {
+        stepsPanelOverlay?.let { rootLayout?.removeView(it) }
+        stepsPanelOverlay = null
+    }
+
+    private fun toggleNativeStepsPanel() {
+        if (stepsPanelOverlay != null) {
+            dismissNativeStepsPanel()
+        } else {
+            showNativeStepsPanel()
+        }
+    }
+
+    private fun showNativeStepsPanel() {
+        val root = rootLayout ?: return
+        val activeRoute = mapboxNavigation?.getNavigationRoutes()?.firstOrNull() ?: return
+
+        val viewHeight = if (height > 0) height else resources.displayMetrics.heightPixels
+        val maxPanelHeight = (viewHeight * STEPS_PANEL_MAX_HEIGHT_FRACTION).toInt()
+
+        val list = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (16 * dp).toInt())
+        }
+
+        var rowCount = 0
+        activeRoute.directionsRoute.legs()?.forEach { leg ->
+            leg.steps()?.forEach { step ->
+                val instruction = step.maneuver()?.instruction() ?: ""
+                if (instruction.isEmpty()) return@forEach
+                if (rowCount > 0) {
+                    list.addView(View(context).apply {
+                        setBackgroundColor(Color.parseColor("#E0E0E0"))
+                    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+                }
+                list.addView(TextView(context).apply {
+                    text = instruction
+                    textSize = 16f
+                    setTextColor(Color.parseColor("#1C1C1E"))
+                    setPadding(0, (10 * dp).toInt(), 0, 0)
+                })
+                list.addView(TextView(context).apply {
+                    text = formatStepDistance(step.distance() ?: 0.0)
+                    textSize = 12f
+                    setTextColor(Color.parseColor("#8E8E93"))
+                    setPadding(0, (2 * dp).toInt(), 0, (10 * dp).toInt())
+                })
+                rowCount++
+            }
+        }
+        if (rowCount == 0) return
+
+        val scroll = MaxHeightScrollView(context, maxPanelHeight).apply {
+            addView(list, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ))
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                // Rounded top corners only (order: TL, TL, TR, TR, BR, BR, BL, BL)
+                cornerRadii = floatArrayOf(16 * dp, 16 * dp, 16 * dp, 16 * dp, 0f, 0f, 0f, 0f)
+            }
+            // Swallow taps on the panel itself so they don't reach the scrim
+            // (which would dismiss it while the user is scrolling/reading).
+            isClickable = true
+        }
+
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#66000000"))
+            setOnClickListener { dismissNativeStepsPanel() }
+            addView(scroll, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            ))
+        }
+
+        root.addView(overlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        stepsPanelOverlay = overlay
+    }
+
     private fun cancelNavigation() {
         speechApi.cancel()
         voiceInstructionsPlayer.clear()
@@ -1072,6 +1215,10 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     }
 
     private fun hideUI() {
+        // Close the native steps panel whenever navigation UI is torn down
+        // (cancel, arrival teardown, etc.) - it must never outlive the
+        // navigation session it lists steps for.
+        dismissNativeStepsPanel()
         maneuverView?.visibility = View.INVISIBLE
         speedInfoView?.visibility = View.GONE
         etaBar?.visibility = View.INVISIBLE
@@ -1093,6 +1240,40 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private fun fetchRoutes() {
         val nav = mapboxNavigation ?: return
         if (coordinates.size < 2) return
+
+        // Degenerate-route guard (5.0.1, parity with iOS - same threshold,
+        // same failure message): when EVERY coordinate lies within 25 m of
+        // the first one, the whole trip is a single point - nothing to
+        // navigate. Emits a clear, catchable onRoutesFailed instead of
+        // starting a 0 m navigation session into an instant arrival screen.
+        // Deliberately checks ALL coordinates against the first (not just
+        // origin vs destination): a legitimate round trip (start -> distant
+        // via point -> back to start) also has origin == destination and
+        // must NOT be blocked. Uses the Android framework's own
+        // Location.distanceBetween - no new dependency.
+        val firstCoord = coordinates.first()
+        val distanceResult = FloatArray(1)
+        val wholeTripIsOnePoint = coordinates.all { coord ->
+            android.location.Location.distanceBetween(
+                firstCoord["latitude"] ?: 0.0, firstCoord["longitude"] ?: 0.0,
+                coord["latitude"] ?: 0.0, coord["longitude"] ?: 0.0,
+                distanceResult
+            )
+            distanceResult[0] < DEGENERATE_ROUTE_THRESHOLD_METERS
+        }
+        if (wholeTripIsOnePoint) {
+            // `code` is a stable, machine-readable identifier: the consuming
+            // app should switch on it to show its own LOCALIZED message
+            // (the `message` string is English-only debugging text - this
+            // package deliberately does not attempt to translate it; the
+            // `language` prop only localizes what the Mapbox API generates,
+            // never this package's own strings).
+            onRoutesFailed(mapOf(
+                "message" to DEGENERATE_ROUTE_MESSAGE,
+                "code" to "same_location"
+            ))
+            return
+        }
         val points = coordinates.map { Point.fromLngLat(it["longitude"] ?: 0.0, it["latitude"] ?: 0.0) }
         val locale = language?.let { Locale.forLanguageTag(it) } ?: Locale.getDefault()
         val builder = RouteOptions.builder()
@@ -1181,6 +1362,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setMaxHeight(h: Double?) { if (h == maxHeight) return; maxHeight = h; scheduleFetchRoutes() }
     fun setMaxWidth(w: Double?) { if (w == maxWidth) return; maxWidth = w; scheduleFetchRoutes() }
     fun setUseMapMatching(u: Boolean) { useMapMatching = u }
+    // iOS-only prop (toggles NavigationViewController's built-in end-of-route
+    // feedback screen). Android's custom-built navigation UI has no such
+    // screen, so there is nothing to show or hide here - declared as a
+    // stored no-op for cross-platform prop parity, matching this package's
+    // existing convention for platform-specific props.
+    fun setShowEndOfRouteFeedback(@Suppress("UNUSED_PARAMETER") show: Boolean) { /* no-op on Android */ }
     fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
     fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
 
@@ -1261,11 +1448,16 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             context
         }
         val mv = MapboxManeuverView(maneuverContext, null, 0, maneuverOptionsBuilder.build())
-        // Feature: tap the instruction banner to see the full list of upcoming
-        // turn-by-turn steps. We emit the data via event so the RN/JS layer can
-        // render a bottom sheet or modal using its own native UI components —
-        // consistent with how all other navigation events are surfaced.
-        mv.setOnClickListener { emitFullRouteSteps() }
+        // Tap the instruction banner to see the full list of upcoming steps.
+        // Two things happen on every tap, deliberately COEXISTING (5.0.1,
+        // exact parity with iOS where the SDK's own built-in steps list and
+        // the event both fire): the onManeuverBannerPressed event is emitted
+        // with the full payload (the JS layer can keep rendering its own
+        // sheet from it), AND the native steps panel below toggles.
+        mv.setOnClickListener {
+            emitFullRouteSteps()
+            toggleNativeStepsPanel()
+        }
         return mv
     }
 
@@ -1453,6 +1645,32 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     return null
                 }
                 Log.d(TAG, "navigationPuck3DModelPath: .glb header validated OK, file size=${File(resolvedPath).length()} bytes: $resolvedPath")
+            }
+            // asset:// paths (Android bundled assets) were previously passed
+            // through with NO validation at all - closed in 5.0.1: verify the
+            // asset exists and starts with the same required .glb magic
+            // number, via the standard AssetManager API (no new dependency).
+            // A nonexistent or non-glb bundled asset reaching Mapbox's
+            // native model loader is the same crash surface the file://
+            // validation above already guards against.
+            if (path.startsWith("asset://")) {
+                val assetName = path.removePrefix("asset://")
+                try {
+                    context.assets.open(assetName).use { stream ->
+                        val header = ByteArray(4)
+                        val read = stream.read(header)
+                        val isGlb = read == 4 &&
+                            header[0] == 0x67.toByte() && header[1] == 0x6C.toByte() &&
+                            header[2] == 0x54.toByte() && header[3] == 0x46.toByte()
+                        if (!isGlb) {
+                            Log.e(TAG, "navigationPuck3DModelPath: bundled asset is not a valid .glb, refusing to use it: $assetName")
+                            return null
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "navigationPuck3DModelPath: bundled asset not found/unreadable: $assetName (${e.message})")
+                    return null
+                }
             }
             // Remote (http/https) URLs can't be cheaply pre-validated this
             // way without downloading them first — passed through as-is to

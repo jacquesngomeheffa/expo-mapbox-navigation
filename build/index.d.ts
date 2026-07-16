@@ -66,6 +66,16 @@ export interface MapboxNavigationViewProps {
     /** Map layer ID above which the custom raster layer is placed. */
     customRasterAboveLayerId?: string;
     /**
+     * Whether the built-in end-of-route screen ("You have arrived" + trip
+     * rating stars) is shown when the final destination is reached.
+     * Defaults to true (the SDK's own behavior). Set to false to arrive
+     * silently — onArrival still fires either way.
+     * iOS only: this screen is part of iOS's drop-in NavigationViewController;
+     * Android's custom-built UI has no equivalent screen, so this prop is a
+     * no-op there.
+     */
+    showEndOfRouteFeedback?: boolean;
+    /**
      * Background color of the turn-by-turn instruction banner, as a hex string
      * (e.g. "#1A73E8" or "1A73E8" — the "#" is optional). Uses the SDK's
      * official ManeuverViewOptions API. Day/light-mode variant — the
@@ -140,9 +150,20 @@ export interface MapboxNavigationViewProps {
     onNavigationCancelled?: (event: {
         nativeEvent: {};
     }) => void;
+    /**
+     * Route calculation failed or was rejected. `message` is English-only
+     * debugging text — do not display it to users directly. When `code` is
+     * present, switch on it to show your own localized message:
+     * - "same_location": all requested waypoints are within 25 m of each
+     *   other (the driver is already at the destination) — no route was
+     *   requested. Round trips via a distant point are NOT affected.
+     * `code` is absent for ordinary routing failures (network errors,
+     * no route found, etc.), whose `message` comes from the SDK.
+     */
     onRoutesFailed?: (event: {
         nativeEvent: {
             message: string;
+            code?: string;
         };
     }) => void;
     onArrival?: (event: {

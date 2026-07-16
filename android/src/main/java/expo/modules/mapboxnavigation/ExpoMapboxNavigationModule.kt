@@ -52,6 +52,9 @@ class ExpoMapboxNavigationModule : Module() {
             Prop("useMapMatching") { view: ExpoMapboxNavigationView, use: Boolean ->
                 view.setUseMapMatching(use)
             }
+            Prop("showEndOfRouteFeedback") { view: ExpoMapboxNavigationView, show: Boolean ->
+                view.setShowEndOfRouteFeedback(show)
+            }
             Prop("customRasterTileUrl") { view: ExpoMapboxNavigationView, url: String? ->
                 view.setCustomRasterTileUrl(url)
             }

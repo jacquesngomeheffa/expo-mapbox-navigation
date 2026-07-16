@@ -153,6 +153,11 @@ public class ExpoMapboxNavigationView: ExpoView {
     private var useMapMatching:         Bool = false
     private var customRasterTileUrl:    String?
     private var customRasterAboveLayerId: String?
+    // Whether NavigationViewController's built-in end-of-route screen
+    // ("You have arrived" + trip rating stars) is shown on final arrival.
+    // Defaults to true = the SDK's own default behavior, so adding this
+    // prop changes nothing for existing consumers unless they opt out.
+    private var showEndOfRouteFeedback: Bool = true
 
     // MARK: - Color customization props (parity with Android)
     // On iOS the NavigationViewController drop-in handles all UI natively,
@@ -173,35 +178,37 @@ public class ExpoMapboxNavigationView: ExpoView {
     private var navigationPuckImagePath:     String?
     private var navigationPuck3DModelPath:   String?
 
+    // MARK: - Shared navigation provider (5.0.1)
+    // Mapbox Navigation SDK v3 enforces ONE MapboxNavigationProvider per
+    // process: its internal checkInstanceIsUnique() deliberately traps
+    // (EXC_BREAKPOINT/SIGTRAP) when a second instance is created while
+    // another is still alive - confirmed by a real production crash log
+    // whose main-thread stack is exactly: closure #1 in static
+    // MapboxNavigationProvider.checkInstanceIsUnique() <- Locked.withLock
+    // <- MapboxNavigationProvider.init(coreConfig:) <- this file's init
+    // block. The previous per-view-instance provider therefore crashed the
+    // app whenever the navigation screen was closed and reopened before
+    // the previous view instance fully deallocated (an intermittent,
+    // remount-timing-dependent crash). All view instances now share this
+    // single lazily-created provider - the same pattern Mapbox's own v3
+    // examples use (a static/shared provider), and the reason reference
+    // implementations of this package keep theirs in a `static let`.
+    //
+    // This also replaces the 4.0.8-era DispatchQueue.main.async deferral
+    // entirely: the shared provider is available synchronously from the
+    // first access, so `mapboxNavigation` is set before any prop setter
+    // can run - the startup race that caused the permanent black screen
+    // is now impossible by construction, and the provider-ready catch-up
+    // call is no longer needed (the coalesced prop-setter scheduler from
+    // 5.0.0 is the single remaining fetch trigger).
+    private static let sharedNavigationProvider = MapboxNavigationProvider(coreConfig: .init())
+
     // MARK: - Init
     public required init(appContext: AppContext? = nil) {
         super.init(appContext: appContext)
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            let provider = MapboxNavigationProvider(coreConfig: .init())
-            self.mapboxNavigationProvider = provider
-            self.mapboxNavigation = provider.mapboxNavigation
-            // RACE FIX: React Native/Fabric delivers initial props (including
-            // `coordinates`) synchronously, in the same main-runloop turn that
-            // created this view — i.e. BEFORE this async block runs. That
-            // first setCoordinates() call therefore reaches fetchRoutes()
-            // while `mapboxNavigation` is still nil, and fetchRoutes()'s
-            // guard bails out silently. Nothing ever re-triggered the fetch
-            // afterwards, so the view stayed permanently empty (black
-            // screen, no Mapbox log activity at all — matching a real
-            // device Console.app capture showing zero Mapbox output).
-            // Re-triggering the fetch here covers that ordering: it no-ops
-            // unless valid coordinates already arrived, and prop updates
-            // arriving after this point were already handled by the setter
-            // path. Goes through scheduleFetchRoutes() (5.0.0), NOT a direct
-            // fetchRoutes() call: at mount, the prop setters have usually
-            // already scheduled a coalesced fetch on the main queue - a
-            // direct call here would fire a first request that the scheduled
-            // one immediately cancels and re-issues (two network requests
-            // per mount, one wasted). The scheduler's guard collapses both
-            // triggers into exactly one request in every arrival order.
-            self.scheduleFetchRoutes()
-        }
+        let provider = Self.sharedNavigationProvider
+        self.mapboxNavigationProvider = provider
+        self.mapboxNavigation = provider.mapboxNavigation
     }
 
     // MARK: - Voice units (Issue #31 parity — exact same logic as Android)
@@ -216,9 +223,52 @@ public class ExpoMapboxNavigationView: ExpoView {
         return imperialCountries.contains(regionCode) ? "imperial" : "metric"
     }
 
+    // Degenerate-route guard threshold (5.0.1): when EVERY coordinate of a
+    // requested trip lies within this radius of the first one, the whole
+    // trip is a single point - there is nothing to navigate. A real device
+    // test showed what happens otherwise: a 0 m route, instant arrival, and
+    // a camera left idle over a default world region. Deliberately checks
+    // ALL coordinates against the first (not just origin vs destination):
+    // a legitimate round trip (start -> distant via point -> back to start)
+    // also has origin == destination and must NOT be blocked.
+    // Same threshold and same failure message on Android - kept in parity.
+    private static let degenerateRouteThresholdMeters: CLLocationDistance = 25.0
+    static let degenerateRouteMessage =
+        "Origin and destination are the same location (all waypoints within 25 m) - nothing to navigate"
+
     // MARK: - Route fetching (parity with Android fetchRoutes)
     private func fetchRoutes() {
         guard coordinates.count >= 2, let mapboxNavigation = mapboxNavigation else { return }
+
+        // Degenerate-route guard (see the threshold constant above): emit a
+        // clear, catchable onRoutesFailed instead of starting a 1-second
+        // navigation session into an instant arrival screen. The consuming
+        // app can present its own "you are already at your destination"
+        // message from this event.
+        let firstLocation = CLLocation(
+            latitude:  coordinates[0]["latitude"]  ?? 0.0,
+            longitude: coordinates[0]["longitude"] ?? 0.0
+        )
+        let wholeTripIsOnePoint = coordinates.allSatisfy { coord in
+            let location = CLLocation(
+                latitude:  coord["latitude"]  ?? 0.0,
+                longitude: coord["longitude"] ?? 0.0
+            )
+            return location.distance(from: firstLocation) < Self.degenerateRouteThresholdMeters
+        }
+        if wholeTripIsOnePoint {
+            // `code` is a stable, machine-readable identifier: the consuming
+            // app should switch on it to show its own LOCALIZED message
+            // (the `message` string is English-only debugging text - this
+            // package deliberately does not attempt to translate it; the
+            // `language` prop only localizes what the Mapbox API generates,
+            // never this package's own strings).
+            onRoutesFailed([
+                "message": Self.degenerateRouteMessage,
+                "code": "same_location"
+            ])
+            return
+        }
 
         // FIXED: waypointIndices was declared/settable but never applied on
         // iOS (dead code) - Android drives MapboxDirections'
@@ -349,6 +399,14 @@ public class ExpoMapboxNavigationView: ExpoView {
         )
         vc.delegate = self
         vc.routeLineTracksTraversal = true
+        // Built-in end-of-route feedback screen toggle. Verified verbatim at
+        // v3.20.1 (NavigationViewController.swift line 522):
+        // `public var showsEndOfRouteFeedback: Bool` with a real setter
+        // (forwards to arrivalController.showsEndOfRoute). NOTE, from the
+        // same source: assigning `showsReportFeedback` OVERWRITES this flag
+        // in its didSet - this package never assigns showsReportFeedback,
+        // so the value set here sticks.
+        vc.showsEndOfRouteFeedback = showEndOfRouteFeedback
 
         // Apply mute state
         if mute {
@@ -411,6 +469,23 @@ public class ExpoMapboxNavigationView: ExpoView {
         // 3DModelPath were already set (via props received before this
         // route was fetched).
         applyPuckSettings()
+
+        // Force the camera into follow-the-driver mode immediately on
+        // presentation. Verified verbatim at v3.20.1:
+        // NavigationCamera.update(cameraState:) is public
+        // (Map/Camera/NavigationCamera.swift line 114) and
+        // NavigationCameraState.following is "the camera is following user
+        // position". Normally active guidance enters this state on its own,
+        // but a real device test surfaced a case where it never did: a
+        // degenerate route whose destination equals the driver's current
+        // position (0 m, instant arrival) left the camera idle over a
+        // default world region (mid-ocean) instead of the driver. Setting
+        // .following explicitly here guarantees the map starts centered and
+        // zoomed on the driver in every case, including that one - the same
+        // call the reference implementation uses for its own recenter
+        // button, so it is also harmless in the normal (non-degenerate)
+        // flow where the SDK would have entered following anyway.
+        vc.navigationView.navigationMapView.navigationCamera.update(cameraState: .following)
     }
 
     // MARK: - Banner tap handler (parity with Android mv.setOnClickListener)
@@ -545,6 +620,14 @@ public class ExpoMapboxNavigationView: ExpoView {
     }
     func setMapStyle(_ s: String?)         { mapStyle = s }
     func setMute(_ m: Bool)                { mute = m; applyMute(m) }
+    // Applied at NavigationViewController construction, and also live on an
+    // already-presented controller (the SDK property has a real setter, so
+    // toggling mid-navigation works). Not a route-affecting prop - no
+    // refetch scheduled.
+    func setShowEndOfRouteFeedback(_ s: Bool) {
+        showEndOfRouteFeedback = s
+        navigationViewController?.showsEndOfRouteFeedback = s
+    }
     func setMaxHeight(_ h: Double?) {
         guard h != maxHeight else { return }
         maxHeight = h
@@ -624,7 +707,19 @@ public class ExpoMapboxNavigationView: ExpoView {
             return
         }
 
-        mapView.puckType = .puck2D(Puck2DConfiguration())
+        // Default (no custom puck prop set): the SDK's own navigation puck -
+        // a 3D directional arrow. Verified verbatim at mapbox-navigation-ios
+        // v3.20.1: NavigationMapView.puckType's own default IS
+        // .puck3D(.navigationDefault) (NavigationMapView.swift line 348),
+        // and Puck2DConfiguration/Puck3DConfiguration.navigationDefault are
+        // public statics defined in Map/Other/PuckConfigurations.swift.
+        // The previous fallback here (.puck2D(Puck2DConfiguration())) was a
+        // real bug: it actively REPLACED the SDK's directional-arrow default
+        // with the plain blue location dot, so active navigation showed a
+        // dot with no heading indication. Setting the SDK default explicitly
+        // (rather than skipping the assignment) also correctly RESTORES the
+        // arrow when a custom puck prop is later cleared back to nil.
+        mapView.puckType = .puck3D(.navigationDefault)
     }
 
     func setNavigationPuckColor(_ c: String?) {

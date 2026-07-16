@@ -57,6 +57,9 @@ public class ExpoMapboxNavigationModule: Module {
       Prop("customRasterAboveLayerId") { (view: ExpoMapboxNavigationView, v: String?) in
         view.setCustomRasterAboveLayerId(v)
       }
+      Prop("showEndOfRouteFeedback") { (view: ExpoMapboxNavigationView, v: Bool) in
+        view.setShowEndOfRouteFeedback(v)
+      }
 
       // ── Color customization props (parity with Android) ───────────────────────
       Prop("maneuverBackgroundColorDay") { (view: ExpoMapboxNavigationView, v: String?) in
