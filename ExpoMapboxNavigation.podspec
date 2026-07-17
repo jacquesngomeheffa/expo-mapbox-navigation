@@ -2,6 +2,37 @@ require 'json'
 
 package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 
+# ── Dynamic iOS SDK version selection (5.0.5+) ────────────────────────────────
+# The config plugin's iOS mod writes ios/.mapbox-ios-versions.json during
+# `expo prebuild` (always before `pod install`) with the consumer's chosen
+# `iosMapboxMapsVersion` / `iosMapboxNavigationVersion` plugin options.
+# This podspec only needs the Maps version (the Navigation version is read
+# by ios/fetch-xcframeworks.sh itself). If the file is absent or unreadable
+# (bare `pod install` without prebuild, older consumers), the hardcoded
+# default below keeps the exact pre-5.0.5 behavior. The value is validated
+# against a strict semver shape before use — anything else falls back to
+# the default rather than injecting arbitrary text into the dependency
+# declaration.
+# Deliberately a local variable, not a Ruby constant - podspecs can be
+# evaluated more than once within a single `pod install`, and re-assigning
+# a constant emits "already initialized constant" warnings.
+default_mapbox_maps_version = '11.20.2'
+mapbox_maps_version = default_mapbox_maps_version
+versions_file = File.join(__dir__, 'ios', '.mapbox-ios-versions.json')
+if File.exist?(versions_file)
+  begin
+    requested = JSON.parse(File.read(versions_file))['iosMapboxMapsVersion']
+    if requested.is_a?(String) && requested.match?(/\A\d+\.\d+\.\d+\z/)
+      mapbox_maps_version = requested
+      Pod::UI.puts "[ExpoMapboxNavigation] Using consumer-pinned MapboxMaps #{mapbox_maps_version} (from .mapbox-ios-versions.json)"
+    else
+      Pod::UI.warn "[ExpoMapboxNavigation] Ignoring invalid iosMapboxMapsVersion #{requested.inspect} - falling back to #{default_mapbox_maps_version}"
+    end
+  rescue StandardError => e
+    Pod::UI.warn "[ExpoMapboxNavigation] Could not read .mapbox-ios-versions.json (#{e.message}) - falling back to MapboxMaps #{default_mapbox_maps_version}"
+  end
+end
+
 Pod::Spec.new do |s|
   s.name           = 'ExpoMapboxNavigation'
   s.version        = package['version']
@@ -67,15 +98,19 @@ Pod::Spec.new do |s|
   # is narrower: get past the currently-blocking compile-time error
   # first.
   #
-  # WARNING: MAINTAINER: this exact version - 11.20.2, matching the
-  # reference implementation's own interlocked version set
+  # DYNAMIC as of 5.0.5: resolved at the top of this file from the
+  # consumer's `iosMapboxMapsVersion` plugin option (via
+  # ios/.mapbox-ios-versions.json, written at prebuild), defaulting to
+  # 11.20.2 - the confirmed-working interlocked set
   # (nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2
-  # / MapboxMaps 11.20.2) - MUST be updated together with
-  # MAPBOX_NAV_VERSION in ios/fetch-xcframeworks.sh, the consuming app's
-  # `RNMapboxMapsVersion`, and s.platforms above, whenever the vendored
-  # SDK version is bumped - see "Upgrading the vendored iOS SDK version"
-  # in README.md.
-  s.dependency 'MapboxMaps', '11.20.2'
+  # / MapboxMaps 11.20.2). WARNING: whoever overrides it is responsible
+  # for (a) matching the consuming app's `RNMapboxMapsVersion` exactly
+  # (a mismatch fails `pod install` loudly with a version conflict - by
+  # design), (b) pairing it correctly with `iosMapboxNavigationVersion`
+  # (a bad pair means link errors or runtime ABI crashes), and
+  # (c) checking whether the chosen versions raise the minimum iOS
+  # deployment target above s.platforms up top.
+  s.dependency 'MapboxMaps', mapbox_maps_version
 
   # Matches stefanpavlovic-tech/react-native-mapbox-navigation's own
   # podspec (the working reference implementation). An earlier version of

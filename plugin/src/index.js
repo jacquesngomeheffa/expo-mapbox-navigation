@@ -13,13 +13,36 @@ const withMapboxNavigation = (config, options = {}) => {
   const {
     accessToken,
     downloadsToken,
-    // Android-only. iOS's MapboxMaps version is hardcoded directly in
-    // ExpoMapboxNavigation.podspec's own `s.dependency 'MapboxMaps', ...`
-    // line, independent of this option — see that podspec's own comments
-    // for why (a consumer overriding this to an arbitrary value could
-    // request a version incompatible with this package's vendored
-    // Navigation binaries).
+    // Android-only. iOS's MapboxMaps version is controlled separately by
+    // `iosMapboxMapsVersion` below (5.0.5+) — the two platforms' correct
+    // version pairings are NOT the same (Android has the -ndk27 artifact
+    // constraint, iOS has the mapbox-navigation-ios-build-artifacts tag
+    // constraint), so they are deliberately independent options.
     mapboxMapsVersion = '11.11.0',
+    // iOS-only (5.0.5+). Version tag of Mapbox's official
+    // mapbox-navigation-ios-build-artifacts repo that
+    // ios/fetch-xcframeworks.sh clones at `pod install` time (vendored
+    // Navigation binaries: MapboxNavigationCore, MapboxNavigationUIKit,
+    // MapboxDirections + helpers, and the transitive
+    // MapboxNavigationNative). Used EXACTLY as given — NO auto-calculation
+    // on iOS, ever: YOU are responsible for verifying that this pairs
+    // correctly with iosMapboxMapsVersion (check Mapbox's
+    // mapbox-navigation-ios release notes for the MapboxMaps version each
+    // Navigation release was built against). A mismatched pair means
+    // link errors or runtime ABI crashes. The defaults are this package's
+    // confirmed-working interlocked set:
+    //   nav 3.20.1 / MapboxNavigationNative 324.20.2 /
+    //   MapboxCommon 24.20.2 / MapboxMaps 11.20.2
+    iosMapboxNavigationVersion = '3.20.1',
+    // iOS-only (5.0.5+). The exact MapboxMaps version the podspec declares
+    // (`s.dependency 'MapboxMaps', ...`), resolved from CocoaPods trunk —
+    // NOT vendored by this package (it arrives via @rnmapbox/maps'
+    // dependency chain). MUST equal the `RNMapboxMapsVersion` you set in
+    // @rnmapbox/maps' own plugin config: if they differ, `pod install`
+    // fails loudly with a version conflict — that failure is a protection,
+    // not a bug. Must also pair correctly with iosMapboxNavigationVersion
+    // (see above).
+    iosMapboxMapsVersion = '11.20.2',
     // Android only (see calculateAndroidNavVersion below / withProjectBuildGradle
     // mod). If set, used EXACTLY as given — no auto-calculation, no safety
     // net. If omitted, derived from mapboxMapsVersion via the Phase 1/Phase 2
@@ -231,6 +254,50 @@ ext {
       if (!existingContent.includes('machine api.mapbox.com')) {
         fs.writeFileSync(netrcPath, existingContent + netrcEntry, { mode: 0o600 });
         console.log('[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote Mapbox credentials to ~/.netrc');
+      }
+      return mod;
+    },
+  ]);
+
+  // ── iOS: dynamic SDK version selection (5.0.5+) ───────────────────────────
+  // Writes the chosen iOS versions into a small JSON file INSIDE this
+  // package's own installed directory (node_modules/.../ios/), during
+  // `expo prebuild` — which always runs before `pod install`, so both
+  // readers find it in time:
+  //   - ExpoMapboxNavigation.podspec reads iosMapboxMapsVersion for its
+  //     `s.dependency 'MapboxMaps', ...` line;
+  //   - ios/fetch-xcframeworks.sh reads iosMapboxNavigationVersion for
+  //     the artifacts tag to clone (unless the MAPBOX_NAV_VERSION env var
+  //     overrides it — CI escape hatch, kept from before).
+  // If this file is absent (bare `pod install` without prebuild, older
+  // consumers), both readers fall back to the same hardcoded defaults —
+  // exactly the pre-5.0.5 behavior, so this is zero-regression by
+  // construction.
+  config = withDangerousMod(config, [
+    'ios',
+    (mod) => {
+      const semverRe = /^\d+\.\d+\.\d+$/;
+      for (const [name, value] of [
+        ['iosMapboxNavigationVersion', iosMapboxNavigationVersion],
+        ['iosMapboxMapsVersion', iosMapboxMapsVersion],
+      ]) {
+        if (!semverRe.test(String(value))) {
+          throw new Error(
+            `[@jacques_gordon/expo-mapbox-navigation] \`${name}\` must be an exact semver like "3.20.1" — got "${value}".`
+          );
+        }
+      }
+      // plugin/src/index.js → package root is two levels up.
+      const packageIosDir = path.join(__dirname, '..', '..', 'ios');
+      if (fs.existsSync(packageIosDir)) {
+        const versionsPath = path.join(packageIosDir, '.mapbox-ios-versions.json');
+        fs.writeFileSync(
+          versionsPath,
+          JSON.stringify({ iosMapboxNavigationVersion, iosMapboxMapsVersion }, null, 2) + '\n'
+        );
+        console.log(
+          `[@jacques_gordon/expo-mapbox-navigation] ✅ iOS SDK versions pinned: navigation ${iosMapboxNavigationVersion} / MapboxMaps ${iosMapboxMapsVersion}`
+        );
       }
       return mod;
     },

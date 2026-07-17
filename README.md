@@ -13,8 +13,8 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 - **Both platforms** — 7 events, 19 props, full feature and API parity
 - NDK 27 + 16 KB page size compliant (Android 15+)
 
-**✅ Tested on iOS**: real EAS production build, real device - launch crash confirmed gone.
-**✅ Tested on Android**: no regressions from the iOS-only changes in 4.0.0 (that release touched iOS exclusively - `ios/fetch-xcframeworks.sh`, `ios/patch-mapbox-library-evolution.sh`, README/changelog only).
+**✅ Tested on iOS**: real EAS production build, real device
+**✅ Tested on Android**: real EAS production build, real device
 
 ---
 
@@ -70,8 +70,10 @@ MapboxCommon 24.20.2 / MapboxMaps 11.20.2 (matches @rnmapbox/maps@10.3.1).
 |--------|----------|---------|-------------|
 | `accessToken` | ✅ | — | Public Mapbox token (`pk.*`). Used for map tiles and routing. |
 | `downloadsToken` | ✅ | — | Secret Mapbox token (`sk.*`) with **Downloads:Read** scope. Same token as `RNMapboxMapsDownloadToken`. Kept for backward compatibility with app.json configs from earlier versions — as of 2.3.0 it's no longer used at app-build time (the iOS SDK is vendored as prebuilt binaries; nothing downloads from `api.mapbox.com` during your `pod install`/EAS build anymore). |
-| `mapboxMapsVersion` | ✅ | `"11.11.0"` — iOS fixed at **11.20.2** | Must exactly match `RNMapboxMapsVersion` in `@rnmapbox/maps`. **Android only** as of 2.3.0. As of 2.3.7, this genuinely drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions — previously this option was silently ignored for that purpose and those versions were hardcoded. iOS SDK version is fixed per npm package release — see [iOS Architecture](#ios-architecture). |
-| `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7 — was deprecated/unused after 2.3.0's iOS rewrite). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula (see [iOS Architecture](#ios-architecture) history) — a best-effort approximation, not a guarantee. Has no effect on iOS; the iOS SDK version is fixed by which npm package version you install. |
+| `mapboxMapsVersion` | ✅ | `"11.11.0"` | **Android only.** Drives the `com.mapbox.maps:android` and (indirectly, via `mapboxNavigationVersion`'s auto-calculation) `com.mapbox.navigationcore:*` Gradle dependency versions. For iOS, use `iosMapboxMapsVersion` instead (5.0.5+) — the two platforms' correct pairings differ, so they are deliberately independent options. |
+| `mapboxNavigationVersion` | — | auto-calculated (Android only) | **Android only** (reactivated in 2.3.7). If set, used exactly as given for `com.mapbox.navigationcore:*` Gradle dependencies — no recalculation. If omitted, derived from `mapboxMapsVersion` via the Phase 1/Phase 2 formula — a best-effort approximation, not a guarantee. For iOS, use `iosMapboxNavigationVersion` instead (5.0.5+). |
+| `iosMapboxNavigationVersion` | — | `"3.20.1"` | **iOS only (5.0.5+).** Git tag of Mapbox's `mapbox-navigation-ios-build-artifacts` repo that the fetch script clones at `pod install` (the vendored Navigation binaries). Used EXACTLY as given — **no auto-calculation on iOS, ever**: you must verify yourself that it pairs with `iosMapboxMapsVersion` (check [mapbox-navigation-ios release notes](https://github.com/mapbox/mapbox-navigation-ios/releases) for the MapboxMaps version each release was built against). A bad pair = link errors or runtime ABI crashes. Must be exact `x.y.z` — anything else fails the prebuild loudly. |
+| `iosMapboxMapsVersion` | — | `"11.20.2"` | **iOS only (5.0.5+).** Exact MapboxMaps version the podspec declares (resolved from CocoaPods trunk — not vendored; it arrives via `@rnmapbox/maps`). MUST equal the `RNMapboxMapsVersion` you set in `@rnmapbox/maps`' plugin config — a mismatch fails `pod install` loudly with a version conflict (a protection, not a bug). Must pair with `iosMapboxNavigationVersion` (see above). The defaults together are the confirmed-working set: nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2 / MapboxMaps 11.20.2. |
 | `androidColorOverrides` | — | `{}` | Override Mapbox native resource colors on Android. |
 
 ---
@@ -88,17 +90,21 @@ Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only �
 
 **Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
 
-### Upgrading the vendored iOS SDK version (maintainers)
+### Upgrading the vendored iOS SDK version
 
-The iOS binaries are tied to a specific Navigation SDK version, matched to a specific `MapboxMaps` version. `ios/Frameworks/*.xcframework` is **not committed to this repo** (see [Why iOS binaries aren't committed to this repo](#why-ios-binaries-arent-committed-to-this-repo) below) — `ios/fetch-xcframeworks.sh` fetches the Navigation-specific frameworks fresh each time they're needed. To bump the version:
+**As of 5.0.5, you likely don't need this section at all.** If you just want to try a newer (or older) Navigation/Maps SDK pairing in your own app, set the `iosMapboxNavigationVersion` and `iosMapboxMapsVersion` plugin options in your `app.json` — see the [Plugin Options](#plugin-options) table above. No new npm release of this package required; the versions are resolved dynamically at your own `expo prebuild` / `pod install`. **You are still responsible for verifying the pairing yourself** — there is no auto-calculation on iOS (unlike Android's `mapboxNavigationVersion`), and a bad pair means link errors or runtime ABI crashes.
+
+This section is for **maintainers of this package** bumping the *shipped defaults* — the versions a consumer gets if they set neither plugin option. `ios/Frameworks/*.xcframework` is **not committed to this repo** (see [Why iOS binaries aren't committed to this repo](#why-ios-binaries-arent-committed-to-this-repo) below) — `ios/fetch-xcframeworks.sh` fetches the Navigation-specific frameworks fresh each time they're needed. To bump the default:
 
 1. Confirm the target Navigation version's matching Maps version from that release's own "Packaging" changelog section at `https://github.com/mapbox/mapbox-navigation-ios/releases/tag/vX.Y.Z` — don't assume a pattern holds, verify the exact release notes every time.
-2. Update `MAPBOX_NAV_VERSION` at the top of [`ios/fetch-xcframeworks.sh`](ios/fetch-xcframeworks.sh).
-3. Update `ExpoMapboxNavigation.podspec`'s `s.dependency 'MapboxMaps', '...'` line to the exact same Maps version — this is intentionally hardcoded here, not read from any option or environment variable (see the comment directly above that line in the podspec for why).
-4. Update `s.platforms`/`IPHONEOS_DEPLOYMENT_TARGET` in the same podspec if the new MapboxMaps version raises its own minimum deployment target.
-5. Also confirm `ios/ExpoMapboxNavigationModule.swift`/`ExpoMapboxNavigationView.swift` still compile against the new SDK version's actual API — this project's own custom Swift source was built against a specific API generation once before and broke silently on a version downgrade (see the 3.1.9 changelog entry) without any warning until a real archive build. There is no automated check for this yet.
-6. Run the **"Verify Mapbox Navigation xcframeworks fetch"** GitHub Actions workflow with the new version tag — this is a CI sanity check only (confirms `ios/fetch-xcframeworks.sh` still works end-to-end against the new version), it does **not** publish or commit anything.
-7. `npm version` + `npm publish` as usual — the published tarball does **not** include `ios/Frameworks/*.xcframework` (see below); consumers fetch it themselves on their own first `pod install`.
+2. Update the default fallback in **all three** places that read the (optional, prebuild-generated) `.mapbox-ios-versions.json` — they must move together:
+   - `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` defaults in [`plugin/src/index.js`](plugin/src/index.js) (the options' own default values).
+   - `MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-...}"` fallback in [`ios/fetch-xcframeworks.sh`](ios/fetch-xcframeworks.sh).
+   - `default_mapbox_maps_version` in [`ExpoMapboxNavigation.podspec`](ExpoMapboxNavigation.podspec).
+3. Update `s.platforms`/`IPHONEOS_DEPLOYMENT_TARGET` in the podspec if the new MapboxMaps version raises its own minimum deployment target.
+4. Also confirm `ios/ExpoMapboxNavigationModule.swift`/`ExpoMapboxNavigationView.swift` still compile against the new SDK version's actual API — this project's own custom Swift source was built against a specific API generation once before and broke silently on a version downgrade (see the 3.1.9 changelog entry) without any warning until a real archive build. There is no automated check for this yet.
+5. Run the **"Verify Mapbox Navigation xcframeworks fetch"** GitHub Actions workflow with the new version tag — this is a CI sanity check only (confirms `ios/fetch-xcframeworks.sh` still works end-to-end against the new version), it does **not** publish or commit anything.
+6. `npm version` + `npm publish` as usual — the published tarball does **not** include `ios/Frameworks/*.xcframework` (see below); consumers fetch it themselves on their own first `pod install`.
 
 ### Why iOS binaries aren't committed to this repo
 
@@ -353,6 +359,13 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 5.0.5
+**iOS SDK versions are now dynamic — two new plugin options, `iosMapboxNavigationVersion` and `iosMapboxMapsVersion`, replace the hardcoded pins.** Same contract as Android's explicit `mapboxNavigationVersion`: you research and choose your own verified version pair. **Unlike Android, there is NO auto-calculation on iOS, ever** — both values are used exactly as given, and the pairing is entirely your responsibility.
+
+- **Defaults keep the exact previous behavior** (zero-regression by construction): `iosMapboxNavigationVersion: "3.20.1"` / `iosMapboxMapsVersion: "11.20.2"` — the confirmed-working interlocked set (nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2 / MapboxMaps 11.20.2). Consumers who set nothing get exactly what 5.0.4 shipped.
+- **Mechanism**: at `expo prebuild`, the config plugin validates both values against a strict `x.y.z` shape (build fails loudly on anything else) and writes them to `ios/.mapbox-ios-versions.json` inside this package's installed directory. At `pod install`: the podspec reads the Maps version for its `s.dependency 'MapboxMaps', ...` line, and `ios/fetch-xcframeworks.sh` reads the Navigation version as the `mapbox-navigation-ios-build-artifacts` git tag to clone (the pre-existing `MAPBOX_NAV_VERSION` env var still takes priority as a CI escape hatch). File absent (bare `pod install` without prebuild, older consumers) → both readers fall back to the same hardcoded defaults. No stale-binary risk on version changes: the fetch has been unconditional on every `pod install` since the on-demand-fetch architecture (with `rm -rf` before each copy).
+- **Your responsibilities when overriding** (the honest contract): (a) `iosMapboxMapsVersion` MUST equal the `RNMapboxMapsVersion` you set in `@rnmapbox/maps`' plugin config — a mismatch fails `pod install` loudly with a version conflict, which is a protection, not a bug; (b) the nav/maps pairing must be verified against Mapbox's own `mapbox-navigation-ios` release notes — a bad pair means link errors or runtime ABI crashes (this project learned that the hard way in the GestureType saga); (c) distant future versions may raise the minimum iOS deployment target above this package's `15.1`, or restructure the artifacts repo's `Package.swift` in ways the fetch script's patching doesn't expect — both fail loudly, not silently.
 
 ### 5.0.4
 **Three fixes driven by real-device reports on recent Android hardware (Samsung S26 Ultra / Xiaomi 17 Pro) plus one iOS dead-prop fix. The Android race fix is the package-native version of a consumer-side patch script — analyzed, two real flaws found in it, and corrected here (see below).**

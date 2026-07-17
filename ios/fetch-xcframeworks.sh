@@ -87,10 +87,28 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # 324.20.0 pairing (which was only confirmed via mapbox-navigation-ios's
 # own CHANGELOG.md, never actually tested end-to-end successfully).
 #
-# MAINTAINER: `RNMapboxMapsVersion` in the consuming app's @rnmapbox/maps
-# config, AND ExpoMapboxNavigation.podspec's own
-# `s.dependency 'MapboxMaps', '...'` line, must both be set to this exact
-# same value - see "Upgrading the vendored iOS SDK version" in README.md.
+# DYNAMIC as of 5.0.5 - resolution order:
+#   1. MAPBOX_NAV_VERSION env var, if set (CI escape hatch, pre-existing);
+#   2. ios/.mapbox-ios-versions.json, written at `expo prebuild` by the
+#      config plugin from the consumer's `iosMapboxNavigationVersion`
+#      plugin option (no auto-calculation on iOS, ever - the consumer is
+#      responsible for a verified nav/maps pairing);
+#   3. hardcoded 3.20.1 default (the confirmed-working set) - exact
+#      pre-5.0.5 behavior when neither of the above is present.
+# The JSON parse below deliberately uses only grep/sed (no jq/node
+# dependency at pod install time) and validates a strict x.y.z shape -
+# anything unexpected falls through to the default instead of passing
+# arbitrary text to `git clone --branch`.
+VERSIONS_FILE="$SCRIPT_DIR/.mapbox-ios-versions.json"
+if [ -z "${MAPBOX_NAV_VERSION:-}" ] && [ -f "$VERSIONS_FILE" ]; then
+  REQUESTED_NAV_VERSION=$(sed -n 's/.*"iosMapboxNavigationVersion"[[:space:]]*:[[:space:]]*"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$VERSIONS_FILE" | head -n1)
+  if [ -n "$REQUESTED_NAV_VERSION" ]; then
+    MAPBOX_NAV_VERSION="$REQUESTED_NAV_VERSION"
+    echo "Using consumer-pinned navigation version $MAPBOX_NAV_VERSION (from .mapbox-ios-versions.json)"
+  else
+    echo "warning: .mapbox-ios-versions.json present but iosMapboxNavigationVersion missing/invalid - using default"
+  fi
+fi
 MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-3.20.1}"
 
 echo "Fetching prebuilt xcframeworks for Mapbox Navigation SDK v$MAPBOX_NAV_VERSION"

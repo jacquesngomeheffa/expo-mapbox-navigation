@@ -20,3 +20,8 @@ android/.gradle
 # same approach used by other public Mapbox Navigation + React Native
 # packages (e.g. pawan-pk/react-native-mapbox-navigation).
 ios/Frameworks/*.xcframework
+
+# Generated at CONSUMER prebuild time by the config plugin (iOS dynamic SDK
+# version selection, 5.0.5+) — never exists in this repo except from local
+# testing; must never be committed or published.
+ios/.mapbox-ios-versions.json
