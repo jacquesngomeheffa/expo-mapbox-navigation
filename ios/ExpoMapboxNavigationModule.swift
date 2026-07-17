@@ -60,6 +60,9 @@ public class ExpoMapboxNavigationModule: Module {
       Prop("showEndOfRouteFeedback") { (view: ExpoMapboxNavigationView, v: Bool) in
         view.setShowEndOfRouteFeedback(v)
       }
+      Prop("showEta") { (view: ExpoMapboxNavigationView, v: Bool) in
+        view.setShowEta(v)
+      }
 
       // ── Color customization props (parity with Android) ───────────────────────
       Prop("maneuverBackgroundColorDay") { (view: ExpoMapboxNavigationView, v: String?) in

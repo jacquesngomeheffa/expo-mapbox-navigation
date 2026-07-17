@@ -52,18 +52,29 @@ export interface MapboxNavigationViewProps {
     /** Maximum vehicle width in metres (for width-restricted routes). */
     maxWidth?: number;
     /**
-     * When true, uses the Mapbox Map Matching API instead of the
-     * standard Directions API. Useful when you want a route that
-     * exactly follows the given coordinates.
+     * When true, uses the Mapbox Map Matching API instead of the standard
+     * Directions API — for routes that exactly follow the given coordinates
+     * (implemented on both platforms as of 5.0.4; changing it re-triggers
+     * the route request). Note: `excludeTypes`, `maxHeight` and `maxWidth`
+     * are Directions-API-only request parameters and have no Map Matching
+     * equivalent — they are ignored in this mode.
      */
     useMapMatching?: boolean;
     /**
-     * URL template for a custom raster tile overlay.
-     * Must include {x}, {y}, {z} placeholders.
+     * URL template for a custom raster tile overlay (implemented on both
+     * platforms as of 5.0.4). Must include {x}, {y}, {z} placeholders.
      * Example: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+     * Applied to the navigation map's style, re-applied automatically on
+     * style changes; clear it (undefined/empty) to remove the overlay.
+     * iOS: applied to the drop-in navigation map (not the pre-route
+     * free-drive fallback map).
      */
     customRasterTileUrl?: string;
-    /** Map layer ID above which the custom raster layer is placed. */
+    /**
+     * Style layer ID above which the custom raster layer is inserted.
+     * If omitted (or the layer doesn't exist in the current style), the
+     * raster layer is added on top.
+     */
     customRasterAboveLayerId?: string;
     /**
      * Whether the built-in end-of-route screen ("You have arrived" + trip
@@ -90,20 +101,48 @@ export interface MapboxNavigationViewProps {
      * instantly — see the iOS Color Customization note in the README.
      */
     maneuverBackgroundColorNight?: string;
-    /** Color of the turn arrow icon inside the instruction banner. Android only — not yet implemented on iOS (see README). */
+    /**
+     * Color of the turn arrow icon inside the instruction banner.
+     * Android: build-time plugin option required for the visible color (see
+     * README). iOS (5.0.4+): applied via the SDK's ManeuverView appearance
+     * at route presentation time.
+     */
     maneuverTurnIconColor?: string;
     /**
-     * Whether the ETA/duration/distance bar is shown once navigation starts.
-     * Defaults to true.
+     * Whether the ETA/duration/distance bottom bar is shown once navigation
+     * starts. Defaults to true.
+     * Android: applied live at any time.
+     * iOS (5.0.4+): swaps the drop-in's bottom banner (ETA bar + cancel
+     * button) for an empty one — construction-time, so changing it while
+     * navigation is already active applies on the next route presentation.
      */
     showEta?: boolean;
-    /** Background color of the bottom ETA/duration/distance bar. */
+    /**
+     * Background color of the bottom ETA/duration/distance bar.
+     * Android: applied live. iOS (5.0.4+): applied via the SDK's
+     * BottomBannerView appearance at route presentation time.
+     */
     etaBarBackgroundColor?: string;
-    /** Text color used for the ETA time and duration in the bottom bar. */
+    /**
+     * Text color for the ETA time/duration/distance labels in the bottom
+     * bar. Android: applied live. iOS (5.0.4+): applied via the SDK's
+     * label appearances at route presentation time (also overrides the
+     * SDK's traffic-based ETA coloring so the color stays uniform).
+     */
     etaTextColor?: string;
-    /** Color of the mute/overview/recenter icon buttons (default state). */
+    /**
+     * Color of the mute/overview/recenter icon buttons (default state).
+     * Android: applied live. iOS (5.0.4+): tints the drop-in's floating
+     * buttons via the SDK's FloatingButton appearance at route
+     * presentation time.
+     */
     iconButtonColor?: string;
-    /** Color of the mute icon when voice guidance is muted. */
+    /**
+     * Color of the mute icon when voice guidance is muted.
+     * Android: applied live. iOS (5.0.4+): tints the drop-in's mute
+     * floating button when muted (SDK default button layout assumed:
+     * overview, mute, feedback — per the SDK's own documentation).
+     */
     iconButtonMutedColor?: string;
     /**
      * Tints the default location puck icon (the arrow/marker showing your

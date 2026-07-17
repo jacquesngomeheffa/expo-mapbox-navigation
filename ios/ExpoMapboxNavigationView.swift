@@ -90,31 +90,111 @@ private func loadUIImage(fromPath path: String) -> UIImage? {
 // presentNavigationViewController() runs), not instantly. This is a real,
 // architecture-driven difference from Android's live-updating behavior,
 // not an oversight.
+// Shared appearance recipe for this package's custom color props (5.0.4,
+// "zero dead props" phase). Every appearance target below is copied
+// VERBATIM from the SDK's own DayStyle.swift at v3.20.1 - the SDK's own
+// complete styling recipe - so these are guaranteed-valid appearance
+// classes/properties, not guesses:
+//   - ManeuverView.primaryColor/secondaryColor (@objc dynamic, lines 10-16
+//     of ManeuverView.swift) -> maneuverTurnIconColor
+//   - BottomBannerView.backgroundColor (DayStyle line 399) -> etaBarBackgroundColor
+//   - TimeRemainingLabel.normalTextColor + its 5 traffic*Color variants,
+//     DistanceRemainingLabel.normalTextColor, ArrivalTimeLabel.normalTextColor
+//     (DayStyle lines 294-299, 353, 405) -> etaTextColor (traffic variants
+//     deliberately unified to the custom color so the label never flips
+//     back to SDK traffic colors)
+//   - FloatingButton.tintColor (DayStyle line 345) -> iconButtonColor
+// Applied inside Style.apply() at NavigationViewController construction,
+// exactly like the existing maneuverBackgroundColor - construction-time
+// semantics, documented since 4.0.2.
+private func applyExpoCustomColors(
+    maneuverBackground: UIColor?,
+    turnIcon: UIColor?,
+    etaBarBackground: UIColor?,
+    etaText: UIColor?,
+    iconButton: UIColor?
+) {
+    let idioms: [UIUserInterfaceIdiom] = [.phone, .pad]
+    for idiom in idioms {
+        let traits = UITraitCollection(userInterfaceIdiom: idiom)
+        if let color = maneuverBackground {
+            InstructionsBannerView.appearance(for: traits).backgroundColor = color
+        }
+        if let color = turnIcon {
+            ManeuverView.appearance(for: traits).primaryColor = color
+            ManeuverView.appearance(for: traits).secondaryColor = color
+        }
+        if let color = etaBarBackground {
+            BottomBannerView.appearance(for: traits).backgroundColor = color
+        }
+        if let color = etaText {
+            TimeRemainingLabel.appearance(for: traits).normalTextColor = color
+            TimeRemainingLabel.appearance(for: traits).trafficHeavyColor = color
+            TimeRemainingLabel.appearance(for: traits).trafficLowColor = color
+            TimeRemainingLabel.appearance(for: traits).trafficModerateColor = color
+            TimeRemainingLabel.appearance(for: traits).trafficSevereColor = color
+            TimeRemainingLabel.appearance(for: traits).trafficUnknownColor = color
+            DistanceRemainingLabel.appearance(for: traits).normalTextColor = color
+            ArrivalTimeLabel.appearance(for: traits).normalTextColor = color
+        }
+        if let color = iconButton {
+            FloatingButton.appearance(for: traits).tintColor = color
+        }
+    }
+}
+
 private final class ExpoManeuverDayStyle: StandardDayStyle {
     var maneuverBackgroundColor: UIColor?
+    var turnIconColor: UIColor?
+    var etaBarBackgroundColor: UIColor?
+    var etaTextColor: UIColor?
+    var iconButtonColor: UIColor?
     required init() {
         super.init()
         styleType = .day
     }
     override func apply() {
         super.apply()
-        guard let color = maneuverBackgroundColor else { return }
-        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .phone)).backgroundColor = color
-        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .pad)).backgroundColor = color
+        applyExpoCustomColors(
+            maneuverBackground: maneuverBackgroundColor,
+            turnIcon: turnIconColor,
+            etaBarBackground: etaBarBackgroundColor,
+            etaText: etaTextColor,
+            iconButton: iconButtonColor
+        )
     }
 }
 
+// Empty bottom banner (5.0.3): passed to NavigationOptions(bottomBanner:)
+// when showEta == false, replacing the SDK's default BottomBannerViewController
+// (the ETA/duration/distance bar + cancel button). This is the SDK's own
+// supported customization point - NavigationViewController.addBottomBanner
+// uses `navigationOptions?.bottomBanner ?? BottomBannerViewController()`
+// (verified verbatim at v3.20.1, NavigationViewController.swift line 611),
+// and Mapbox's own CustomBars example subclasses ContainerViewController
+// exactly like this. Deterministic by construction - no show/hide timing
+// races against the SDK's own banner presentation flow.
+private final class ExpoEmptyBottomBanner: ContainerViewController {}
+
 private final class ExpoManeuverNightStyle: StandardNightStyle {
     var maneuverBackgroundColor: UIColor?
+    var turnIconColor: UIColor?
+    var etaBarBackgroundColor: UIColor?
+    var etaTextColor: UIColor?
+    var iconButtonColor: UIColor?
     required init() {
         super.init()
         styleType = .night
     }
     override func apply() {
         super.apply()
-        guard let color = maneuverBackgroundColor else { return }
-        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .phone)).backgroundColor = color
-        InstructionsBannerView.appearance(for: UITraitCollection(userInterfaceIdiom: .pad)).backgroundColor = color
+        applyExpoCustomColors(
+            maneuverBackground: maneuverBackgroundColor,
+            turnIcon: turnIconColor,
+            etaBarBackground: etaBarBackgroundColor,
+            etaText: etaTextColor,
+            iconButton: iconButtonColor
+        )
     }
 }
 
@@ -170,6 +250,13 @@ public class ExpoMapboxNavigationView: ExpoView {
     // Defaults to true = the SDK's own default behavior, so adding this
     // prop changes nothing for existing consumers unless they opt out.
     private var showEndOfRouteFeedback: Bool = true
+    // Whether the drop-in's bottom banner (ETA/duration/distance bar +
+    // cancel button) is shown (5.0.3 - previously an Android-only prop,
+    // dead on iOS). false swaps in an empty bottom banner at
+    // NavigationViewController construction (see ExpoEmptyBottomBanner).
+    // Construction-time configuration, like the maneuver banner colors:
+    // changing it mid-navigation applies on the NEXT route presentation.
+    private var showEta: Bool = true
 
     // MARK: - Color customization props (parity with Android)
     // On iOS the NavigationViewController drop-in handles all UI natively,
@@ -307,59 +394,65 @@ public class ExpoMapboxNavigationView: ExpoView {
             return wp
         }
 
-        var options = NavigationRouteOptions(waypoints: waypoints)
-        if let langTag = language { options.locale = Locale(identifier: langTag) }
-        options.distanceMeasurementSystem = resolveVoiceUnits() == "imperial" ? .imperial : .metric
-
+        let resolvedProfile: ProfileIdentifier
         switch navigationProfile ?? "driving-traffic" {
-        case "driving-traffic": options.profileIdentifier = .automobileAvoidingTraffic
-        case "driving":         options.profileIdentifier = .automobile
-        case "walking":         options.profileIdentifier = .walking
-        case "cycling":         options.profileIdentifier = .cycling
-        default:                options.profileIdentifier = .automobileAvoidingTraffic
+        case "driving-traffic": resolvedProfile = .automobileAvoidingTraffic
+        case "driving":         resolvedProfile = .automobile
+        case "walking":         resolvedProfile = .walking
+        case "cycling":         resolvedProfile = .cycling
+        default:                resolvedProfile = .automobileAvoidingTraffic
         }
+        let measurementSystem: MeasurementSystem = resolveVoiceUnits() == "imperial" ? .imperial : .metric
 
-        // FIXED: excludeTypes was declared/settable but never applied on
-        // iOS (dead code) - Android drives MapboxDirections' exclude(...)
-        // request param with it. RoadClasses(descriptions:) is a FAILABLE
-        // initializer (`init?`, verified verbatim in mapbox-navigation-ios
-        // v3.20.1's vendored Sources/MapboxDirections/RoadClasses.swift):
-        // any single unrecognized description string makes the WHOLE
-        // initializer return nil (its `default:` case is `return nil`).
-        // Recognized values at v3.20.1: "toll", "restricted", "motorway",
-        // "ferry", "tunnel", "hov2", "hov3", "hot", "unpaved",
-        // "cash_only_tolls" ("" is skipped). So: valid list -> applied;
-        // any invalid entry -> nil -> no exclusions applied (graceful
-        // no-op rather than a crash), matching this package's established
-        // never-crash-on-bad-prop-input convention (see mapboxColor above).
-        if let excludes = excludeTypes, !excludes.isEmpty,
-           let roadClasses = RoadClasses(descriptions: excludes) {
-            options.roadClassesToAvoid = roadClasses
-        }
-
-        // FIXED: maxHeight/maxWidth were declared/settable but never
-        // applied on iOS (dead code) - Android drives MapboxDirections'
-        // maxHeight(...)/maxWidth(...) request params with them (vehicle
-        // dimension restrictions for truck routing, NOT view layout
-        // sizing - confirmed against Android's own usage, which passes
-        // these straight to its Directions request builder, not to any
-        // view/layout API). RouteOptions.maximumHeight/maximumWidth are
-        // typed as Measurement<UnitLength> (confirmed from
-        // mapbox-directions-swift's own RouteOptions.swift, which converts
-        // via `.converted(to: .meters)` before encoding) - Android's
-        // values are already in meters (matching its own MapboxDirections
-        // Java/Kotlin API), so no unit conversion is needed here.
-        if let h = maxHeight {
-            options.maximumHeight = Measurement(value: h, unit: UnitLength.meters)
-        }
-        if let w = maxWidth {
-            options.maximumWidth = Measurement(value: w, unit: UnitLength.meters)
+        // useMapMatching (5.0.4, zero-dead-props phase - previously
+        // stored-only on iOS): routes the request through the Map Matching
+        // API instead of Directions. RoutingProvider declares BOTH
+        // overloads at v3.20.1 (verified verbatim:
+        // `calculateRoutes(options: RouteOptions) -> FetchTask` and
+        // `calculateRoutes(options: MatchOptions) -> FetchTask`, same
+        // return type), and NavigationMatchOptions is the SDK's own
+        // navigation-optimized MatchOptions subclass - so the entire
+        // downstream result handling is IDENTICAL for both branches.
+        let request: Task<NavigationRoutes, Error>
+        if useMapMatching {
+            let options = NavigationMatchOptions(waypoints: waypoints, profileIdentifier: resolvedProfile)
+            if let langTag = language { options.locale = Locale(identifier: langTag) }
+            options.distanceMeasurementSystem = measurementSystem
+            // NOTE: excludeTypes/maxHeight/maxWidth are Directions-API-only
+            // request parameters (RouteOptions properties with no
+            // MatchOptions equivalent) - the Map Matching API itself has no
+            // such filters. Not dead code: an API-surface difference,
+            // documented in the Props table.
+            request = mapboxNavigation.routingProvider().calculateRoutes(options: options)
+        } else {
+            let options = NavigationRouteOptions(waypoints: waypoints, profileIdentifier: resolvedProfile)
+            if let langTag = language { options.locale = Locale(identifier: langTag) }
+            options.distanceMeasurementSystem = measurementSystem
+            // RoadClasses(descriptions:) is a FAILABLE initializer (verified
+            // verbatim at v3.20.1): any single unrecognized description
+            // makes it return nil -> exclusions skipped gracefully, never a
+            // crash. Recognized values: "toll", "restricted", "motorway",
+            // "ferry", "tunnel", "hov2", "hov3", "hot", "unpaved",
+            // "cash_only_tolls".
+            if let excludes = excludeTypes, !excludes.isEmpty,
+               let roadClasses = RoadClasses(descriptions: excludes) {
+                options.roadClassesToAvoid = roadClasses
+            }
+            // maximumHeight/maximumWidth are Measurement<UnitLength>
+            // (verified at v3.20.1); Android's plain numeric values are
+            // already meters, so no conversion needed.
+            if let h = maxHeight {
+                options.maximumHeight = Measurement(value: h, unit: UnitLength.meters)
+            }
+            if let w = maxWidth {
+                options.maximumWidth = Measurement(value: w, unit: UnitLength.meters)
+            }
+            request = mapboxNavigation.routingProvider().calculateRoutes(options: options)
         }
 
         routeRequestTask?.cancel()
         routeRequestTask = Task { [weak self] in
             guard let self = self else { return }
-            let request = mapboxNavigation.routingProvider().calculateRoutes(options: options)
             let result = await request.result
             // Swift Task cancellation is cooperative: cancel() only sets a
             // flag, it does not interrupt this body. Without this check, a
@@ -450,6 +543,39 @@ public class ExpoMapboxNavigationView: ExpoView {
         )
     }
 
+    // customRasterTileUrl/customRasterAboveLayerId (5.0.4, zero-dead-props
+    // phase - previously stored-only on BOTH platforms since before 4.0.2).
+    // Injects a raster tile source + layer into the drop-in map's style.
+    // API pattern (RasterSource(id:)/tiles/tileSize, RasterLayer(id:source:),
+    // addSource/addLayer(layerPosition: .above)) verified against a real
+    // same-SDK-generation implementation compiled in production. Idempotent:
+    // removes any previous instance first, so it is safe to call on every
+    // style load AND on live prop changes; a nil URL simply cleans up.
+    // Style operations use try? - never a crash source.
+    private static let customRasterSourceId = "expo_mapbox_navigation_raster_source"
+    private static let customRasterLayerId = "expo_mapbox_navigation_raster_layer"
+
+    private func applyCustomRasterLayer(on navigationMapView: NavigationMapView) {
+        let mapboxMap = navigationMapView.mapView.mapboxMap
+        if mapboxMap.layerExists(withId: Self.customRasterLayerId) {
+            try? mapboxMap.removeLayer(withId: Self.customRasterLayerId)
+        }
+        if mapboxMap.sourceExists(withId: Self.customRasterSourceId) {
+            try? mapboxMap.removeSource(withId: Self.customRasterSourceId)
+        }
+        guard let tileUrl = customRasterTileUrl, !tileUrl.isEmpty else { return }
+        var rasterSource = RasterSource(id: Self.customRasterSourceId)
+        rasterSource.tiles = [tileUrl]
+        rasterSource.tileSize = 256
+        let rasterLayer = RasterLayer(id: Self.customRasterLayerId, source: Self.customRasterSourceId)
+        try? mapboxMap.addSource(rasterSource)
+        if let aboveLayerId = customRasterAboveLayerId, !aboveLayerId.isEmpty {
+            try? mapboxMap.addLayer(rasterLayer, layerPosition: .above(aboveLayerId))
+        } else {
+            try? mapboxMap.addLayer(rasterLayer)
+        }
+    }
+
     // MARK: - Free-drive fallback map (5.0.2)
     // Construction pattern verified VERBATIM against Mapbox's own v3.20.1
     // example (Examples/AdditionalExamples/Examples/
@@ -520,12 +646,38 @@ public class ExpoMapboxNavigationView: ExpoView {
         dayStyle.maneuverBackgroundColor = maneuverBackgroundColorDay.flatMap { mapboxColor(fromHex: $0) }
         let nightStyle = ExpoManeuverNightStyle()
         nightStyle.maneuverBackgroundColor = maneuverBackgroundColorNight.flatMap { mapboxColor(fromHex: $0) }
+        // Custom colors (5.0.4, zero-dead-props phase) - previously
+        // stored-only on iOS, now applied through the same construction-time
+        // style mechanism as the maneuver background (see
+        // applyExpoCustomColors for the verified appearance targets).
+        let turnIcon = maneuverTurnIconColor.flatMap { mapboxColor(fromHex: $0) }
+        let etaBg = etaBarBackgroundColor.flatMap { mapboxColor(fromHex: $0) }
+        let etaText = etaTextColor.flatMap { mapboxColor(fromHex: $0) }
+        let iconBtn = iconButtonColor.flatMap { mapboxColor(fromHex: $0) }
+        for style in [dayStyle as Any, nightStyle as Any] {
+            if let day = style as? ExpoManeuverDayStyle {
+                day.turnIconColor = turnIcon
+                day.etaBarBackgroundColor = etaBg
+                day.etaTextColor = etaText
+                day.iconButtonColor = iconBtn
+            } else if let night = style as? ExpoManeuverNightStyle {
+                night.turnIconColor = turnIcon
+                night.etaBarBackgroundColor = etaBg
+                night.etaTextColor = etaText
+                night.iconButtonColor = iconBtn
+            }
+        }
 
         let navigationOptions = NavigationOptions(
             mapboxNavigation: mapboxNavigation,
             voiceController:  provider.routeVoiceController,
             eventsManager:    provider.eventsManager(),
-            styles: [dayStyle, nightStyle]
+            styles: [dayStyle, nightStyle],
+            // showEta=false (5.0.3): replace the default bottom banner
+            // (ETA bar + cancel button) with an empty one - the SDK's own
+            // customization point, no show/hide timing races. nil keeps
+            // the SDK default exactly as before.
+            bottomBanner: showEta ? nil : ExpoEmptyBottomBanner()
         )
 
         let vc = NavigationViewController(
@@ -578,16 +730,22 @@ public class ExpoMapboxNavigationView: ExpoView {
         self.navigationViewController = vc
         isOverviewMode = false
 
-        // Destination flag image: register now, and re-register after every
-        // style load (style changes wipe registered images - including this
+        // Destination flag image + custom raster layer: apply now, and
+        // re-apply after every style load (style changes wipe both
+        // registered images AND injected sources/layers - including this
         // package's own optional mapStyle load below). Same double coverage
         // as Mapbox's own v3.20.1 Custom-Final-Waypoint example.
         registerFlagImage(on: vc.navigationView.navigationMapView)
+        applyCustomRasterLayer(on: vc.navigationView.navigationMapView)
         waypointImageStyleCancelable = vc.navigationView.navigationMapView.mapView.mapboxMap
             .onStyleLoaded.observe { [weak self, weak vc] _ in
                 guard let self = self, let vc = vc else { return }
                 self.registerFlagImage(on: vc.navigationView.navigationMapView)
+                self.applyCustomRasterLayer(on: vc.navigationView.navigationMapView)
             }
+        // Initial mute-button tint (applies iconButtonMutedColor if the
+        // view mounted already muted).
+        updateMuteButtonTint()
 
         // FIXED: mapStyle was declared/settable but never applied on iOS
         // (dead code) - Android drives mapView.mapboxMap.loadStyle(...)
@@ -671,6 +829,27 @@ public class ExpoMapboxNavigationView: ExpoView {
     private func applyMute(_ shouldMute: Bool) {
         isMuted = shouldMute
         mapboxNavigationProvider?.routeVoiceController.speechSynthesizer.muted = shouldMute
+        updateMuteButtonTint()
+    }
+
+    // iconButtonMutedColor (5.0.4, zero-dead-props phase): tints the drop-in's
+    // mute floating button when voice is muted. `floatingButtons` is a
+    // public [UIButton]? on NavigationViewController (verified at v3.20.1,
+    // line 643), and the SDK's own doc comment on it states the default
+    // buttons are "the overview, mute and feedback report button" - so the
+    // mute button is index 1. That ordering is part of the SDK we vendor at
+    // a FIXED version, and the access is bounds-checked: if the array is
+    // shorter (custom configurations), this is a silent no-op, never a
+    // crash.
+    private func updateMuteButtonTint() {
+        guard let buttons = navigationViewController?.floatingButtons, buttons.count > 1 else { return }
+        let normal = iconButtonColor.flatMap { mapboxColor(fromHex: $0) }
+        let muted = iconButtonMutedColor.flatMap { mapboxColor(fromHex: $0) }
+        if isMuted {
+            if let muted = muted { buttons[1].tintColor = muted }
+        } else if let normal = normal {
+            buttons[1].tintColor = normal
+        }
     }
 
     // MARK: - Cancel (parity with Android cancelNavigation)
@@ -776,6 +955,12 @@ public class ExpoMapboxNavigationView: ExpoView {
         showEndOfRouteFeedback = s
         navigationViewController?.showsEndOfRouteFeedback = s
     }
+    // iOS implementation added in 5.0.3 (previously Android-only, dead
+    // here). Construction-time: applies when the next route presents its
+    // NavigationViewController - not a refetch trigger.
+    func setShowEta(_ s: Bool) {
+        showEta = s
+    }
     func setMaxHeight(_ h: Double?) {
         guard h != maxHeight else { return }
         maxHeight = h
@@ -786,9 +971,29 @@ public class ExpoMapboxNavigationView: ExpoView {
         maxWidth = w
         scheduleFetchRoutes()
     }
-    func setUseMapMatching(_ u: Bool)      { useMapMatching = u }
-    func setCustomRasterTileUrl(_ u: String?)        { customRasterTileUrl = u }
-    func setCustomRasterAboveLayerId(_ l: String?)   { customRasterAboveLayerId = l }
+    // useMapMatching switches which API the route request uses (5.0.4) -
+    // it IS a route-affecting prop now, so changes re-trigger the fetch.
+    func setUseMapMatching(_ u: Bool) {
+        guard u != useMapMatching else { return }
+        useMapMatching = u
+        scheduleFetchRoutes()
+    }
+    // Raster overlay props (5.0.4): applied live on the presented map when
+    // one exists; always re-applied on style loads via the style observer.
+    func setCustomRasterTileUrl(_ u: String?) {
+        guard u != customRasterTileUrl else { return }
+        customRasterTileUrl = u
+        if let vc = navigationViewController {
+            applyCustomRasterLayer(on: vc.navigationView.navigationMapView)
+        }
+    }
+    func setCustomRasterAboveLayerId(_ l: String?) {
+        guard l != customRasterAboveLayerId else { return }
+        customRasterAboveLayerId = l
+        if let vc = navigationViewController {
+            applyCustomRasterLayer(on: vc.navigationView.navigationMapView)
+        }
+    }
 
     // Color props — stored for reference; NavigationViewController applies its own
     // theme automatically. Custom color support via NavigationViewController's

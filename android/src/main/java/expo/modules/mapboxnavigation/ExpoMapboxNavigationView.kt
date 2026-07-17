@@ -31,7 +31,18 @@ import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.common.location.Location
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.Style
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.addLayerAbove
+import com.mapbox.maps.extension.style.layers.generated.rasterLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.IconAnchor
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.rasterSource
+import com.mapbox.navigation.base.ExperimentalPreviewMapboxNavigationAPI
+import com.mapbox.navigation.core.mapmatching.MapMatchingAPICallback
+import com.mapbox.navigation.core.mapmatching.MapMatchingFailure
+import com.mapbox.navigation.core.mapmatching.MapMatchingOptions
+import com.mapbox.navigation.core.mapmatching.MapMatchingSuccessfulResult
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
@@ -135,6 +146,11 @@ private const val STEPS_PANEL_MAX_HEIGHT_FRACTION = 0.86f
 // session will ever start (so the usual first-location camera centering,
 // which depends on the trip session's location updates, never triggers).
 private const val DEGENERATE_ROUTE_CAMERA_ZOOM = 15.0
+
+// Custom raster overlay (5.0.4, zero-dead-props phase) - stable ids for the
+// injected source/layer so re-application on style reloads is idempotent.
+private const val CUSTOM_RASTER_SOURCE_ID = "expo_mapbox_navigation_raster_source"
+private const val CUSTOM_RASTER_LAYER_ID = "expo_mapbox_navigation_raster_layer"
 
 class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     ExpoView(context, appContext) {
@@ -779,6 +795,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
         mapView.mapboxMap.loadStyle(mapStyle ?: getAutoStyle()) { style ->
             routeLineView.initializeLayers(style)
+            applyCustomRasterLayer(style)
 
             viewportDataSource = MapboxNavigationViewportDataSource(mapView.mapboxMap)
             viewportDataSource.followingPadding = followingPadding
@@ -797,11 +814,30 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
             // Navigation arrow puck
             mapView.location.setLocationProvider(navigationLocationProvider)
-            navigationSetupComplete = true
             applyPuckSettings()
             mapView.location.puckBearing = PuckBearing.COURSE
 
             registerObservers()
+            // READINESS ORDERING FIX (5.0.3): the completion flag is set
+            // LAST, only after the route line layers, viewport data source,
+            // navigation camera, location provider AND all observers are in
+            // place. It was previously set before registerObservers(),
+            // which left a window where fetchRoutes() considered the view
+            // ready while route/location observers weren't registered yet.
+            // This whole loadStyle callback is ASYNC (style loading is
+            // network-bound): on fast devices the route response can win
+            // the race against it - real reports on recent Samsung/Xiaomi
+            // hardware showed routes arriving before setup completed, with
+            // the map stuck on a world view and the camera never engaging.
+            navigationSetupComplete = true
+            // Replay a fetch that was deferred by fetchRoutes' readiness
+            // guard while setup was still in progress (see
+            // pendingRouteFetchUntilSetup) - the coalescing scheduler
+            // makes this safe to call unconditionally-guarded.
+            if (pendingRouteFetchUntilSetup) {
+                pendingRouteFetchUntilSetup = false
+                scheduleFetchRoutes()
+            }
         }
     }
 
@@ -1018,6 +1054,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             if (shouldBeNight) NavigationStyles.NAVIGATION_NIGHT_STYLE else NavigationStyles.NAVIGATION_DAY_STYLE
         ) { style ->
             routeLineView.initializeLayers(style)
+            applyCustomRasterLayer(style)
             mapboxNavigation?.getNavigationRoutes()?.takeIf { it.isNotEmpty() }?.let { routes ->
                 routeLineApi.setNavigationRoutes(routes) { value ->
                     routeLineView.renderRouteDrawData(style, value)
@@ -1215,6 +1252,37 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         return bmp
     }
 
+    // customRasterTileUrl/customRasterAboveLayerId (5.0.4, zero-dead-props
+    // phase - previously stored-only on BOTH platforms since before 4.0.2).
+    // Injects a raster tile source + layer into the map style, using the
+    // Maps SDK's own style-extension DSL (bundled with the existing
+    // com.mapbox.maps:android dependency). Idempotent: removes any previous
+    // instance first, so it is safe to call on EVERY style load (both the
+    // initial setupNavigation load and day/night style switches wipe
+    // injected sources/layers) and on live prop changes; a null/empty URL
+    // simply cleans up. Wrapped so a style failure can never break
+    // navigation (cosmetic-only guarantee, same as the waypoint markers).
+    private fun applyCustomRasterLayer(style: Style) {
+        try {
+            if (style.styleLayerExists(CUSTOM_RASTER_LAYER_ID)) style.removeStyleLayer(CUSTOM_RASTER_LAYER_ID)
+            if (style.styleSourceExists(CUSTOM_RASTER_SOURCE_ID)) style.removeStyleSource(CUSTOM_RASTER_SOURCE_ID)
+            val url = customRasterTileUrl?.takeIf { it.isNotEmpty() } ?: return
+            style.addSource(rasterSource(CUSTOM_RASTER_SOURCE_ID) {
+                tiles(listOf(url))
+                tileSize(256L)
+            })
+            val layer = rasterLayer(CUSTOM_RASTER_LAYER_ID, CUSTOM_RASTER_SOURCE_ID) {}
+            val above = customRasterAboveLayerId?.takeIf { it.isNotEmpty() }
+            if (above != null && style.styleLayerExists(above)) {
+                style.addLayerAbove(layer, above)
+            } else {
+                style.addLayer(layer)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "applyCustomRasterLayer failed: ${e.message}")
+        }
+    }
+
     private fun clearWaypointMarkers() {
         try {
             waypointAnnotationManager?.deleteAll()
@@ -1404,9 +1472,27 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     }
 
     @SuppressLint("MissingPermission")
+    @OptIn(ExperimentalPreviewMapboxNavigationAPI::class)
     private fun fetchRoutes() {
         val nav = mapboxNavigation ?: return
         if (coordinates.size < 2) return
+        // READINESS GUARD (5.0.3): never issue a route request before the
+        // async style-load setup has fully completed (route line layers,
+        // viewport data source, navigation camera, observers - see
+        // setupNavigation). On fast devices the JS props/route flow can
+        // beat the network-bound style load; requests fired in that window
+        // produced a route the UI never drew (map stuck on world view,
+        // camera never engaging - reported on recent Samsung/Xiaomi
+        // hardware). The deferred fetch is replayed exactly once by the
+        // setup callback when it finishes. The lateinit checks are
+        // belt-and-suspenders alongside the flag: they make this guard
+        // correct even if the flag's position in the setup flow ever
+        // drifts again. Placed BEFORE the degenerate-route guard: its
+        // free-drive fallback needs the same camera/session setup.
+        if (!navigationSetupComplete || !::viewportDataSource.isInitialized || !::navigationCamera.isInitialized) {
+            pendingRouteFetchUntilSetup = true
+            return
+        }
 
         // Degenerate-route guard (5.0.1, parity with iOS - same threshold,
         // same failure message): when EVERY coordinate lies within 25 m of
@@ -1484,6 +1570,62 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
         val points = coordinates.map { Point.fromLngLat(it["longitude"] ?: 0.0, it["latitude"] ?: 0.0) }
         val locale = language?.let { Locale.forLanguageTag(it) } ?: Locale.getDefault()
+
+        // useMapMatching (5.0.4, zero-dead-props phase - previously
+        // stored-only on BOTH platforms): routes the request through the
+        // Map Matching API via MapboxNavigation.requestMapMatching -
+        // introduced with Core Framework 3.x (verified verbatim at
+        // v3.11.0: MapMatchingOptions.Builder with coordinates/profile/
+        // language/waypoints/bannerInstructions, and
+        // MapMatchingSuccessfulResult.navigationRoutes which the SDK
+        // documents as "routes which could be set to navigation").
+        // Marked @ExperimentalPreviewMapboxNavigationAPI by Mapbox - the
+        // @OptIn on this function acknowledges that. Success/cancel
+        // handling mirrors the Directions callback exactly (same
+        // destroyed-instance guard, same one-shot cancellation retry).
+        // NOTE: excludeTypes/maxHeight/maxWidth are Directions-API-only
+        // request parameters - the Map Matching API has no equivalents.
+        if (useMapMatching) {
+            try {
+                val mmBuilder = MapMatchingOptions.Builder()
+                    .coordinates(points)
+                    .bannerInstructions(true)
+                navigationProfile?.let { mmBuilder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }
+                language?.let { mmBuilder.language(it) }
+                waypointIndices?.let { mmBuilder.waypoints(it) }
+                nav.requestMapMatching(mmBuilder.build(), object : MapMatchingAPICallback {
+                    override fun success(result: MapMatchingSuccessfulResult) {
+                        if (nav.isDestroyed) {
+                            Log.w(TAG, "Map matching response arrived after MapboxNavigation was destroyed - ignoring")
+                            return
+                        }
+                        val routes = result.navigationRoutes
+                        if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
+                        nav.setNavigationRoutes(routes)
+                        nav.startTripSession()
+                        updateWaypointMarkers(routes.first())
+                        routeCancelRetryUsed = false
+                    }
+                    override fun failure(failure: MapMatchingFailure) {
+                        Log.e(TAG, "Map matching request failed: $failure")
+                        onRoutesFailed(mapOf("message" to "Map matching request failed"))
+                    }
+                    override fun onCancel() {
+                        if (nav.isDestroyed) return
+                        Log.w(TAG, "Map matching request canceled by SDK")
+                        if (!routeCancelRetryUsed && coordinates.size >= 2) {
+                            routeCancelRetryUsed = true
+                            fetchHandler.postDelayed({ scheduleFetchRoutes() }, 250L)
+                        }
+                    }
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Map matching request could not be issued: ${e.message}")
+                onRoutesFailed(mapOf("message" to (e.message ?: "Map matching request failed")))
+            }
+            return
+        }
+
         val builder = RouteOptions.builder()
             .applyDefaultNavigationOptions()
             .language(locale.toLanguageTag())
@@ -1517,15 +1659,44 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         maxWidth?.let { builder.maxWidth(it) }
         nav.requestRoutes(builder.build(), object : NavigationRouterCallback {
             override fun onRoutesReady(routes: List<NavigationRoute>, @RouterOrigin routerOrigin: String) {
+                // DESTROYED-INSTANCE GUARD (5.0.3): route responses are
+                // async - if the view unmounted meanwhile,
+                // onDetachedFromWindow() has already called
+                // MapboxNavigationProvider.destroy(), and ANY call on the
+                // destroyed instance throws IllegalStateException ("This
+                // instance of MapboxNavigation is destroyed") - a real
+                // production crash with exactly this stack
+                // (onRoutesReady -> startTripSession -> runIfNotDestroyed).
+                if (nav.isDestroyed) {
+                    Log.w(TAG, "Route response arrived after MapboxNavigation was destroyed - ignoring")
+                    return
+                }
                 if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
                 nav.setNavigationRoutes(routes)
                 nav.startTripSession()
                 updateWaypointMarkers(routes.first())
+                // Success: refresh the one-shot cancellation-retry budget.
+                routeCancelRetryUsed = false
             }
             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
             }
-            override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {}
+            override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {
+                // SDK-SIDE CANCELLATION RETRY (5.0.3): previously a silent
+                // no-op - if the SDK cancelled the request (observed on
+                // some recent devices), nothing reached JS and the map just
+                // sat there. Retry ONCE per trip: the budget flag is only
+                // reset by new coordinates or a successful response, never
+                // here and never in fetchRoutes() - so a systematically
+                // cancelling environment degrades to exactly one retry, not
+                // an infinite 250ms loop.
+                if (nav.isDestroyed) return
+                Log.w(TAG, "Route request canceled by SDK (origin=$routerOrigin)")
+                if (!routeCancelRetryUsed && coordinates.size >= 2) {
+                    routeCancelRetryUsed = true
+                    fetchHandler.postDelayed({ scheduleFetchRoutes() }, 250L)
+                }
+            }
         })
     }
 
@@ -1551,6 +1722,17 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // useMapMatching, customRaster*) deliberately do NOT schedule a refetch.
     private val fetchHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var fetchScheduled = false
+    // Set when fetchRoutes() was invoked before the async style-load setup
+    // completed (see setupNavigation's loadStyle callback) - the fetch is
+    // replayed exactly once when setup finishes, instead of firing a route
+    // request that the not-yet-registered observers would mishandle.
+    private var pendingRouteFetchUntilSetup = false
+    // One-shot retry budget for SDK-side route request cancellations
+    // (onCanceled). Reset ONLY when new coordinates arrive or a request
+    // succeeds - deliberately NOT reset inside fetchRoutes() itself, which
+    // would let a systematically-cancelling environment retry forever
+    // (cancel -> retry -> fetch resets budget -> cancel -> retry -> ...).
+    private var routeCancelRetryUsed = false
     private fun scheduleFetchRoutes() {
         if (fetchScheduled) return
         fetchScheduled = true
@@ -1560,7 +1742,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
-    fun setCoordinates(coords: List<Map<String, Double>>) { if (coords == coordinates) return; coordinates = coords; scheduleFetchRoutes() }
+    fun setCoordinates(coords: List<Map<String, Double>>) { if (coords == coordinates) return; coordinates = coords; routeCancelRetryUsed = false; scheduleFetchRoutes() }
     fun setWaypointIndices(i: List<Int>?) { if (i == waypointIndices) return; waypointIndices = i; scheduleFetchRoutes() }
     fun setLanguage(l: String?) { if (l == language) return; language = l; scheduleFetchRoutes() }
     fun setVoiceUnits(u: String?) { if (u == voiceUnits) return; voiceUnits = u; scheduleFetchRoutes() }
@@ -1570,15 +1752,27 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setMute(m: Boolean) { if (m != isMuted) toggleMute() }
     fun setMaxHeight(h: Double?) { if (h == maxHeight) return; maxHeight = h; scheduleFetchRoutes() }
     fun setMaxWidth(w: Double?) { if (w == maxWidth) return; maxWidth = w; scheduleFetchRoutes() }
-    fun setUseMapMatching(u: Boolean) { useMapMatching = u }
+    // useMapMatching switches which API the route request uses (5.0.4) -
+    // it IS a route-affecting prop now, so changes re-trigger the fetch.
+    fun setUseMapMatching(u: Boolean) { if (u == useMapMatching) return; useMapMatching = u; scheduleFetchRoutes() }
     // iOS-only prop (toggles NavigationViewController's built-in end-of-route
     // feedback screen). Android's custom-built navigation UI has no such
     // screen, so there is nothing to show or hide here - declared as a
     // stored no-op for cross-platform prop parity, matching this package's
     // existing convention for platform-specific props.
     fun setShowEndOfRouteFeedback(@Suppress("UNUSED_PARAMETER") show: Boolean) { /* no-op on Android */ }
-    fun setCustomRasterTileUrl(u: String?) { customRasterTileUrl = u }
-    fun setCustomRasterAboveLayerId(l: String?) { customRasterAboveLayerId = l }
+    // Raster overlay props (5.0.4): applied live when the style is loaded;
+    // always re-applied on style (re)loads via both loadStyle callbacks.
+    fun setCustomRasterTileUrl(u: String?) {
+        if (u == customRasterTileUrl) return
+        customRasterTileUrl = u
+        mapView.mapboxMap.getStyle()?.let { applyCustomRasterLayer(it) }
+    }
+    fun setCustomRasterAboveLayerId(l: String?) {
+        if (l == customRasterAboveLayerId) return
+        customRasterAboveLayerId = l
+        mapView.mapboxMap.getStyle()?.let { applyCustomRasterLayer(it) }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Maneuver view creation/rebuild
