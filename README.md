@@ -354,6 +354,12 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 5.0.3
+**Android: fixes the destination flag (and waypoint badges) rendering visibly offset from the point where the route line actually ends — confirmed by a real device screenshot. Two independent causes, both fixed.**
+
+- **Cause 1 — wrong coordinate source (the big one)**: markers were placed at the RAW request coordinates (the geocoded address the app passes in), but Mapbox snaps routes to the road network — the drawn route line ends at the SNAPPED point, which can sit tens of meters away from the raw geocode. Markers now use the Directions RESPONSE waypoints (per Mapbox's own docs: "input coordinates snapped to the road and path network, in the order of the input coordinates") — i.e. exactly where the route line starts/ends. Bonus correctness: response waypoints only contain leg-separating stops (the API itself excludes silent via-points), so intermediate badge numbering is right by construction. If a response carries no waypoints, markers fall back to the raw coordinates (the pre-5.0.3 placement) rather than disappearing. iOS needs no change: its markers go through the SDK's own waypoint pipeline, which is already route-derived.
+- **Cause 2 — bitmap anchor geometry**: the flag bitmap drew its pole at the LEFT edge with a 2dp empty margin below, while `IconAnchor.BOTTOM` anchors the bitmap's bottom-CENTER on the map point — so the pole base landed ~11dp right of and 2dp above the true point even when the coordinate was correct. The pole is now horizontally centered with its base flush against the bitmap's bottom edge (the exact anchor pixel), with the banner waving right of the pole top.
+
 ### 5.0.2
 **Two changes: (1) BOTH platforms — when the degenerate-route guard fires (driver already at the destination), the view now switches to a live free-drive map centered on the driver, instead of a whole-world view on Android and a permanently black surface on iOS; (2) build-tooling fix — the published `build/index.js` in 5.0.0/5.0.1 contained raw, uncompiled JSX, restored to proper compiled `createElement` output, byte-identical to the production-proven 4.0.2 artifact.**
 

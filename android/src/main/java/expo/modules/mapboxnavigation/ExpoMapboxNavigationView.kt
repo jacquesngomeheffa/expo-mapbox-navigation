@@ -1142,21 +1142,32 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var waypointAnnotationManager: PointAnnotationManager? = null
 
     private fun drawDestinationFlagBitmap(): Bitmap {
-        val w = (30 * dp).toInt()
+        // GEOMETRY CONTRACT (5.0.3 offset fix): the pole's base sits EXACTLY
+        // at the bitmap's bottom-center pixel, because IconAnchor.BOTTOM
+        // anchors the bitmap's bottom-center on the map point. The previous
+        // drawing had the pole at the LEFT edge with a 2dp empty margin
+        // below it - so the flag rendered visibly offset from the true
+        // point (confirmed by a real device screenshot). Pole is now
+        // horizontally centered and touches the bottom edge; the flag
+        // banner waves to the right of the pole top.
+        val w = (36 * dp).toInt()
         val h = (40 * dp).toInt()
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val darkSlate = Color.rgb(46, 59, 74)
         val ink = Color.rgb(31, 36, 43)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        // Pole: rounded vertical bar at the left, full height.
+        val poleCenterX = w / 2f
+        // Pole: rounded vertical bar, horizontally centered, base flush
+        // with the bitmap's bottom edge (the anchor point).
         paint.color = darkSlate
         canvas.drawRoundRect(
-            RectF(2 * dp, 2 * dp, 5 * dp, 38 * dp),
+            RectF(poleCenterX - 1.5f * dp, 2 * dp, poleCenterX + 1.5f * dp, h.toFloat()),
             1.5f * dp, 1.5f * dp, paint
         )
-        // Flag body: white base, 3x2 checker, thin border.
-        val flag = RectF(5 * dp, 3 * dp, 27 * dp, 18 * dp)
+        // Flag body: white base, 3x2 checker, thin border - attached to the
+        // pole top, extending right.
+        val flag = RectF(poleCenterX + 1.5f * dp, 3 * dp, 34 * dp, 16 * dp)
         paint.color = Color.WHITE
         canvas.drawRect(flag, paint)
         paint.color = ink
@@ -1212,41 +1223,57 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         }
     }
 
-    private fun updateWaypointMarkers() {
-        if (coordinates.size < 2) return
+    private fun updateWaypointMarkers(route: NavigationRoute) {
         try {
             val manager = waypointAnnotationManager
                 ?: mapView.annotations.createPointAnnotationManager().also { waypointAnnotationManager = it }
             manager.deleteAll()
 
+            // OFFSET FIX (5.0.3): use the ROUTE-SNAPPED waypoint locations
+            // from the Directions RESPONSE, not the raw request coordinates.
+            // Per Mapbox's own DirectionsResponse docs, response waypoints
+            // are "input coordinates snapped to the road and path network,
+            // in the order of the input coordinates" - i.e. exactly where
+            // the drawn route line starts/ends. The raw request coordinates
+            // (a geocoded address) can sit tens of meters off the road, and
+            // a real device screenshot showed the flag visibly detached
+            // from the route line's endpoint because of it. Response
+            // waypoints also only contain LEG-SEPARATING stops (silent
+            // via-points are excluded by the API itself), so every
+            // intermediate entry is a true numbered stop by construction.
+            val snappedPoints: List<Point>? = try {
+                route.directionsResponse.waypoints()?.mapNotNull { it.location() }
+            } catch (e: Exception) {
+                Log.e(TAG, "updateWaypointMarkers: snapped waypoints unavailable (${e.message}), falling back to raw coordinates")
+                null
+            }
+            // Fallback (raw request coordinates + waypointIndices semantics,
+            // the pre-5.0.3 behavior) only if the response carries no
+            // waypoints - markers stay slightly offset there, but never
+            // disappear entirely.
+            val points: List<Point> = snappedPoints ?: coordinates.mapNotNull { coord ->
+                val lat = coord["latitude"] ?: return@mapNotNull null
+                val lng = coord["longitude"] ?: return@mapNotNull null
+                Point.fromLngLat(lng, lat)
+            }
+            if (points.size < 2) return
+
             val markers = mutableListOf<PointAnnotationOptions>()
-            var badgeNumber = 0
-            coordinates.forEachIndexed { index, coord ->
-                val lat = coord["latitude"] ?: return@forEachIndexed
-                val lng = coord["longitude"] ?: return@forEachIndexed
-                val isFinal = index == coordinates.size - 1
-                val isOrigin = index == 0
-                // Same leg-separation semantics fetchRoutes sends to the
-                // Directions API: with waypointIndices set, only listed
-                // intermediate indices are true stops; otherwise every
-                // intermediate coordinate is one.
-                val isTrueStop = waypointIndices?.let { it.contains(index) } ?: true
+            points.forEachIndexed { index, point ->
+                val isFinal = index == points.size - 1
                 when {
                     isFinal -> markers.add(
                         PointAnnotationOptions()
-                            .withPoint(Point.fromLngLat(lng, lat))
+                            .withPoint(point)
                             .withIconImage(drawDestinationFlagBitmap())
                             .withIconAnchor(IconAnchor.BOTTOM)
                     )
-                    !isOrigin && isTrueStop -> {
-                        badgeNumber += 1
-                        markers.add(
-                            PointAnnotationOptions()
-                                .withPoint(Point.fromLngLat(lng, lat))
-                                .withIconImage(drawWaypointBadgeBitmap(badgeNumber))
-                                .withIconAnchor(IconAnchor.CENTER)
-                        )
-                    }
+                    index > 0 -> markers.add(
+                        PointAnnotationOptions()
+                            .withPoint(point)
+                            .withIconImage(drawWaypointBadgeBitmap(index))
+                            .withIconAnchor(IconAnchor.CENTER)
+                    )
                 }
             }
             if (markers.isNotEmpty()) manager.create(markers)
@@ -1493,7 +1520,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
                 nav.setNavigationRoutes(routes)
                 nav.startTripSession()
-                updateWaypointMarkers()
+                updateWaypointMarkers(routes.first())
             }
             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
