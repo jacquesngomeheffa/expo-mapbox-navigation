@@ -17,6 +17,7 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 
 **✅ Tested on Android**: real EAS production build, real device
 
+
 ---
 
 ## Installation
@@ -63,6 +64,7 @@ nav 3.20.1 / MapboxNavigationNative 324.20.2 (bucket dash-native) /
 MapboxCommon 24.20.2 / MapboxMaps 11.20.2 (matches @rnmapbox/maps@10.3.1).
 ```
 
+
 ---
 
 ## Plugin Options
@@ -77,61 +79,6 @@ MapboxCommon 24.20.2 / MapboxMaps 11.20.2 (matches @rnmapbox/maps@10.3.1).
 | `iosMapboxMapsVersion` | — | `"11.20.2"` | **iOS only (5.0.5+).** Exact MapboxMaps version the podspec declares (resolved from CocoaPods trunk — not vendored; it arrives via `@rnmapbox/maps`). MUST equal the `RNMapboxMapsVersion` you set in `@rnmapbox/maps`' plugin config — a mismatch fails `pod install` loudly with a version conflict (a protection, not a bug). Must pair with `iosMapboxNavigationVersion` (see above). The defaults together are the confirmed-working set: nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2 / MapboxMaps 11.20.2. |
 | `androidColorOverrides` | — | `{}` | Override Mapbox native resource colors on Android. |
 
----
-
-## iOS Architecture
-
-Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only — Mapbox has not shipped CocoaPods support for it. This package works around that by vendoring the SDK's binaries directly. Mapbox officially publishes `MapboxNavigationCore`/`MapboxNavigationUIKit`/`MapboxDirections` (and their transitive binary dependencies) as precompiled `.xcframework` downloads via a dedicated repository, [`mapbox-navigation-ios-build-artifacts`](https://github.com/mapbox/mapbox-navigation-ios-build-artifacts) — `ios/fetch-xcframeworks.sh` fetches these directly into the consuming app's `node_modules` on its own first `pod install`.
-
-**What this means for you:**
-- No network access to `api.mapbox.com` needed during your `pod install` or EAS build for the Navigation-specific frameworks themselves — only your own `downloadsToken` at fetch time.
-- No SPM package resolution happens in your project for this SDK at all.
-- `useFrameworks: "static"` (see step 3 of [Installation](#installation)) is required. `forceStaticLinking`, previously documented here as the fix for the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash, has been **retracted as of 4.0.3** — real A/B binary evidence showed it made no observable difference to linking type in either a crashing or non-crashing build. See the `4.0.3` changelog entry for the retraction and why the crash's real cause is currently unconfirmed.
-- The iOS SDK version is fixed by which version of this npm package you install (matching a specific `mapboxMapsVersion`), not something you configure per-app.
-
-**Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
-
-### Upgrading the vendored iOS SDK version
-
-**As of 5.0.5, you likely don't need this section at all.** If you just want to try a newer (or older) Navigation/Maps SDK pairing in your own app, set the `iosMapboxNavigationVersion` and `iosMapboxMapsVersion` plugin options in your `app.json` — see the [Plugin Options](#plugin-options) table above. No new npm release of this package required; the versions are resolved dynamically at your own `expo prebuild` / `pod install`. **You are still responsible for verifying the pairing yourself** — there is no auto-calculation on iOS (unlike Android's `mapboxNavigationVersion`), and a bad pair means link errors or runtime ABI crashes.
-
-This section is for **maintainers of this package** bumping the *shipped defaults* — the versions a consumer gets if they set neither plugin option. `ios/Frameworks/*.xcframework` is **not committed to this repo** (see [Why iOS binaries aren't committed to this repo](#why-ios-binaries-arent-committed-to-this-repo) below) — `ios/fetch-xcframeworks.sh` fetches the Navigation-specific frameworks fresh each time they're needed. To bump the default:
-
-1. Confirm the target Navigation version's matching Maps version from that release's own "Packaging" changelog section at `https://github.com/mapbox/mapbox-navigation-ios/releases/tag/vX.Y.Z` — don't assume a pattern holds, verify the exact release notes every time.
-2. Update the default fallback in **all three** places that read the (optional, prebuild-generated) `.mapbox-ios-versions.json` — they must move together:
-   - `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` defaults in [`plugin/src/index.js`](plugin/src/index.js) (the options' own default values).
-   - `MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-...}"` fallback in [`ios/fetch-xcframeworks.sh`](ios/fetch-xcframeworks.sh).
-   - `default_mapbox_maps_version` in [`ExpoMapboxNavigation.podspec`](ExpoMapboxNavigation.podspec).
-3. Update `s.platforms`/`IPHONEOS_DEPLOYMENT_TARGET` in the podspec if the new MapboxMaps version raises its own minimum deployment target.
-4. Also confirm `ios/ExpoMapboxNavigationModule.swift`/`ExpoMapboxNavigationView.swift` still compile against the new SDK version's actual API — this project's own custom Swift source was built against a specific API generation once before and broke silently on a version downgrade (see the 3.1.9 changelog entry) without any warning until a real archive build. There is no automated check for this yet.
-5. Run the **"Verify Mapbox Navigation xcframeworks fetch"** GitHub Actions workflow with the new version tag — this is a CI sanity check only (confirms `ios/fetch-xcframeworks.sh` still works end-to-end against the new version), it does **not** publish or commit anything.
-6. `npm version` + `npm publish` as usual — the published tarball does **not** include `ios/Frameworks/*.xcframework` (see below); consumers fetch it themselves on their own first `pod install`.
-
-### CocoaPods sunset (Dec 2, 2026) — contingency plan
-
-**Confirmed fact** (verified directly against Mapbox's own release notes and install guide, not a secondary summary): *"Mapbox will end support for CocoaPods in December 2026. After that date, new versions of the Mapbox Maps SDK for iOS will not be published to CocoaPods."* — [`mapbox-maps-ios` release notes](https://github.com/mapbox/mapbox-maps-ios/releases/tag/v11.26.0), [install guide](https://docs.mapbox.com/ios/maps/guides/install/). CocoaPods trunk itself also goes fully read-only around the same date (no new versions of ANY pod, from any maintainer).
-
-**What is NOT at risk**: the vendored Navigation frameworks (`ios/fetch-xcframeworks.sh`) never went through CocoaPods trunk at all — they're fetched by `git clone`-ing Mapbox's own `mapbox-navigation-ios-build-artifacts` repo directly. That mechanism is unaffected by the sunset.
-
-**What IS at risk**: `ExpoMapboxNavigation.podspec`'s `s.dependency 'MapboxMaps', mapbox_maps_version` line. It resolves `MapboxMaps` from CocoaPods trunk — via `@rnmapbox/maps`'s own CocoaPods dependency on it, deduplicated by pod name. After Mapbox stops publishing to trunk, whatever `MapboxMaps` version is last available there becomes a hard ceiling for `iosMapboxMapsVersion` — existing trunk-published versions stay installable forever (read-only, not deleted), but nothing newer will ever appear via this path.
-
-**The actual trigger to watch is NOT Mapbox's own December 2026 date** — it's whether `@rnmapbox/maps` itself migrates off CocoaPods. As of this writing, `@rnmapbox/maps`'s own install docs (`ios/install.md`) make no mention of Swift Package Manager, and no migration announcement has been found. As long as `@rnmapbox/maps` keeps resolving `MapboxMaps` via CocoaPods, our current mechanism keeps working exactly as-is (just capped at whatever version was last on trunk when Mapbox stops publishing).
-
-**Why we can't preemptively vendor `MapboxMaps` ourselves today**: this was already tried once (see the "REVERTED" section at the top of `ios/fetch-xcframeworks.sh`) and confirmed to break CocoaPods' automatic "[CP] Copy XCFrameworks" build phase generation when overriding `@rnmapbox/maps`'s own `MapboxMaps` dependency via a `:podspec =>` Podfile override — while `@rnmapbox/maps` ALSO still pulls its own copy from trunk, that's two copies of the same symbols, guaranteed duplicate-symbol link errors.
-
-**The concrete plan for when the trigger fires** (`@rnmapbox/maps` drops CocoaPods, or Mapbox's trunk freeze date arrives and we need a version newer than what's frozen there): the two-copies conflict above disappears on its own once `@rnmapbox/maps` no longer also provides `MapboxMaps` via CocoaPods — at that point, re-enable direct `MapboxMaps.xcframework` vendoring, extending `ios/fetch-xcframeworks.sh`'s existing git-clone-and-vendor pattern (it already does exactly this for the Navigation frameworks) to also cover `MapboxMaps` itself, sourced from [`mapbox-maps-ios-binary`](https://github.com/mapbox/mapbox-maps-ios/) or Mapbox's SPM binary distribution. Verified as of this writing: a lower-level bridge, [`spm_dependency`](https://www.reactnativecrossroads.com/posts/expo-plugin-add-spm-dependency/) (React Native >= 0.75), lets a podspec declare an SPM dependency directly — but as of Expo SDK ~53/RN 0.79 (Navio's current versions) it has a confirmed open, unresolved bug causing duplicate-symbol errors specifically in Expo modules ([expo/expo#37813](https://github.com/expo/expo/issues/37813)), and forces dynamic frameworks project-wide — which conflicts with this project's `useFrameworks: "static"` requirement (tied to the GestureType crash investigation). Re-verify that issue's status before relying on `spm_dependency` for this.
-
-**Until the trigger fires**: no code changes are justified. Keep `iosMapboxMapsVersion`/`iosMapboxNavigationVersion` reasonably current when convenient (see "Upgrading the vendored iOS SDK version" above) so whichever version ends up frozen is as recent as practical, rather than stale from neglect.
-
-### Why iOS binaries aren't committed to this repo
-
-Mapbox's own [Product Terms](https://www.mapbox.com/legal/tos) ("1.10. No Redistribution") prohibit redistributing their SDK binaries to third parties who haven't authenticated with their own Mapbox account/token. Since this repository and npm package are public, committing `ios/Frameworks/*.xcframework` (fetched using this project's own Mapbox `DOWNLOADS:READ` token) would make them freely downloadable by anyone via `git clone` or `npm install`, without their own token — a real compliance risk, not just a repo-size concern.
-
-Instead, `ios/Frameworks/*.xcframework` is excluded from both this repo (`.gitignore`) and the published npm tarball (`package.json`'s `files`), and `ExpoMapboxNavigation.podspec`'s `s.prepare_command` fetches these binaries directly into the **consuming app's** `node_modules/@jacques_gordon/expo-mapbox-navigation/ios/Frameworks/` the first time that app runs `pod install` — using that app's own Mapbox `downloadsToken` (see the `downloadsToken` plugin option, required for iOS). This matches the approach used by other public Mapbox Navigation + React Native packages (e.g. [`pawan-pk/react-native-mapbox-navigation`](https://github.com/pawan-pk/react-native-mapbox-navigation)).
-
-**Practical implications for consumers of this package**:
-- The first `pod install` after installing/upgrading this package will be noticeably slower (fetching ~250MB of binaries) — subsequent installs are fast as long as `node_modules` isn't wiped between them.
-- Requires network access and a valid Mapbox `DOWNLOADS:READ` token (via the `downloadsToken` plugin option) at `pod install` time, not just at publish time. If that token is missing or invalid, the consuming app's own build fails with a clear error (not a cryptic downstream one), pointing back to the `downloadsToken` option.
 
 ---
 
@@ -171,6 +118,7 @@ export default function Navigation() {
   );
 }
 ```
+
 
 ---
 
@@ -303,6 +251,7 @@ In short: if you're only using one of the two, just use `maneuverBackgroundColor
 
 **`maneuverTurnIconColor` — plugin option only, no priority conflict.** Unlike the background color above, there's no `androidColorOverrides` key for the turn icon's color, so there's nothing to prioritize against — just set `maneuverTurnIconColor` as a plugin option and it's used directly to generate `MapboxCustomManeuverTurnIconStyle`, referenced from `MapboxCustomManeuverStyle` via `maneuverViewIconStyle`/`laneGuidanceManeuverIconStyle` (Mapbox's own official mechanism for this — see their "Change the color of maneuver turn icons" guide). Same single build-time XML style file as the background color, generated in both `res/values/` and `res/values-night/` — Mapbox ships its own `values-night/` default for this too, which would otherwise silently win in dark mode the same way it originally did for the background color.
 
+
 ---
 
 ## Events
@@ -333,6 +282,64 @@ interface RouteStep {
   }[];
 }
 ```
+
+
+---
+
+## iOS Architecture
+
+Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only — Mapbox has not shipped CocoaPods support for it. This package works around that by vendoring the SDK's binaries directly. Mapbox officially publishes `MapboxNavigationCore`/`MapboxNavigationUIKit`/`MapboxDirections` (and their transitive binary dependencies) as precompiled `.xcframework` downloads via a dedicated repository, [`mapbox-navigation-ios-build-artifacts`](https://github.com/mapbox/mapbox-navigation-ios-build-artifacts) — `ios/fetch-xcframeworks.sh` fetches these directly into the consuming app's `node_modules` on its own first `pod install`.
+
+**What this means for you:**
+- No network access to `api.mapbox.com` needed during your `pod install` or EAS build for the Navigation-specific frameworks themselves — only your own `downloadsToken` at fetch time.
+- No SPM package resolution happens in your project for this SDK at all.
+- `useFrameworks: "static"` (see step 3 of [Installation](#installation)) is required. `forceStaticLinking`, previously documented here as the fix for the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash, has been **retracted as of 4.0.3** — real A/B binary evidence showed it made no observable difference to linking type in either a crashing or non-crashing build. See the `4.0.3` changelog entry for the retraction and why the crash's real cause is currently unconfirmed.
+- The iOS SDK version is fixed by which version of this npm package you install (matching a specific `mapboxMapsVersion`), not something you configure per-app.
+
+**Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
+
+### Upgrading the vendored iOS SDK version
+
+**As of 5.0.5, you likely don't need this section at all.** If you just want to try a newer (or older) Navigation/Maps SDK pairing in your own app, set the `iosMapboxNavigationVersion` and `iosMapboxMapsVersion` plugin options in your `app.json` — see the [Plugin Options](#plugin-options) table above. No new npm release of this package required; the versions are resolved dynamically at your own `expo prebuild` / `pod install`. **You are still responsible for verifying the pairing yourself** — there is no auto-calculation on iOS (unlike Android's `mapboxNavigationVersion`), and a bad pair means link errors or runtime ABI crashes.
+
+This section is for **maintainers of this package** bumping the *shipped defaults* — the versions a consumer gets if they set neither plugin option. `ios/Frameworks/*.xcframework` is **not committed to this repo** (see [Why iOS binaries aren't committed to this repo](#why-ios-binaries-arent-committed-to-this-repo) below) — `ios/fetch-xcframeworks.sh` fetches the Navigation-specific frameworks fresh each time they're needed. To bump the default:
+
+1. Confirm the target Navigation version's matching Maps version from that release's own "Packaging" changelog section at `https://github.com/mapbox/mapbox-navigation-ios/releases/tag/vX.Y.Z` — don't assume a pattern holds, verify the exact release notes every time.
+2. Update the default fallback in **all three** places that read the (optional, prebuild-generated) `.mapbox-ios-versions.json` — they must move together:
+   - `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` defaults in [`plugin/src/index.js`](plugin/src/index.js) (the options' own default values).
+   - `MAPBOX_NAV_VERSION="${MAPBOX_NAV_VERSION:-...}"` fallback in [`ios/fetch-xcframeworks.sh`](ios/fetch-xcframeworks.sh).
+   - `default_mapbox_maps_version` in [`ExpoMapboxNavigation.podspec`](ExpoMapboxNavigation.podspec).
+3. Update `s.platforms`/`IPHONEOS_DEPLOYMENT_TARGET` in the podspec if the new MapboxMaps version raises its own minimum deployment target.
+4. Also confirm `ios/ExpoMapboxNavigationModule.swift`/`ExpoMapboxNavigationView.swift` still compile against the new SDK version's actual API — this project's own custom Swift source was built against a specific API generation once before and broke silently on a version downgrade (see the 3.1.9 changelog entry) without any warning until a real archive build. There is no automated check for this yet.
+5. Run the **"Verify Mapbox Navigation xcframeworks fetch"** GitHub Actions workflow with the new version tag — this is a CI sanity check only (confirms `ios/fetch-xcframeworks.sh` still works end-to-end against the new version), it does **not** publish or commit anything.
+6. `npm version` + `npm publish` as usual — the published tarball does **not** include `ios/Frameworks/*.xcframework` (see below); consumers fetch it themselves on their own first `pod install`.
+
+### CocoaPods sunset (Dec 2, 2026) — contingency plan
+
+**Confirmed fact** (verified directly against Mapbox's own release notes and install guide, not a secondary summary): *"Mapbox will end support for CocoaPods in December 2026. After that date, new versions of the Mapbox Maps SDK for iOS will not be published to CocoaPods."* — [`mapbox-maps-ios` release notes](https://github.com/mapbox/mapbox-maps-ios/releases/tag/v11.26.0), [install guide](https://docs.mapbox.com/ios/maps/guides/install/). CocoaPods trunk itself also goes fully read-only around the same date (no new versions of ANY pod, from any maintainer).
+
+**What is NOT at risk**: the vendored Navigation frameworks (`ios/fetch-xcframeworks.sh`) never went through CocoaPods trunk at all — they're fetched by `git clone`-ing Mapbox's own `mapbox-navigation-ios-build-artifacts` repo directly. That mechanism is unaffected by the sunset.
+
+**What IS at risk**: `ExpoMapboxNavigation.podspec`'s `s.dependency 'MapboxMaps', mapbox_maps_version` line. It resolves `MapboxMaps` from CocoaPods trunk — via `@rnmapbox/maps`'s own CocoaPods dependency on it, deduplicated by pod name. After Mapbox stops publishing to trunk, whatever `MapboxMaps` version is last available there becomes a hard ceiling for `iosMapboxMapsVersion` — existing trunk-published versions stay installable forever (read-only, not deleted), but nothing newer will ever appear via this path.
+
+**The actual trigger to watch is NOT Mapbox's own December 2026 date** — it's whether `@rnmapbox/maps` itself migrates off CocoaPods. As of this writing, `@rnmapbox/maps`'s own install docs (`ios/install.md`) make no mention of Swift Package Manager, and no migration announcement has been found. As long as `@rnmapbox/maps` keeps resolving `MapboxMaps` via CocoaPods, our current mechanism keeps working exactly as-is (just capped at whatever version was last on trunk when Mapbox stops publishing).
+
+**Why we can't preemptively vendor `MapboxMaps` ourselves today**: this was already tried once (see the "REVERTED" section at the top of `ios/fetch-xcframeworks.sh`) and confirmed to break CocoaPods' automatic "[CP] Copy XCFrameworks" build phase generation when overriding `@rnmapbox/maps`'s own `MapboxMaps` dependency via a `:podspec =>` Podfile override — while `@rnmapbox/maps` ALSO still pulls its own copy from trunk, that's two copies of the same symbols, guaranteed duplicate-symbol link errors.
+
+**The concrete plan for when the trigger fires** (`@rnmapbox/maps` drops CocoaPods, or Mapbox's trunk freeze date arrives and we need a version newer than what's frozen there): the two-copies conflict above disappears on its own once `@rnmapbox/maps` no longer also provides `MapboxMaps` via CocoaPods — at that point, re-enable direct `MapboxMaps.xcframework` vendoring, extending `ios/fetch-xcframeworks.sh`'s existing git-clone-and-vendor pattern (it already does exactly this for the Navigation frameworks) to also cover `MapboxMaps` itself, sourced from [`mapbox-maps-ios-binary`](https://github.com/mapbox/mapbox-maps-ios/) or Mapbox's SPM binary distribution. Verified as of this writing: a lower-level bridge, [`spm_dependency`](https://www.reactnativecrossroads.com/posts/expo-plugin-add-spm-dependency/) (React Native >= 0.75), lets a podspec declare an SPM dependency directly — but as of Expo SDK ~53/RN 0.79 (Navio's current versions) it has a confirmed open, unresolved bug causing duplicate-symbol errors specifically in Expo modules ([expo/expo#37813](https://github.com/expo/expo/issues/37813)), and forces dynamic frameworks project-wide — which conflicts with this project's `useFrameworks: "static"` requirement (tied to the GestureType crash investigation). Re-verify that issue's status before relying on `spm_dependency` for this.
+
+**Until the trigger fires**: no code changes are justified. Keep `iosMapboxMapsVersion`/`iosMapboxNavigationVersion` reasonably current when convenient (see "Upgrading the vendored iOS SDK version" above) so whichever version ends up frozen is as recent as practical, rather than stale from neglect.
+
+### Why iOS binaries aren't committed to this repo
+
+Mapbox's own [Product Terms](https://www.mapbox.com/legal/tos) ("1.10. No Redistribution") prohibit redistributing their SDK binaries to third parties who haven't authenticated with their own Mapbox account/token. Since this repository and npm package are public, committing `ios/Frameworks/*.xcframework` (fetched using this project's own Mapbox `DOWNLOADS:READ` token) would make them freely downloadable by anyone via `git clone` or `npm install`, without their own token — a real compliance risk, not just a repo-size concern.
+
+Instead, `ios/Frameworks/*.xcframework` is excluded from both this repo (`.gitignore`) and the published npm tarball (`package.json`'s `files`), and `ExpoMapboxNavigation.podspec`'s `s.prepare_command` fetches these binaries directly into the **consuming app's** `node_modules/@jacques_gordon/expo-mapbox-navigation/ios/Frameworks/` the first time that app runs `pod install` — using that app's own Mapbox `downloadsToken` (see the `downloadsToken` plugin option, required for iOS). This matches the approach used by other public Mapbox Navigation + React Native packages (e.g. [`pawan-pk/react-native-mapbox-navigation`](https://github.com/pawan-pk/react-native-mapbox-navigation)).
+
+**Practical implications for consumers of this package**:
+- The first `pod install` after installing/upgrading this package will be noticeably slower (fetching ~250MB of binaries) — subsequent installs are fast as long as `node_modules` isn't wiped between them.
+- Requires network access and a valid Mapbox `DOWNLOADS:READ` token (via the `downloadsToken` plugin option) at `pod install` time, not just at publish time. If that token is missing or invalid, the consuming app's own build fails with a clear error (not a cryptic downstream one), pointing back to the `downloadsToken` option.
+
 
 ---
 
@@ -372,6 +379,7 @@ If you enable `androidUseNdk27` with an unsupported version pair, Gradle will fa
 **In short**: leaving everything at defaults gets you Mechanism 1 automatically (Maps/Common covered). Google Play flagging only `libnavigator-android.so` specifically means Mechanism 2 is what you still need — set `androidUseNdk27: true` with a verified `>= 3.11.0` pairing.
 
 See [Android's 16 KB page size guide](https://developer.android.com/guide/practices/page-sizes).
+
 
 ---
 
@@ -996,6 +1004,7 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 - Fix #31: `voiceUnits` prop for metric/imperial.
 - NDK 27 + 16 KB page size enforcement.
 - Expo SDK 53 compatibility.
+
 
 ---
 
