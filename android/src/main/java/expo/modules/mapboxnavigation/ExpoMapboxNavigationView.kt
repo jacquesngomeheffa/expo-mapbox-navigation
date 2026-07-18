@@ -1309,8 +1309,19 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             // waypoints also only contain LEG-SEPARATING stops (silent
             // via-points are excluded by the API itself), so every
             // intermediate entry is a true numbered stop by construction.
+            //
+            // COMPILE FIX (5.0.5): `route.waypoints`, NOT
+            // `route.directionsResponse.waypoints()` - the latter was the
+            // Navigation SDK v2 shape and does not exist on v3's
+            // NavigationRoute. Verified verbatim at v3.20.0 (the version
+            // Android actually resolves): NavigationRoute.kt line 55
+            // declares `val waypoints: List<DirectionsWaypoint>?` directly
+            // on the route - same snapped response waypoints, one hop
+            // shorter. Caught by the first real Android compile since
+            // 5.0.2 (this package has no local Gradle; 5.0.3/5.0.4's
+            // Android additions had only ever been source-verified).
             val snappedPoints: List<Point>? = try {
-                route.directionsResponse.waypoints()?.mapNotNull { it.location() }
+                route.waypoints?.mapNotNull { it.location() }
             } catch (e: Exception) {
                 Log.e(TAG, "updateWaypointMarkers: snapped waypoints unavailable (${e.message}), falling back to raw coordinates")
                 null
@@ -1574,11 +1585,13 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // useMapMatching (5.0.4, zero-dead-props phase - previously
         // stored-only on BOTH platforms): routes the request through the
         // Map Matching API via MapboxNavigation.requestMapMatching -
-        // introduced with Core Framework 3.x (verified verbatim at
-        // v3.11.0: MapMatchingOptions.Builder with coordinates/profile/
-        // language/waypoints/bannerInstructions, and
-        // MapMatchingSuccessfulResult.navigationRoutes which the SDK
-        // documents as "routes which could be set to navigation").
+        // introduced with Core Framework 3.x. Verified verbatim at BOTH
+        // v3.11.0 (the -ndk27 floor) and v3.20.0 (what Android actually
+        // resolves today): MapMatchingOptions.Builder with coordinates/
+        // profile/language/waypoints/bannerInstructions is identical at
+        // both tags, and MapMatchingMatch.navigationRoute exists at both
+        // (the result's `navigationRoutes` convenience getter does NOT -
+        // removed between 3.11 and 3.20, see the success callback below).
         // Marked @ExperimentalPreviewMapboxNavigationAPI by Mapbox - the
         // @OptIn on this function acknowledges that. Success/cancel
         // handling mirrors the Directions callback exactly (same
@@ -1599,7 +1612,17 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                             Log.w(TAG, "Map matching response arrived after MapboxNavigation was destroyed - ignoring")
                             return
                         }
-                        val routes = result.navigationRoutes
+                        // COMPILE FIX (5.0.5): the `navigationRoutes`
+                        // convenience getter existed at v3.11.0 but was
+                        // REMOVED from MapMatchingSuccessfulResult by
+                        // v3.20.0 (the version Android actually resolves) -
+                        // an @ExperimentalPreviewMapboxNavigationAPI is
+                        // allowed to break like that. Only `matches`
+                        // survives; MapMatchingMatch.navigationRoute exists
+                        // at BOTH v3.11.0 and v3.20.0 (verified verbatim at
+                        // each tag), so mapping over matches is the form
+                        // portable across the supported version range.
+                        val routes = result.matches.map { it.navigationRoute }
                         if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
                         nav.setNavigationRoutes(routes)
                         nav.startTripSession()

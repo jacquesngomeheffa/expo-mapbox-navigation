@@ -14,6 +14,7 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 - NDK 27 + 16 KB page size compliant (Android 15+)
 
 **✅ Tested on iOS**: real EAS production build, real device
+
 **✅ Tested on Android**: real EAS production build, real device
 
 ---
@@ -361,6 +362,12 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ## Changelog
 
 ### 5.0.5
+**Two Android COMPILE fixes — caught by the first real Android build since 5.0.2.** This package has no local Gradle; 5.0.3/5.0.4's Android additions were source-verified but had never been compiled until a real EAS build failed with `Unresolved reference 'directionsResponse'` (line 1313) and `Unresolved reference 'navigationRoutes'` (line 1602). Both root causes confirmed verbatim at v3.20.0 — the version Android actually resolves (auto-derived from `mapboxMapsVersion: 11.20.2`):
+
+- **`route.directionsResponse.waypoints()` → `route.waypoints`** (5.0.3's flag-offset fix): `directionsResponse` was the Navigation SDK **v2** shape and does not exist on v3's `NavigationRoute`. At v3.20.0, `NavigationRoute` declares `val waypoints: List<DirectionsWaypoint>?` directly (NavigationRoute.kt line 55) — the same road-snapped response waypoints, one hop shorter. Marker behavior is unchanged; it just compiles now.
+- **`result.navigationRoutes` → `result.matches.map { it.navigationRoute }`** (5.0.4's map matching): the `navigationRoutes` convenience getter existed at v3.11.0 (where it was originally verified — the wrong tag: the -ndk27 floor, not the resolved version) but was **removed from `MapMatchingSuccessfulResult` by v3.20.0** — an `@ExperimentalPreviewMapboxNavigationAPI` is allowed to break like that. Only `matches` survives; `MapMatchingMatch.navigationRoute` exists at BOTH v3.11.0 and v3.20.0 (verified at each tag), so mapping over `matches` is the form portable across the supported range.
+- **Full regression re-audit of every never-compiled-since-5.0.2 API on both platforms**, verified at the actually-resolved versions: Android v3.20.0 — `MapboxNavigation.isDestroyed` (public read, `private set`), `requestMapMatching` + full `MapMatchingOptions.Builder` surface (identical at 3.11.0 and 3.20.0), annotation plugin usage (`mapView.annotations` extension import present, `createPointAnnotationManager`/`create`/`deleteAll`, `withIconImage(Bitmap)`/`withIconAnchor`), raster style DSL, `RoutesUpdatedResult.navigationRoutes` in the routes observer (different class — still exists, unaffected). iOS v3.20.1 — `FetchTask = Task<NavigationRoutes, Error>` (verbatim match with the explicit type annotation), plus everything already verified verbatim during 5.0.4 (DayStyle appearance recipe, `floatingButtons`, `NavigationMatchOptions`, `ContainerViewController`). **No iOS changes needed.**
+
 **iOS SDK versions are now dynamic — two new plugin options, `iosMapboxNavigationVersion` and `iosMapboxMapsVersion`, replace the hardcoded pins.** Same contract as Android's explicit `mapboxNavigationVersion`: you research and choose your own verified version pair. **Unlike Android, there is NO auto-calculation on iOS, ever** — both values are used exactly as given, and the pairing is entirely your responsibility.
 
 - **Defaults keep the exact previous behavior** (zero-regression by construction): `iosMapboxNavigationVersion: "3.20.1"` / `iosMapboxMapsVersion: "11.20.2"` — the confirmed-working interlocked set (nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2 / MapboxMaps 11.20.2). Consumers who set nothing get exactly what 5.0.4 shipped.
@@ -368,6 +375,8 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 - **Your responsibilities when overriding** (the honest contract): (a) `iosMapboxMapsVersion` MUST equal the `RNMapboxMapsVersion` you set in `@rnmapbox/maps`' plugin config — a mismatch fails `pod install` loudly with a version conflict, which is a protection, not a bug; (b) the nav/maps pairing must be verified against Mapbox's own `mapbox-navigation-ios` release notes — a bad pair means link errors or runtime ABI crashes (this project learned that the hard way in the GestureType saga); (c) distant future versions may raise the minimum iOS deployment target above this package's `15.1`, or restructure the artifacts repo's `Package.swift` in ways the fetch script's patching doesn't expect — both fail loudly, not silently.
 
 ### 5.0.4
+> **This version was published, then unpublished from npm** after its first real Android build failed with the two compile errors fixed in 5.0.5 above (npm permanently forbids reusing an unpublished version number, so 5.0.4 will never reappear). **Everything below ships in 5.0.5** — kept as its own entry for accurate history.
+
 **Three fixes driven by real-device reports on recent Android hardware (Samsung S26 Ultra / Xiaomi 17 Pro) plus one iOS dead-prop fix. The Android race fix is the package-native version of a consumer-side patch script — analyzed, two real flaws found in it, and corrected here (see below).**
 
 - **Android: setup-readiness race (map stuck on world view, route never drawn, camera never engaging — intermittent, worse on fast devices).** `setupNavigation()`'s style-load callback is ASYNC (network-bound): the route line layers, viewport data source, navigation camera AND all observers are only created inside it. On fast devices, the JS props → coalesced fetch → route response chain can win the race against style loading — the route existed but nothing was wired to draw it. Fixed with: (1) `fetchRoutes()` now refuses to fire before setup completes (flag + `lateinit` checks as belt-and-suspenders) and records a pending fetch instead; (2) the setup callback sets its completion flag LAST — after `registerObservers()`, which previously ran after the flag — then replays the pending fetch exactly once. Placed before the degenerate-route guard, since the free-drive fallback needs the same camera/session setup.
