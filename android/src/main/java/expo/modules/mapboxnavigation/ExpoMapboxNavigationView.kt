@@ -790,6 +790,138 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             )
         }
 
+    // OBSERVER TEARDOWN FIX (5.0.10): these three were previously anonymous
+    // objects created INLINE inside registerObservers() - impossible to
+    // unregister later since nothing held a reference to the exact same
+    // instance. Named class-level properties here (bodies UNCHANGED,
+    // verbatim from before - only where the object is created moved, not
+    // what it does) so onDetachedFromWindow() can unregister them
+    // symmetrically, alongside voiceInstructionsObserver below (which
+    // already had this pattern - only IT was ever unregistered on
+    // detach). Real device crash this fixes: "This instance of
+    // MapboxNavigation is destroyed" thrown from deep inside a
+    // Choreographer/Fabric frame callback (not from any of this file's own
+    // onRoutesReady/onCanceled/onFailure call sites, all already guarded) -
+    // consistent with ONE of these three still-registered observers
+    // firing AFTER MapboxNavigationProvider.destroy() tore the instance
+    // down, since none of them were ever unregistered before. Safe to
+    // construct this early (class-property initializers, not referenced
+    // until registerObservers() runs from setupNavigation()'s ASYNC
+    // loadStyle callback - by which point construction has long finished),
+    // same reasoning already relied on elsewhere in this file (e.g.
+    // fetchHandler).
+    private val routesObserver = object : RoutesObserver {
+        override fun onRoutesChanged(result: RoutesUpdatedResult) {
+            if (result.navigationRoutes.isNotEmpty()) {
+                // Cancel any in-flight speech when route changes
+                speechApi.cancel()
+                voiceInstructionsPlayer.clear()
+
+                routeLineApi.setNavigationRoutes(result.navigationRoutes) { value ->
+                    mapView.mapboxMap.style?.apply { routeLineView.renderRouteDrawData(this, value) }
+                }
+                viewportDataSource.onRouteChanged(result.navigationRoutes.first())
+                viewportDataSource.evaluate()
+                isOverviewMode = false
+                safeCameraFollowing()
+                showUI()
+                onRoutesReady(mapOf(
+                    "routeCount" to result.navigationRoutes.size,
+                    "distanceMeters" to (result.navigationRoutes.first().directionsRoute.distance() ?: 0.0),
+                    "durationSeconds" to (result.navigationRoutes.first().directionsRoute.duration() ?: 0.0)
+                ))
+            } else {
+                mapView.mapboxMap.style?.let { style ->
+                    routeLineApi.clearRouteLine { value ->
+                        routeLineView.renderClearRouteLineValue(style, value)
+                    }
+                    routeArrowView.render(style, routeArrowApi.clearArrows())
+                }
+                viewportDataSource.clearRouteData()
+                viewportDataSource.evaluate()
+                hideUI()
+            }
+        }
+    }
+
+    private val routeProgressObserver = RouteProgressObserver { routeProgress ->
+        viewportDataSource.onRouteProgressChanged(routeProgress)
+        viewportDataSource.evaluate()
+
+        mapView.mapboxMap.style?.let { style ->
+            val arrowResult = routeArrowApi.addUpcomingManeuverArrow(routeProgress)
+            routeArrowView.renderManeuverUpdate(style, arrowResult)
+        }
+
+        val maneuvers = maneuverApi.getManeuvers(routeProgress)
+        maneuvers.fold(
+            { error -> Log.w(TAG, "Maneuver error: ${error.errorMessage}"); Unit },
+            { _ ->
+                maneuverView?.visibility = View.VISIBLE
+                maneuverView?.renderManeuvers(maneuvers)
+                Unit
+            }
+        )
+
+        val tripProgress = tripProgressApi.getTripProgress(routeProgress)
+        tripProgressView?.render(tripProgress)
+        updateEtaBar(
+            tripProgress.estimatedTimeToArrival,
+            tripProgress.totalTimeRemaining,
+            tripProgress.distanceRemaining
+        )
+
+        onRouteProgressChanged(mapOf(
+            "distanceRemaining" to routeProgress.distanceRemaining,
+            "durationRemaining" to routeProgress.durationRemaining,
+            "distanceTraveled" to routeProgress.distanceTraveled,
+            "fractionTraveled" to routeProgress.fractionTraveled,
+            "currentStepDistanceRemaining" to
+                (routeProgress.currentLegProgress?.currentStepProgress?.distanceRemaining ?: 0f)
+        ))
+    }
+
+    private val locationObserver = object : LocationObserver {
+        override fun onNewRawLocation(rawLocation: Location) {}
+        override fun onNewLocationMatcherResult(result: LocationMatcherResult) {
+            val loc = result.enhancedLocation
+            // ── FIX: Puck jitter / drift ──────────────────────────────────────
+            // Root cause (confirmed via Mapbox GitHub issue #4140):
+            // When keyPoints are passed to changePosition(), the puck animator
+            // splits the 1-second transition EVENLY across all keypoints in time,
+            // but the keypoints are NOT evenly spaced in distance. This causes the
+            // puck to speed up/slow down and visibly drift left/right off the
+            // route line, even on a perfectly straight road.
+            // Official Mapbox workaround: pass emptyList() instead of keyPoints.
+            navigationLocationProvider.changePosition(location = loc, keyPoints = emptyList())
+            viewportDataSource.onLocationChanged(loc)
+            viewportDataSource.evaluate()
+
+            if (!firstLocationReceived) {
+                firstLocationReceived = true
+                safeCameraFollowing()
+            }
+
+            // ── Speed limit (issue #4: was not displaying) ──────────────────
+            // updatePostedAndCurrentSpeed returns null when:
+            //  1. The route response has no `maxspeed` annotation for this segment
+            //  2. GPS speed is unavailable
+            // We log this so issues can be diagnosed via `adb logcat`
+            val fmtOptions = DistanceFormatterOptions.Builder(context).build()
+            val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
+            if (speedInfo != null) {
+                speedInfoView?.visibility = View.VISIBLE
+                speedInfoView?.render(speedInfo)
+            } else {
+                speedInfoView?.visibility = View.GONE
+                Log.d(TAG, "Speed info unavailable for this location/route segment " +
+                    "(no maxspeed annotation or GPS speed not ready yet)")
+            }
+
+            checkAndSwitchDayNight()
+        }
+    }
+
     private val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
         speechApi.generate(voiceInstructions, speechCallback)
     }
@@ -900,123 +1032,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // ─────────────────────────────────────────────────────────────────────────
     private fun registerObservers() {
         val nav = mapboxNavigation ?: return
-
-        // Routes observer
-        nav.registerRoutesObserver(object : RoutesObserver {
-            override fun onRoutesChanged(result: RoutesUpdatedResult) {
-                if (result.navigationRoutes.isNotEmpty()) {
-                    // Cancel any in-flight speech when route changes
-                    speechApi.cancel()
-                    voiceInstructionsPlayer.clear()
-
-                    routeLineApi.setNavigationRoutes(result.navigationRoutes) { value ->
-                        mapView.mapboxMap.style?.apply { routeLineView.renderRouteDrawData(this, value) }
-                    }
-                    viewportDataSource.onRouteChanged(result.navigationRoutes.first())
-                    viewportDataSource.evaluate()
-                    isOverviewMode = false
-                    safeCameraFollowing()
-                    showUI()
-                    onRoutesReady(mapOf(
-                        "routeCount" to result.navigationRoutes.size,
-                        "distanceMeters" to (result.navigationRoutes.first().directionsRoute.distance() ?: 0.0),
-                        "durationSeconds" to (result.navigationRoutes.first().directionsRoute.duration() ?: 0.0)
-                    ))
-                } else {
-                    mapView.mapboxMap.style?.let { style ->
-                        routeLineApi.clearRouteLine { value ->
-                            routeLineView.renderClearRouteLineValue(style, value)
-                        }
-                        routeArrowView.render(style, routeArrowApi.clearArrows())
-                    }
-                    viewportDataSource.clearRouteData()
-                    viewportDataSource.evaluate()
-                    hideUI()
-                }
-            }
-        })
-
-        // Route progress observer
-        nav.registerRouteProgressObserver(RouteProgressObserver { routeProgress ->
-            viewportDataSource.onRouteProgressChanged(routeProgress)
-            viewportDataSource.evaluate()
-
-            mapView.mapboxMap.style?.let { style ->
-                val arrowResult = routeArrowApi.addUpcomingManeuverArrow(routeProgress)
-                routeArrowView.renderManeuverUpdate(style, arrowResult)
-            }
-
-            val maneuvers = maneuverApi.getManeuvers(routeProgress)
-            maneuvers.fold(
-                { error -> Log.w(TAG, "Maneuver error: ${error.errorMessage}"); Unit },
-                { _ ->
-                    maneuverView?.visibility = View.VISIBLE
-                    maneuverView?.renderManeuvers(maneuvers)
-                    Unit
-                }
-            )
-
-            val tripProgress = tripProgressApi.getTripProgress(routeProgress)
-            tripProgressView?.render(tripProgress)
-            updateEtaBar(
-                tripProgress.estimatedTimeToArrival,
-                tripProgress.totalTimeRemaining,
-                tripProgress.distanceRemaining
-            )
-
-            onRouteProgressChanged(mapOf(
-                "distanceRemaining" to routeProgress.distanceRemaining,
-                "durationRemaining" to routeProgress.durationRemaining,
-                "distanceTraveled" to routeProgress.distanceTraveled,
-                "fractionTraveled" to routeProgress.fractionTraveled,
-                "currentStepDistanceRemaining" to
-                    (routeProgress.currentLegProgress?.currentStepProgress?.distanceRemaining ?: 0f)
-            ))
-        })
-
-        // Location observer
-        nav.registerLocationObserver(object : LocationObserver {
-            override fun onNewRawLocation(rawLocation: Location) {}
-            override fun onNewLocationMatcherResult(result: LocationMatcherResult) {
-                val loc = result.enhancedLocation
-                // ── FIX: Puck jitter / drift ──────────────────────────────────────
-                // Root cause (confirmed via Mapbox GitHub issue #4140):
-                // When keyPoints are passed to changePosition(), the puck animator
-                // splits the 1-second transition EVENLY across all keypoints in time,
-                // but the keypoints are NOT evenly spaced in distance. This causes the
-                // puck to speed up/slow down and visibly drift left/right off the
-                // route line, even on a perfectly straight road.
-                // Official Mapbox workaround: pass emptyList() instead of keyPoints.
-                navigationLocationProvider.changePosition(location = loc, keyPoints = emptyList())
-                viewportDataSource.onLocationChanged(loc)
-                viewportDataSource.evaluate()
-
-                if (!firstLocationReceived) {
-                    firstLocationReceived = true
-                    safeCameraFollowing()
-                }
-
-                // ── Speed limit (issue #4: was not displaying) ──────────────────
-                // updatePostedAndCurrentSpeed returns null when:
-                //  1. The route response has no `maxspeed` annotation for this segment
-                //  2. GPS speed is unavailable
-                // We log this so issues can be diagnosed via `adb logcat`
-                val fmtOptions = DistanceFormatterOptions.Builder(context).build()
-                val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
-                if (speedInfo != null) {
-                    speedInfoView?.visibility = View.VISIBLE
-                    speedInfoView?.render(speedInfo)
-                } else {
-                    speedInfoView?.visibility = View.GONE
-                    Log.d(TAG, "Speed info unavailable for this location/route segment " +
-                        "(no maxspeed annotation or GPS speed not ready yet)")
-                }
-
-                checkAndSwitchDayNight()
-            }
-        })
-
-        // Voice instructions observer — triggers TTS announcements
+        // Bodies moved to named class-level properties above (5.0.10) so
+        // onDetachedFromWindow() can unregister every one of these
+        // symmetrically - see the comment on routesObserver above for why.
+        nav.registerRoutesObserver(routesObserver)
+        nav.registerRouteProgressObserver(routeProgressObserver)
+        nav.registerLocationObserver(locationObserver)
         nav.registerVoiceInstructionsObserver(voiceInstructionsObserver)
     }
 
@@ -1756,6 +1777,33 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 routeCancelRetryUsed = false
             }
             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                // TRANSIENT-FAILURE RETRY (5.0.10): previously every
+                // onFailure fired onRoutesFailed unconditionally, with no
+                // retry - unlike onCanceled below, which already retried
+                // once. This left a gap: a genuinely transient failure
+                // reported via onFailure (not onCanceled) - e.g. a cold-
+                // start connectivity blip - had no recovery path, matching
+                // a real device report of the map staying stuck with no
+                // route. RouterFailure.isRetryable is the SDK's OWN signal
+                // for exactly this (verified verbatim in
+                // mapbox-navigation-android's RouterFailure.kt at v3.20.0:
+                // "Indicates if it makes sense to retry the failed route
+                // request for this type of failure") - so this defers to
+                // the SDK's own judgment rather than guessing which
+                // RouterFailureType values are transient. Deliberately
+                // narrow: only retries when the SDK itself says to, never
+                // for permanent failures (bad input, no route found, auth
+                // errors, missing tiles) - retrying those would just repeat
+                // the same failure. Shares onCanceled's one-shot budget
+                // (routeCancelRetryUsed) rather than a separate counter, so
+                // the total retry allowance across BOTH failure paths
+                // stays capped at one - no compounding retries.
+                if (reasons.any { it.isRetryable } && !routeCancelRetryUsed && coordinates.size >= 2) {
+                    routeCancelRetryUsed = true
+                    Log.w(TAG, "Route request failed with a retryable reason (${reasons.firstOrNull()?.type}) - retrying once")
+                    fetchHandler.postDelayed({ scheduleFetchRoutes() }, 250L)
+                    return
+                }
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
             }
             override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {
@@ -2370,6 +2418,16 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         if (::maneuverApi.isInitialized) maneuverApi.cancel()
         if (::routeLineApi.isInitialized) routeLineApi.cancel()
         if (::routeLineView.isInitialized) routeLineView.cancel()
+        // OBSERVER TEARDOWN FIX (5.0.10): routesObserver/routeProgressObserver/
+        // locationObserver were never unregistered here before (only
+        // voiceInstructionsObserver was) - see the comment on routesObserver's
+        // declaration above for the full reasoning and the real crash this
+        // fixes. All four unregistered symmetrically, BEFORE destroy() (same
+        // ordering already established for voiceInstructionsObserver), so no
+        // stale callback can fire into a torn-down instance from here on.
+        mapboxNavigation?.unregisterRoutesObserver(routesObserver)
+        mapboxNavigation?.unregisterRouteProgressObserver(routeProgressObserver)
+        mapboxNavigation?.unregisterLocationObserver(locationObserver)
         mapboxNavigation?.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
         mapboxNavigation?.stopTripSession()
         MapboxNavigationProvider.destroy()
