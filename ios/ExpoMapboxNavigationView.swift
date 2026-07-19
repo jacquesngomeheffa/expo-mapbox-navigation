@@ -402,7 +402,14 @@ public class ExpoMapboxNavigationView: ExpoView {
         case "cycling":         resolvedProfile = .cycling
         default:                resolvedProfile = .automobileAvoidingTraffic
         }
-        let measurementSystem: MeasurementSystem = resolveVoiceUnits() == "imperial" ? .imperial : .metric
+        // COMPILE FIX (5.0.6): a plain Bool, NOT an explicitly-typed
+        // `MeasurementSystem` local. The type itself isn't in scope here
+        // (its module isn't imported by this file) - the pre-5.0.5 code
+        // only ever used it through inference on the
+        // `distanceMeasurementSystem` property, which is also how both
+        // branches below assign it. Caught by the first real iOS compile
+        // of this refactor (EAS build - this package has no local Xcode).
+        let useImperialUnits = resolveVoiceUnits() == "imperial"
 
         // useMapMatching (5.0.4, zero-dead-props phase - previously
         // stored-only on iOS): routes the request through the Map Matching
@@ -417,7 +424,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         if useMapMatching {
             let options = NavigationMatchOptions(waypoints: waypoints, profileIdentifier: resolvedProfile)
             if let langTag = language { options.locale = Locale(identifier: langTag) }
-            options.distanceMeasurementSystem = measurementSystem
+            options.distanceMeasurementSystem = useImperialUnits ? .imperial : .metric
             // NOTE: excludeTypes/maxHeight/maxWidth are Directions-API-only
             // request parameters (RouteOptions properties with no
             // MatchOptions equivalent) - the Map Matching API itself has no
@@ -427,7 +434,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         } else {
             let options = NavigationRouteOptions(waypoints: waypoints, profileIdentifier: resolvedProfile)
             if let langTag = language { options.locale = Locale(identifier: langTag) }
-            options.distanceMeasurementSystem = measurementSystem
+            options.distanceMeasurementSystem = useImperialUnits ? .imperial : .metric
             // RoadClasses(descriptions:) is a FAILABLE initializer (verified
             // verbatim at v3.20.1): any single unrecognized description
             // makes it return nil -> exclusions skipped gracefully, never a
@@ -556,7 +563,15 @@ public class ExpoMapboxNavigationView: ExpoView {
     private static let customRasterLayerId = "expo_mapbox_navigation_raster_layer"
 
     private func applyCustomRasterLayer(on navigationMapView: NavigationMapView) {
-        let mapboxMap = navigationMapView.mapView.mapboxMap
+        // COMPILE FIX (5.0.6): guard-let, not a plain `let` binding.
+        // MapView.mapboxMap is an implicitly-unwrapped optional
+        // (`MapboxMap!`): direct call chains auto-unwrap it (which is why
+        // registerFlagImage's chained calls have compiled since 5.0.3),
+        // but binding it to a local demotes it to an ordinary `MapboxMap?`
+        // whose members then require unwrapping - the exact EAS compile
+        // error this fixes. guard-let also gives the nil case a graceful
+        // no-op, per this package's never-crash-on-style-ops rule.
+        guard let mapboxMap = navigationMapView.mapView.mapboxMap else { return }
         if mapboxMap.layerExists(withId: Self.customRasterLayerId) {
             try? mapboxMap.removeLayer(withId: Self.customRasterLayerId)
         }

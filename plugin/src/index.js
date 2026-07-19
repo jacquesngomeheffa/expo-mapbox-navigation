@@ -2,6 +2,7 @@ const {
   withAppBuildGradle,
   withProjectBuildGradle,
   withAndroidManifest,
+  withGradleProperties,
   withInfoPlist,
   withDangerousMod,
   withXcodeProject,
@@ -164,6 +165,43 @@ ext {
           (mapboxNavigationVersion ? ' (nav version explicit)' : ' (nav version auto-calculated — pass mapboxNavigationVersion to override)')
       );
     }
+    return mod;
+  });
+
+  // ── Android: Mapbox Maven credentials (5.0.6) ─────────────────────────────
+  // Writes MAPBOX_DOWNLOADS_TOKEN into android/gradle.properties - the
+  // property that the api.mapbox.com Maven repository block (injected into
+  // the project build.gradle by @rnmapbox/maps' own plugin) reads as its
+  // password. Previously this package silently relied on @rnmapbox/maps'
+  // plugin writing that property from its `RNMapboxMapsDownloadToken`
+  // option - so when a consumer dropped that (deprecated) option, EVERY
+  // api.mapbox.com Maven download 401'd, with this package's
+  // com.mapbox.navigationcore:* artifacts as the first casualties (a real
+  // EAS build failure, July 2026). Now this package provisions the
+  // credential itself, from sources it controls:
+  //   1. this plugin's own `downloadsToken` option (required anyway - the
+  //      same sk.* token the iOS ~/.netrc mod uses);
+  //   2. fallback: the RNMAPBOX_MAPS_DOWNLOAD_TOKEN environment variable
+  //      (the EAS-secret-friendly name @rnmapbox/maps documents).
+  // A NON-EMPTY value already present in gradle.properties (e.g. written
+  // by @rnmapbox/maps' plugin when the consumer still uses its option, in
+  // either plugin order) is respected and left untouched - this is a
+  // safety net, not a takeover.
+  config = withGradleProperties(config, (mod) => {
+    const mavenToken = downloadsToken || process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN;
+    if (!mavenToken) return mod;
+    const existing = mod.modResults.find(
+      (item) => item.type === 'property' && item.key === 'MAPBOX_DOWNLOADS_TOKEN'
+    );
+    if (existing && existing.value) return mod;
+    if (existing) {
+      existing.value = mavenToken;
+    } else {
+      mod.modResults.push({ type: 'property', key: 'MAPBOX_DOWNLOADS_TOKEN', value: mavenToken });
+    }
+    console.log(
+      '[@jacques_gordon/expo-mapbox-navigation] ✅ Wrote MAPBOX_DOWNLOADS_TOKEN to android/gradle.properties (Mapbox Maven credentials)'
+    );
     return mod;
   });
 
