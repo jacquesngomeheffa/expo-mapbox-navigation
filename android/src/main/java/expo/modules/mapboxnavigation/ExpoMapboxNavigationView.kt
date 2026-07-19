@@ -152,6 +152,12 @@ private const val DEGENERATE_ROUTE_CAMERA_ZOOM = 15.0
 private const val CUSTOM_RASTER_SOURCE_ID = "expo_mapbox_navigation_raster_source"
 private const val CUSTOM_RASTER_LAYER_ID = "expo_mapbox_navigation_raster_layer"
 
+// Style-load failure recovery (5.0.9) - bounded so a persistently failing
+// environment (offline, style host unreachable) degrades to a finite
+// number of attempts, not an infinite retry loop.
+private const val MAX_STYLE_LOAD_RETRIES = 3
+private const val STYLE_LOAD_RETRY_DELAY_MS = 1500L
+
 class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     ExpoView(context, appContext) {
 
@@ -313,6 +319,9 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // regardless and will already reflect whatever the current prop values
     // are by the time it fires.
     private var navigationSetupComplete = false
+    // Bounded retry counter for style-load failures (5.0.9) - see
+    // MAX_STYLE_LOAD_RETRIES / setupNavigation()'s subscribeMapLoadingError.
+    private var styleLoadRetryCount = 0
 
     // ── Pixel density ─────────────────────────────────────────────────────────
     private val dp = context.resources.displayMetrics.density
@@ -793,6 +802,51 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             NavigationOptions.Builder(context).build()
         )
 
+        // STYLE-LOAD FAILURE RECOVERY (5.0.9): loadStyle(...)'s trailing
+        // lambda below is success-ONLY - Mapbox v11 dropped the old
+        // onMapLoadErrorListener parameter with no direct replacement wired
+        // to loadStyle itself (confirmed against Mapbox's own v11 API:
+        // error detection moved to a SEPARATE subscription,
+        // MapboxMap.subscribeMapLoadingError). Without this, a style load
+        // that genuinely fails (transient network gap at cold start, style
+        // host unreachable, etc. - NOT the fast-device race the 5.0.3
+        // readiness-ordering fix already handles) left
+        // navigationSetupComplete permanently false: real device report -
+        // map stuck at world-view zoom forever, no route drawn, no camera
+        // engagement, and total silence to JS (fetchRoutes() just kept
+        // deferring via pendingRouteFetchUntilSetup, no onRoutesFailed
+        // ever fired). The 5.0.3 fix's whole design assumes loadStyle's
+        // callback eventually fires - true for a race, false for an
+        // outright failure. This subscription is the missing failure path.
+        //
+        // Bounded, not self-perpetuating: subscribeMapLoadingError can fire
+        // more than once for a single underlying failure (per sub-resource
+        // - style, sprite, glyphs, tiles), so the retry count is a capped
+        // counter (MAX_STYLE_LOAD_RETRIES), never reset by further error
+        // events. Guarded by navigationSetupComplete so a late/spurious
+        // error firing AFTER a successful load can never trigger a wasted
+        // reload of an already-working map.
+        mapView.mapboxMap.subscribeMapLoadingError { eventData ->
+            if (navigationSetupComplete) return@subscribeMapLoadingError
+            Log.e(TAG, "Map style load error (type=${eventData.type}): ${eventData.message}")
+            if (styleLoadRetryCount < MAX_STYLE_LOAD_RETRIES) {
+                styleLoadRetryCount++
+                Log.w(TAG, "Retrying map style load (attempt $styleLoadRetryCount/$MAX_STYLE_LOAD_RETRIES)")
+                fetchHandler.postDelayed({ attemptLoadStyle() }, STYLE_LOAD_RETRY_DELAY_MS)
+            } else {
+                Log.e(TAG, "Map style load failed after $MAX_STYLE_LOAD_RETRIES retries - giving up")
+                onRoutesFailed(mapOf("message" to "Map failed to load: ${eventData.message}"))
+            }
+        }
+
+        attemptLoadStyle()
+    }
+
+    // Extracted from setupNavigation() (5.0.9) so subscribeMapLoadingError's
+    // retry path can re-invoke the exact same style-load logic without
+    // duplicating it. The success callback body is otherwise UNCHANGED from
+    // 5.0.3 - only the retry entry point is new.
+    private fun attemptLoadStyle() {
         mapView.mapboxMap.loadStyle(mapStyle ?: getAutoStyle()) { style ->
             routeLineView.initializeLayers(style)
             applyCustomRasterLayer(style)
