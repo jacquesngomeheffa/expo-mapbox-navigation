@@ -390,6 +390,16 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 5.0.7
+**Android: this package now provisions its own Mapbox Maven credentials**, instead of silently depending on `@rnmapbox/maps`' plugin to have written them. Root cause of the 5.0.6-era `401 Unauthorized` (see that entry below): this package's Navigation artifacts (`com.mapbox.navigationcore:*-ndk27`) authenticate against `api.mapbox.com`'s Maven repo through the same `MAPBOX_DOWNLOADS_TOKEN` Gradle property that `@rnmapbox/maps`' own downloads use — but only `@rnmapbox/maps`' plugin ever wrote that property, and only from its now-**deprecated** `RNMapboxMapsDownloadToken` option (confirmed directly in `@rnmapbox/maps`' own plugin source: it prints a deprecation warning pointing to the `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` environment variable instead). A consumer who (correctly) drops that deprecated option without setting the env var loses the token entirely, and every `api.mapbox.com` Maven download 401s — this package's artifacts were just the first to hit it.
+
+**Fixed structurally**: the config plugin now writes `MAPBOX_DOWNLOADS_TOKEN` to `android/gradle.properties` itself, resolved in this priority order:
+1. This package's own required `downloadsToken` option (the same `sk.*` token already used for iOS's `~/.netrc`) — checked first.
+2. Fallback: the `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` environment variable — the same one `@rnmapbox/maps`' own Maven block already reads natively.
+3. If a non-empty `MAPBOX_DOWNLOADS_TOKEN` is already present (e.g. written by `@rnmapbox/maps`' plugin, in either plugin order), it's respected and left untouched — this is a safety net, not a takeover.
+
+Consumers no longer need `RNMapboxMapsDownloadToken` (deprecated) or the `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` env var at all for this package's own artifacts to resolve — `downloadsToken` alone now covers both platforms' credential needs. See the updated `downloadsToken` row in [Plugin Options](#plugin-options) and step 1 of [Installation](#installation).
+
 ### 5.0.6
 **Two iOS COMPILE fixes — caught by the first real iOS build of the 5.0.4/5.0.5 refactors** (this package has no local Xcode; 5.0.5's "no iOS changes needed" audit verdict was wrong on exactly two Swift-compiler-only nuances that source-level verification cannot catch):
 
