@@ -49,6 +49,18 @@ class ExpoMapboxNavigationModule : Module() {
             Prop("maxWidth") { view: ExpoMapboxNavigationView, width: Double? ->
                 view.setMaxWidth(width)
             }
+            Prop("navigationViewportPaddingTop") { view: ExpoMapboxNavigationView, v: Double? ->
+                view.setNavigationViewportPaddingTop(v)
+            }
+            Prop("navigationViewportPaddingLeft") { view: ExpoMapboxNavigationView, v: Double? ->
+                view.setNavigationViewportPaddingLeft(v)
+            }
+            Prop("navigationViewportPaddingBottom") { view: ExpoMapboxNavigationView, v: Double? ->
+                view.setNavigationViewportPaddingBottom(v)
+            }
+            Prop("navigationViewportPaddingRight") { view: ExpoMapboxNavigationView, v: Double? ->
+                view.setNavigationViewportPaddingRight(v)
+            }
             Prop("useMapMatching") { view: ExpoMapboxNavigationView, use: Boolean ->
                 view.setUseMapMatching(use)
             }

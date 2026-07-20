@@ -242,6 +242,18 @@ public class ExpoMapboxNavigationView: ExpoView {
     private var mute:                   Bool = false
     private var maxHeight:              Double?
     private var maxWidth:               Double?
+    // Navigation icon (puck) position overrides (5.1.0) - each independently
+    // optional, in points. nil (the default for all four) means "use the
+    // SDK's own existing default" (UIEdgeInsets(top: 20, left: 20,
+    // bottom: 40, right: 20), verified verbatim in NavigationMapView.swift
+    // at v3.20.1 - this package never overrode it before, so preserving
+    // that default here is required for no-regression). Maps 1:1 to
+    // NavigationMapView.viewportPadding, the SDK's own public property for
+    // this - not a custom mechanism.
+    private var navigationViewportPaddingTop:    Double?
+    private var navigationViewportPaddingLeft:   Double?
+    private var navigationViewportPaddingBottom: Double?
+    private var navigationViewportPaddingRight:  Double?
     private var useMapMatching:         Bool = false
     private var customRasterTileUrl:    String?
     private var customRasterAboveLayerId: String?
@@ -502,17 +514,42 @@ public class ExpoMapboxNavigationView: ExpoView {
     // no bundled image assets, consistent with how every icon in this
     // package's Android UI is drawn. Size in points; rendered at screen
     // scale by UIGraphicsImageRenderer automatically.
+    //
+    // GEOMETRY CONTRACT (5.1.0 offset fix): the pole's base must sit
+    // EXACTLY at the image's bottom-CENTER pixel, because
+    // `iconAnchor = .bottom` (see waypointSymbolLayerWithIdentifier below)
+    // anchors the image's bottom-center on the map point - the same
+    // contract Android's drawDestinationFlagBitmap() already documents and
+    // relies on (fixed there in 5.0.3). The PREVIOUS version of this
+    // function had the pole at the LEFT edge (x: 2, not centered on a
+    // 30pt-wide image) with a 2pt empty margin below it - the exact same
+    // class of offset bug 5.0.3 fixed on Android, just never verified here
+    // at the time (the 5.0.3 changelog's "iOS needs no change" claim was
+    // only about the COORDINATE SOURCE - confirmed correct, traced to
+    // `Route.waypointsMapFeature` in NavigationMapStyleManager.swift at
+    // v3.20.1, response-derived, not raw request coordinates - it never
+    // examined this image's own internal drawing geometry). Pole is now
+    // horizontally centered and touches the bottom edge exactly, matching
+    // Android's fix pixel-for-pixel in spirit.
+    //
+    // SIZE (5.1.0, "more prominent" per real-device feedback the flag was
+    // too small next to the route line): scaled up from the previous
+    // 30x40 to 48x56 - proportionally larger, same design (pole + 3x2
+    // checkered banner), matching Android's own proportional enlargement
+    // in this same version.
     private static func makeDestinationFlagImage() -> UIImage {
-        let size = CGSize(width: 30, height: 40)
+        let size = CGSize(width: 48, height: 56)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             let c = ctx.cgContext
-            // Pole: rounded vertical bar, dark slate, full height, at left.
-            let poleRect = CGRect(x: 2, y: 2, width: 3, height: 36)
+            let poleCenterX = size.width / 2
+            // Pole: rounded vertical bar, horizontally centered, base
+            // flush with the image's bottom edge (the anchor point).
+            let poleRect = CGRect(x: poleCenterX - 2, y: 3, width: 4, height: size.height - 3)
             c.setFillColor(UIColor(red: 0.18, green: 0.23, blue: 0.29, alpha: 1).cgColor)
-            UIBezierPath(roundedRect: poleRect, cornerRadius: 1.5).fill()
-            // Flag body: rectangle attached to the pole top.
-            let flagRect = CGRect(x: 5, y: 3, width: 22, height: 15)
+            UIBezierPath(roundedRect: poleRect, cornerRadius: 2).fill()
+            // Flag body: rectangle attached to the pole top, extending right.
+            let flagRect = CGRect(x: poleCenterX + 2, y: 4, width: 20, height: 18)
             // White base + thin dark border, then 3x2 checker overlay.
             c.setFillColor(UIColor.white.cgColor)
             c.fill(flagRect)
@@ -739,6 +776,39 @@ public class ExpoMapboxNavigationView: ExpoView {
             vc.didMove(toParent: parentVC)
         }
 
+        // AUTOMATIC DAY/NIGHT FIX (5.1.0): NavigationViewController.viewDidLoad()
+        // (triggered above by `addSubview(vc.view)`, which forces the view to
+        // load) calls its own internal setupNavigation(), which - verified
+        // verbatim at v3.20.1 - runs setupStyleManager(navigationOptions)
+        // BEFORE mapboxNavigation.tripSession().startActiveGuidance(...). At
+        // the exact moment StyleManager first computes sunrise/sunset for the
+        // day/night switch, its own StyleManagerDelegate.location(for:)
+        // implementation (also the SDK's own, on NavigationViewController)
+        // reads `route`, a computed property backed by
+        // `tripSession().currentNavigationRoutes` - which is still nil,
+        // since the trip session hasn't started yet. Location resolution
+        // fails, StyleManager silently falls back to `styles.first` (day,
+        // given how `styles: [dayStyle, nightStyle]` is ordered above) -
+        // permanently: `resetTimeOfDayTimer()` fails the same way at the
+        // same moment, so no timer is ever scheduled to retry later either.
+        // Net effect: the map never shows night style automatically, no
+        // matter the actual time - a real device report confirmed this
+        // (map stayed light at night, every time, not intermittently).
+        //
+        // Fixed using only the SDK's own public API, not by reimplementing
+        // sunrise/sunset math: `StyleManager.styles`'s public setter has a
+        // `didSet` that internally calls BOTH `applyStyle()` (re-evaluates
+        // and applies the correct style for the CURRENT time) AND
+        // `resetTimeOfDayTimer()` (schedules the next correct transition) -
+        // confirmed verbatim in StyleManager.swift. Re-assigning the same
+        // array to itself triggers that didSet. By this point `startActive
+        // Guidance` has already run (it's the line right after
+        // setupStyleManager() inside the same synchronous setupNavigation()
+        // call, itself already complete since accessing `vc.view` above
+        // forced viewDidLoad to run to completion) - so `route` now resolves
+        // and the sunrise/sunset calculation succeeds.
+        vc.styleManager.styles = vc.styleManager.styles
+
         // Tap on banner → emit full steps list (parity with Android banner tap)
         attachManeuverBannerTapHandler(to: vc)
 
@@ -788,6 +858,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         // 3DModelPath were already set (via props received before this
         // route was fetched).
         applyPuckSettings()
+        applyViewportPadding(to: vc.navigationView.navigationMapView)
 
         // Force the camera into follow-the-driver mode immediately on
         // presentation. Verified verbatim at v3.20.1:
@@ -981,6 +1052,30 @@ public class ExpoMapboxNavigationView: ExpoView {
         maxHeight = h
         scheduleFetchRoutes()
     }
+    // Navigation icon position overrides (5.1.0) - camera framing only,
+    // never affects the route, so these apply live to the already-presented
+    // navigationMapView instead of scheduling a refetch (same pattern as
+    // setCustomRasterTileUrl below).
+    func setNavigationViewportPaddingTop(_ v: Double?) {
+        guard v != navigationViewportPaddingTop else { return }
+        navigationViewportPaddingTop = v
+        if let vc = navigationViewController { applyViewportPadding(to: vc.navigationView.navigationMapView) }
+    }
+    func setNavigationViewportPaddingLeft(_ v: Double?) {
+        guard v != navigationViewportPaddingLeft else { return }
+        navigationViewportPaddingLeft = v
+        if let vc = navigationViewController { applyViewportPadding(to: vc.navigationView.navigationMapView) }
+    }
+    func setNavigationViewportPaddingBottom(_ v: Double?) {
+        guard v != navigationViewportPaddingBottom else { return }
+        navigationViewportPaddingBottom = v
+        if let vc = navigationViewController { applyViewportPadding(to: vc.navigationView.navigationMapView) }
+    }
+    func setNavigationViewportPaddingRight(_ v: Double?) {
+        guard v != navigationViewportPaddingRight else { return }
+        navigationViewportPaddingRight = v
+        if let vc = navigationViewController { applyViewportPadding(to: vc.navigationView.navigationMapView) }
+    }
     func setMaxWidth(_ w: Double?) {
         guard w != maxWidth else { return }
         maxWidth = w
@@ -1088,6 +1183,34 @@ public class ExpoMapboxNavigationView: ExpoView {
         // (rather than skipping the assignment) also correctly RESTORES the
         // arrow when a custom puck prop is later cleared back to nil.
         mapView.puckType = .puck3D(.navigationDefault)
+    }
+
+    // Navigation icon position (5.1.0): NavigationMapView.viewportPadding is
+    // the SDK's own public property for this (verified verbatim at v3.20.1,
+    // NavigationMapView.swift - "The padding applied to the viewport in
+    // addition to the safe area", default
+    // UIEdgeInsets(top: 20, left: 20, bottom: 40, right: 20)). Applying all
+    // four values unconditionally (falling back to that same SDK default
+    // per-side when a prop is nil) rather than only setting it when at
+    // least one override is present, so a later prop CHANGE back to nil
+    // correctly restores the SDK default too - not just the initial value.
+    private func applyViewportPadding(to navigationMapView: NavigationMapView) {
+        // COMPILE FIX (audited before publish): UIEdgeInsets' initializer
+        // expects CGFloat, but `navigationViewportPaddingTop ?? 20` (etc.)
+        // resolves to Double - `??`'s both sides unify against the Double?
+        // property's wrapped type BEFORE the outer UIEdgeInsets(top:) call
+        // is considered, so the literal `20` is inferred as Double, not
+        // CGFloat. Swift does not implicitly convert Double to CGFloat as
+        // a function argument (they are distinct concrete types) - this
+        // would have failed exactly like the MeasurementSystem/IUO-binding
+        // compile errors found in earlier EAS builds this same version
+        // range. Explicit CGFloat(...) conversion on each value fixes it.
+        navigationMapView.viewportPadding = UIEdgeInsets(
+            top: CGFloat(navigationViewportPaddingTop ?? 20),
+            left: CGFloat(navigationViewportPaddingLeft ?? 20),
+            bottom: CGFloat(navigationViewportPaddingBottom ?? 40),
+            right: CGFloat(navigationViewportPaddingRight ?? 20)
+        )
     }
 
     func setNavigationPuckColor(_ c: String?) {
@@ -1252,7 +1375,17 @@ extension ExpoMapboxNavigationView: NavigationViewControllerDelegate {
         var symbolLayer = SymbolLayer(id: identifier, source: sourceIdentifier)
         symbolLayer.iconImage = .expression(Exp(.get) { "imageId" })
         symbolLayer.iconAnchor = .constant(.bottom)
-        symbolLayer.iconOffset = .constant([0, 2])
+        // OFFSET FIX (5.1.0): the previous `iconOffset: [0, 2]` was an
+        // ad-hoc, incomplete attempt to compensate for the destination
+        // flag image's own pole-not-flush-with-bottom-edge bug (see
+        // makeDestinationFlagImage's GEOMETRY CONTRACT comment) - it
+        // nudged the icon by a fixed 2pt but never addressed the pole
+        // also being off-center horizontally, and didn't fully cancel the
+        // vertical gap either. Now that the image itself is drawn
+        // correctly (pole centered, base flush with the bottom edge),
+        // `iconAnchor: .bottom` alone places it exactly on the waypoint
+        // coordinate with no extra offset needed - matching Android, which
+        // has no equivalent per-marker offset compensation either.
         symbolLayer.iconAllowOverlap = .constant(true)
         let hiddenWhenCompleted = Exp(.switchCase) {
             Exp(.any) { Exp(.get) { "completed" } }

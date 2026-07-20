@@ -85,6 +85,7 @@ import com.mapbox.navigation.ui.components.speedlimit.view.MapboxSpeedInfoView
 import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressView
 import com.mapbox.navigation.ui.maps.NavigationStyles
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
+import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraState
 import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
 import com.mapbox.navigation.ui.maps.camera.transition.NavigationCameraTransitionOptions
 import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
@@ -339,9 +340,21 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // (see the LocationObserver fix below), NOT by this padding value. The
     // jitter fix and the Waze-style positioning are independent and both
     // needed; restoring bottom=300dp here does not reintroduce the jitter.
-    private val followingPadding by lazy {
-        EdgeInsets(180.0 * dp, 40.0 * dp, 300.0 * dp, 40.0 * dp)
-    }
+    // NAVIGATION ICON POSITION (5.1.0): the four insets below are individually
+    // overridable via navigationViewportPadding{Top,Left,Bottom,Right} props
+    // (each nullable, default null - see the prop declarations below). Left
+    // as a `get()` (recomputed on every read, not `by lazy`/cached) so a
+    // live prop change takes effect without needing this whole view to be
+    // recreated. Defaults are the EXACT pre-5.1.0 hardcoded values -
+    // unchanged unless a prop is explicitly set, per this package's
+    // never-change-existing-behavior-silently rule.
+    private val followingPadding: EdgeInsets
+        get() = EdgeInsets(
+            (navigationViewportPaddingTop ?: 180.0) * dp,
+            (navigationViewportPaddingLeft ?: 40.0) * dp,
+            (navigationViewportPaddingBottom ?: 300.0) * dp,
+            (navigationViewportPaddingRight ?: 40.0) * dp
+        )
     private val overviewPadding by lazy {
         EdgeInsets(140.0 * dp, 40.0 * dp, 120.0 * dp, 40.0 * dp)
     }
@@ -357,6 +370,17 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var mute: Boolean = false
     private var maxHeight: Double? = null
     private var maxWidth: Double? = null
+    // Navigation icon (puck) position overrides (5.1.0) - each independently
+    // optional, in dp. null (the default for all four) means "use this
+    // package's existing Waze-style values" - see followingPadding's get()
+    // above for the exact fallback numbers. Only `bottom` is the one most
+    // consumers would ever touch (it's what pushes the puck up from the
+    // true bottom edge), but all four are exposed for full flexibility,
+    // matching the shape of the native EdgeInsets API these map to 1:1.
+    private var navigationViewportPaddingTop: Double? = null
+    private var navigationViewportPaddingLeft: Double? = null
+    private var navigationViewportPaddingBottom: Double? = null
+    private var navigationViewportPaddingRight: Double? = null
     private var useMapMatching: Boolean = false
     private var customRasterTileUrl: String? = null
     private var customRasterAboveLayerId: String? = null
@@ -1001,7 +1025,75 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             // Navigation arrow puck
             mapView.location.setLocationProvider(navigationLocationProvider)
             applyPuckSettings()
-            mapView.location.puckBearing = PuckBearing.COURSE
+            // FIXED PUCK ORIENTATION (5.1.0): was `PuckBearing.COURSE` -
+            // real device video evidence showed the puck visibly rotating
+            // WHILE the road curved on screen underneath it, instead of
+            // staying fixed pointing up like Waze/Google Maps.
+            //
+            // Root cause, confirmed at the Mapbox Maps SDK source: the
+            // location-indicator layer's `bearing` is a GEOGRAPHIC property
+            // (relative to true north), rendered through the SAME camera
+            // transform as the rest of the map (verified verbatim in
+            // mapbox-maps-android's LocationIndicatorLayerRenderer.kt -
+            // `layer.bearing(bearing)` sets the style layer's bearing
+            // directly). `PuckBearing.COURSE` fed the puck's RAW,
+            // instantaneous GPS course on every location update. The
+            // camera's own bearing, meanwhile, comes from
+            // MapboxNavigationViewportDataSource's `bearingSmoothing`
+            // (`getSmootherBearingForMap`, capped at 45deg per update,
+            // computed from an anticipatory look-ahead window of upcoming
+            // route points - by design, NOT raw instantaneous course, for a
+            // less jittery camera). These two bearings are computed by
+            // different algorithms with different responsiveness, so they
+            // drift apart mid-turn - and since the puck's on-screen angle
+            // is literally (puck bearing - camera bearing), any drift
+            // between them is exactly what appears as "the puck rotating".
+            //
+            // Fix: `PuckBearing.HEADING` - which is also the Mapbox Maps
+            // SDK's own DEFAULT (`@Default("PuckBearing.HEADING")`,
+            // verified verbatim in LocationComponentSettingsData.kt) and
+            // exactly what Mapbox's own official reference implementation
+            // uses (TurnByTurnExperienceActivity.kt, mapbox-navigation-
+            // android-examples repo - never overrides puckBearing at all,
+            // relying on this same default). HEADING mode drives puck
+            // rotation from device COMPASS data, not the `Location.bearing`
+            // fed via `navigationLocationProvider.changePosition(...)` -
+            // since this package never feeds compass data through that
+            // pathway, the puck's on-screen bearing simply never gets
+            // pushed away from the camera's own bearing by a competing
+            // update source. The net effect is exactly the Waze pattern:
+            // 100% of the visible rotation comes from the camera turning
+            // beneath a puck that stays visually fixed - not from a manual
+            // bearing-cancellation calculation, but because there is no
+            // second, independently-timed bearing source left to disagree
+            // with the camera in the first place.
+            //
+            // REFINEMENT: HEADING alone has one edge case, found during
+            // audit - Overview mode (this file's own toggleOverview(),
+            // camera goes north-up/non-rotating). There, HEADING gives no
+            // direction at all (no compass feed), whereas the OLD COURSE
+            // mode showed the correct absolute direction just fine (a
+            // static, non-rotating map has no camera-bearing-vs-course
+            // drift to begin with - COURSE was never actually buggy there).
+            // So: switch puckBearing WITH the camera state instead of
+            // fixing it to one mode - HEADING only while Following (the
+            // mode that was actually broken), COURSE everywhere else
+            // (Overview/Idle, where it was always correct). Registered
+            // once, right after NavigationCamera's construction below -
+            // registerNavigationCameraStateChangeObserver invokes the
+            // callback immediately with the CURRENT state upon
+            // registration (verified verbatim in NavigationCamera.kt), so
+            // this also sets the correct initial value with no separate
+            // explicit assignment needed.
+            navigationCamera.registerNavigationCameraStateChangeObserver { cameraState ->
+                mapView.location.puckBearing = when (cameraState) {
+                    NavigationCameraState.TRANSITION_TO_FOLLOWING,
+                    NavigationCameraState.FOLLOWING -> PuckBearing.HEADING
+                    NavigationCameraState.TRANSITION_TO_OVERVIEW,
+                    NavigationCameraState.OVERVIEW,
+                    NavigationCameraState.IDLE -> PuckBearing.COURSE
+                }
+            }
 
             registerObservers()
             // READINESS ORDERING FIX (5.0.3): the completion flag is set
@@ -1262,8 +1354,15 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // point (confirmed by a real device screenshot). Pole is now
         // horizontally centered and touches the bottom edge; the flag
         // banner waves to the right of the pole top.
-        val w = (36 * dp).toInt()
-        val h = (40 * dp).toInt()
+        //
+        // SIZE (5.1.0, "more prominent" per real-device feedback the flag
+        // was too small next to the route line): scaled up from the
+        // previous 36x40dp to 48x56dp - same proportions/design (pole +
+        // 3x2 checkered banner) applied identically on iOS in this same
+        // version, so both platforms render the same design at the same
+        // relative size.
+        val w = (48 * dp).toInt()
+        val h = (56 * dp).toInt()
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val darkSlate = Color.rgb(46, 59, 74)
@@ -1274,12 +1373,12 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // with the bitmap's bottom edge (the anchor point).
         paint.color = darkSlate
         canvas.drawRoundRect(
-            RectF(poleCenterX - 1.5f * dp, 2 * dp, poleCenterX + 1.5f * dp, h.toFloat()),
-            1.5f * dp, 1.5f * dp, paint
+            RectF(poleCenterX - 2f * dp, 3 * dp, poleCenterX + 2f * dp, h.toFloat()),
+            2f * dp, 2f * dp, paint
         )
         // Flag body: white base, 3x2 checker, thin border - attached to the
         // pole top, extending right.
-        val flag = RectF(poleCenterX + 1.5f * dp, 3 * dp, 34 * dp, 16 * dp)
+        val flag = RectF(poleCenterX + 2f * dp, 4 * dp, poleCenterX + 22f * dp, 22 * dp)
         paint.color = Color.WHITE
         canvas.drawRect(flag, paint)
         paint.color = ink
@@ -1877,6 +1976,34 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     fun setMute(m: Boolean) { if (m != isMuted) toggleMute() }
     fun setMaxHeight(h: Double?) { if (h == maxHeight) return; maxHeight = h; scheduleFetchRoutes() }
     fun setMaxWidth(w: Double?) { if (w == maxWidth) return; maxWidth = w; scheduleFetchRoutes() }
+    // Navigation icon position overrides (5.1.0) - camera framing only, never
+    // affects the route itself, so these apply live to the already-computed
+    // viewportDataSource instead of scheduling a refetch. Guarded by
+    // ::viewportDataSource.isInitialized since these can arrive before
+    // setupNavigation()'s async style load completes (see the readiness
+    // guard elsewhere in this file for the same pattern) - in that case the
+    // new value is simply picked up whenever followingPadding is next read,
+    // once setup finishes.
+    fun setNavigationViewportPaddingTop(v: Double?) {
+        if (v == navigationViewportPaddingTop) return
+        navigationViewportPaddingTop = v
+        if (::viewportDataSource.isInitialized) viewportDataSource.followingPadding = followingPadding
+    }
+    fun setNavigationViewportPaddingLeft(v: Double?) {
+        if (v == navigationViewportPaddingLeft) return
+        navigationViewportPaddingLeft = v
+        if (::viewportDataSource.isInitialized) viewportDataSource.followingPadding = followingPadding
+    }
+    fun setNavigationViewportPaddingBottom(v: Double?) {
+        if (v == navigationViewportPaddingBottom) return
+        navigationViewportPaddingBottom = v
+        if (::viewportDataSource.isInitialized) viewportDataSource.followingPadding = followingPadding
+    }
+    fun setNavigationViewportPaddingRight(v: Double?) {
+        if (v == navigationViewportPaddingRight) return
+        navigationViewportPaddingRight = v
+        if (::viewportDataSource.isInitialized) viewportDataSource.followingPadding = followingPadding
+    }
     // useMapMatching switches which API the route request uses (5.0.4) -
     // it IS a route-affecting prop now, so changes re-trigger the fetch.
     fun setUseMapMatching(u: Boolean) { if (u == useMapMatching) return; useMapMatching = u; scheduleFetchRoutes() }

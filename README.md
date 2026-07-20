@@ -10,7 +10,7 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 
 - **Android** — Waze-style navigation UI built from scratch: maneuver banner, lane guidance, speed limit, ETA bar, voice instructions, mute/overview/recenter buttons, day/night auto-switch
 - **iOS** — Drop-in `NavigationViewController` from Mapbox Navigation SDK v3 (lane guidance, speed limit, voice, day/night all built-in)
-- **Both platforms** — 7 events, 19 props, full feature and API parity
+- **Both platforms** — 7 events, 30 props, full feature and API parity
 - NDK 27 + 16 KB page size compliant (Android 15+)
 
 **✅ Tested on iOS**: real EAS production build, real device
@@ -31,9 +31,11 @@ npx expo install @jacques_gordon/expo-mapbox-navigation @rnmapbox/maps
 ```json
 ["@rnmapbox/maps", {
   "RNMapboxMapsImpl": "mapbox",
-  "RNMapboxMapsVersion": "11.11.0",-- Android (editable), 11.20.2 -- IOS (fixed)
+  "RNMapboxMapsVersion": "11.11.0"
 }]
 ```
+
+`RNMapboxMapsVersion` must exactly match this package's `mapboxMapsVersion` (Android) / `iosMapboxMapsVersion` (iOS, 5.0.5+) — see [Plugin Options](#plugin-options) below.
 
 Don't set `RNMapboxMapsDownloadToken` here — `@rnmapbox/maps`' own plugin marks it **deprecated** (its own source prints a warning if you set it) in favor of the `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` environment variable, which its Maven repo block already reads as a fallback natively. You don't need to set that env var either: this package's own `downloadsToken` (step 2 below) already provisions the same `MAPBOX_DOWNLOADS_TOKEN` Gradle property that `@rnmapbox/maps`' downloads also authenticate through (5.0.7+) — one token, one place to set it.
 
@@ -43,9 +45,11 @@ Don't set `RNMapboxMapsDownloadToken` here — `@rnmapbox/maps`' own plugin mark
 ["@jacques_gordon/expo-mapbox-navigation", {
   "accessToken": "pk.your_public_token",
   "downloadsToken": "sk.your_secret_token",
-  "mapboxMapsVersion": "11.11.0"-- Android (editable), 11.20.2 -- IOS (fixed)
+  "mapboxMapsVersion": "11.11.0"
 }]
 ```
+
+`mapboxMapsVersion` is Android-only and editable. iOS's SDK versions default to `3.20.1`/`11.20.2` but are also editable (5.0.5+) via the separate `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` options — most apps won't need to touch these; see [Plugin Options](#plugin-options).
 
 ### 3. iOS only — enable static frameworks
 
@@ -59,11 +63,7 @@ Don't set `RNMapboxMapsDownloadToken` here — `@rnmapbox/maps`' own plugin mark
 
 > Hit the `DYLD 4 Symbol missing: GestureType.singleTap` launch crash? See [The `GestureType.singleTap` launch crash](#the-dyld-4-symbol-missing-gesturetypesingletap-launch-crash) in iOS Architecture below — there is currently no confirmed, actionable fix to apply here at setup time.
 
-Confirmed working version set (interlocked — lift from the matching build-artifacts tag on bump):
-```
-nav 3.20.1 / MapboxNavigationNative 324.20.2 (bucket dash-native) /
-MapboxCommon 24.20.2 / MapboxMaps 11.20.2 (matches @rnmapbox/maps@10.3.1).
-```
+This package's default, confirmed-working iOS SDK version set is `nav 3.20.1 / MapboxNavigationNative 324.20.2 / MapboxCommon 24.20.2 / MapboxMaps 11.20.2` (interlocked — see the `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` rows in [Plugin Options](#plugin-options) below to override).
 
 
 ---
@@ -127,7 +127,7 @@ export default function Navigation() {
 
 ### Navigation
 
-> **Route recalculation on prop change (5.0.0+, both platforms):** changing any of `coordinates`, `waypointIndices`, `navigationProfile`, `language`, `voiceUnits`, `excludeTypes`, `maxHeight` or `maxWidth` automatically recalculates the route with the new value (multiple changes in the same render batch coalesce into a single request; re-setting an identical value does nothing). Before 5.0.0, only `coordinates` triggered recalculation — changing e.g. `language` mid-session had no effect until the next coordinates change. `mapStyle` and the color/UI props never trigger recalculation.
+> **Route recalculation on prop change (5.0.0+, both platforms):** changing any of `coordinates`, `waypointIndices`, `navigationProfile`, `language`, `voiceUnits`, `excludeTypes`, `maxHeight`, `maxWidth`, or `useMapMatching` (5.0.4+) automatically recalculates the route with the new value (multiple changes in the same render batch coalesce into a single request; re-setting an identical value does nothing). Before 5.0.0, only `coordinates` triggered recalculation — changing e.g. `language` mid-session had no effect until the next coordinates change. `mapStyle`, `navigationViewportPadding*`, and the color/UI props never trigger recalculation.
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
@@ -141,6 +141,7 @@ export default function Navigation() {
 | `mute` | `boolean` | `false` | Silence voice instructions. |
 | `maxHeight` | `number` | — | Max vehicle height in metres. |
 | `maxWidth` | `number` | — | Max vehicle width in metres. |
+| `navigationViewportPaddingTop` / `Left` / `Bottom` / `Right` | `number` | Android: 180/40/300/40 dp — iOS: 20/20/40/20 pt (each platform's own pre-5.1.0 default, unchanged unless set) | Padding around the camera's framed viewport, applied live (no route recalculation). `Bottom` is the one most apps touch — a larger value pushes the navigation icon further up from the screen's true bottom edge (this is what gives the Waze-style ~30%-from-bottom position). Maps directly to `EdgeInsets` (Android) / `NavigationMapView.viewportPadding` (iOS) — both native SDK mechanisms, not custom. |
 | `useMapMatching` | `boolean` | `false` | **Implemented on both platforms as of 5.0.4.** Uses the Map Matching API instead of Directions — for routes that exactly follow the given coordinates. Changing it re-triggers the route request. `excludeTypes`/`maxHeight`/`maxWidth` are Directions-only parameters and are ignored in this mode (API limitation, not a bug). |
 | `customRasterTileUrl` | `string` | — | **Implemented on both platforms as of 5.0.4.** Custom raster tile URL with `{x}/{y}/{z}` placeholders, injected into the navigation map's style and automatically re-applied on style changes. Clear it to remove the overlay. iOS: applies to the drop-in navigation map (not the pre-route free-drive fallback). |
 | `customRasterAboveLayerId` | `string` | — | Style layer ID above which the raster layer is inserted. If omitted or not present in the current style, the raster goes on top. |
@@ -220,11 +221,11 @@ All color props are optional — defaults are applied when omitted.
 > <MapboxNavigationView {...maneuverColors} /* ...other props */ />
 > ```
 
-> **iOS parity, as of this release:**
+> **iOS implementation notes, beyond what's already in the tables above:**
 > - `maneuverBackgroundColorDay`/`maneuverBackgroundColorNight` — implemented via a custom `StandardDayStyle`/`StandardNightStyle` subclass pair, styling `InstructionsBannerView` through `UIAppearance` (Mapbox's own confirmed, documented v3 mechanism for this). **Read once, at the time a route is presented** — unlike Android, `NavigationOptions.styles` is a construction-time configuration, so changing these colors while navigation is already active takes effect on the *next* route, not instantly. This is an architectural difference from Android's live-updating maneuver view, not an oversight.
-> - `navigationPuckColor`/`navigationPuckImagePath`/`navigationPuck3DModelPath` — implemented via `NavigationMapView.puckType` (`Puck2DConfiguration`/`Puck3DConfiguration`), the confirmed official v3 API — same precedence as Android (3D model > custom image, never tinted > color tint > default). Unlike the maneuver colors above, this **can** be updated live while navigation is active. `navigationPuckColor` tints a standard system symbol rather than Mapbox's own default icon — there's no confirmed public API for the exact built-in asset name to tint directly on iOS, unlike Android.
-> - `maneuverTurnIconColor` and `speedLimitPosition` are **not implemented on iOS** and remain no-ops (stored, no effect). `maneuverTurnIconColor` would require referencing a specific internal SDK view class for the turn-direction icon that we could not confirm still exists under an unchanged name in the current v3 `MapboxNavigationUIKit` — guessing wrong would fail to compile the entire iOS build, not just silently not work, so this was left out deliberately rather than risked. `speedLimitPosition` has no confirmed repositioning API — `SpeedLimitView`'s position is fixed as part of `NavigationViewController`'s drop-in layout. Both would require building a custom top/bottom banner (see Mapbox's "Build a custom UI" guide) rather than using the drop-in `NavigationViewController`, a substantially larger undertaking than styling one already outside this package's current architecture.
-> - `etaBarBackgroundColor`, `etaTextColor`, `iconButtonColor`, `iconButtonMutedColor` remain stored-only for the same reason as `maneuverTurnIconColor` — no confirmed v3 class name found for these specific sub-elements.
+> - `maneuverTurnIconColor`, `etaBarBackgroundColor`, `etaTextColor`, `iconButtonColor`, `iconButtonMutedColor` (5.0.4+) — same construction-time caveat as the maneuver background colors above (read once, at route presentation). Applied via `ManeuverView`/`BottomBannerView`/`TimeRemainingLabel`/`DistanceRemainingLabel`/`ArrivalTimeLabel`/`FloatingButton` `UIAppearance` targets — every one verified verbatim against Mapbox's own `DayStyle.swift` at v3.20.1, not guessed.
+> - `navigationPuckColor`/`navigationPuckImagePath`/`navigationPuck3DModelPath` — implemented via `NavigationMapView.puckType` (`Puck2DConfiguration`/`Puck3DConfiguration`), the confirmed official v3 API — same precedence as Android (3D model > custom image, never tinted > color tint > default). Unlike the maneuver/ETA/button colors above, this **can** be updated live while navigation is active. `navigationPuckColor` tints a standard system symbol rather than Mapbox's own default icon — there's no confirmed public API for the exact built-in asset name to tint directly on iOS, unlike Android.
+> - `speedLimitPosition` is the only color/UI prop still **not implemented on iOS** (no-op, stored only) — `SpeedLimitView`'s position is fixed as part of `NavigationViewController`'s drop-in layout, with no confirmed public repositioning API. Would require building a custom top/bottom banner (see Mapbox's "Build a custom UI" guide) rather than the drop-in `NavigationViewController` — a substantially larger undertaking than styling, outside this package's current architecture.
 
 ### Mapbox Native Colors (Android, via plugin)
 
@@ -295,7 +296,7 @@ Mapbox Navigation SDK v3 for iOS is distributed via Swift Package Manager only �
 - No network access to `api.mapbox.com` needed during your `pod install` or EAS build for the Navigation-specific frameworks themselves — only your own `downloadsToken` at fetch time.
 - No SPM package resolution happens in your project for this SDK at all.
 - `useFrameworks: "static"` (see step 3 of [Installation](#installation)) is required. See [The `GestureType.singleTap` launch crash](#the-dyld-4-symbol-missing-gesturetypesingletap-launch-crash) below for the retracted `forceStaticLinking` claim previously documented here.
-- The iOS SDK version is fixed by which version of this npm package you install (matching a specific `mapboxMapsVersion`), not something you configure per-app.
+- The iOS SDK version defaults to whatever this npm package version ships, but is configurable per-app (5.0.5+) via the `iosMapboxNavigationVersion`/`iosMapboxMapsVersion` plugin options — see [Upgrading the vendored iOS SDK version](#upgrading-the-vendored-ios-sdk-version) below.
 
 **Why `MapboxMaps`/`MapboxCommon`/`MapboxCoreMaps`/`Turf` are *not* vendored here:** `@rnmapbox/maps` already installs those via CocoaPods. Vendoring a second copy of the same libraries would cause duplicate-symbol link errors. Only the Navigation-specific frameworks that `@rnmapbox/maps` doesn't already provide are vendored by this package.
 
@@ -363,7 +364,7 @@ The config plugin's `addAndroidConfig` unconditionally substitutes these to thei
 
 **Mechanism 2 — `com.mapbox.navigationcore:*`: opt-in — `androidUseNdk27`.**
 
-Mapbox publishes a separate `-ndk27` artifact variant of each `com.mapbox.navigationcore:*` dependency (the one this package itself declares in `android/build.gradle`) — but **only starting from Navigation SDK 3.11.0** (this package defaults to `3.8.1`, which predates it; confirmed from [Mapbox's own changelog](https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)). Since switching to a nonexistent `-ndk27` artifact fails the build outright (`Could not resolve`), this one is opt-in rather than default:
+Mapbox publishes a separate `-ndk27` artifact variant of each `com.mapbox.navigationcore:*` dependency (the one this package itself declares in `android/build.gradle`) — but **only starting from Navigation SDK 3.11.0** (with the config plugin applied and no `mapboxNavigationVersion` override, the default `mapboxMapsVersion: "11.11.0"` auto-calculates to `3.8.0`, which predates it; confirmed from [Mapbox's own changelog](https://raw.githubusercontent.com/mapbox/mapbox-navigation-android/master/CHANGELOG.md)). Since switching to a nonexistent `-ndk27` artifact fails the build outright (`Could not resolve`), this one is opt-in rather than default:
 
 ```json
 ["@jacques_gordon/expo-mapbox-navigation", {
@@ -389,6 +390,19 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 ---
 
 ## Changelog
+
+### 5.1.0
+**Android: navigation icon (puck) was visibly rotating independently of the map during turns, instead of staying fixed like Waze/Google Maps** — confirmed by frame-by-frame analysis of two real device screen recordings (same pattern on both, independently). The puck's on-screen angle is literally `(puck bearing − camera bearing)`, since the location-indicator layer's bearing is a geographic property rendered through the same camera transform as the rest of the map (verified verbatim in `mapbox-maps-android`'s `LocationIndicatorLayerRenderer.kt`). This package had explicitly set `puckBearing = PuckBearing.COURSE`, feeding the puck the RAW, instantaneous GPS course on every location update — while the camera's own bearing comes from `MapboxNavigationViewportDataSource`'s `bearingSmoothing` (capped at 45°/update, computed from an anticipatory look-ahead window of upcoming route points, deliberately not raw instantaneous course). Two independently-timed bearing sources drift apart mid-turn; that drift is exactly what appeared as "the puck rotating." **Fixed** by switching to `PuckBearing.HEADING` — which is also the Mapbox Maps SDK's own default (`@Default("PuckBearing.HEADING")`, verified verbatim in `LocationComponentSettingsData.kt`) and exactly what Mapbox's own official reference app uses (`TurnByTurnExperienceActivity.kt`, `mapbox-navigation-android-examples` — never overrides `puckBearing` at all). `HEADING` mode drives puck rotation from device compass data, which this package never feeds through `changePosition(...)` — so there's no second bearing source left to disagree with the camera, and 100% of the visible rotation now comes from the camera turning beneath a visually fixed puck. iOS was not affected (verified: no equivalent explicit override exists there — the drop-in `NavigationViewController` manages puck/camera bearing sync entirely internally).
+
+**Refinement over a fixed `HEADING` value, found during audit**: a static `HEADING` setting has one edge case — this package's own Overview mode (`toggleOverview()`, camera goes north-up/non-rotating) gets no direction at all from `HEADING` (no compass feed), whereas the OLD `COURSE` mode showed the correct absolute direction there just fine (a static, non-rotating map has no camera-bearing-vs-course drift to begin with — `COURSE` was never actually buggy in Overview, only in Following). Fixed by switching `puckBearing` WITH the camera state instead of fixing it to one value: `HEADING` only while `FOLLOWING`/`TRANSITION_TO_FOLLOWING` (the mode that was actually broken), `COURSE` everywhere else (`OVERVIEW`/`TRANSITION_TO_OVERVIEW`/`IDLE`, where it was always correct) — via `navigationCamera.registerNavigationCameraStateChangeObserver`, which also fires immediately with the current state on registration (verified verbatim in `NavigationCamera.kt`), so the correct initial value is set with no separate explicit assignment needed.
+
+**New prop, both platforms: `navigationViewportPaddingTop`/`Left`/`Bottom`/`Right`** — lets consumers reposition the navigation icon within the frame without touching this package's own defaults. Maps directly to each platform's own native mechanism (Android's `EdgeInsets` fed to `MapboxNavigationViewportDataSource.followingPadding`; iOS's `NavigationMapView.viewportPadding`, verified verbatim at v3.20.1 — the SDK's own public property for this, previously never set by this package at all). Defaults are each platform's exact pre-5.1.0 value (Android: 180/40/300/40 dp, the existing Waze-style ~30%-from-bottom position, unchanged; iOS: 20/20/40/20 pt, the SDK's own untouched default) — so leaving these unset changes nothing on either platform. Applied live on both platforms; never triggers a route recalculation. **Caught during a pre-publish audit**: the iOS setter originally passed `navigationViewportPaddingTop ?? 20` (etc.) directly to `UIEdgeInsets`, which expects `CGFloat` — but `??`'s both sides resolve against the `Double?` property's wrapped type *before* the outer `UIEdgeInsets` call is considered, so the expression was typed `Double`, which Swift does not implicitly convert to `CGFloat` as a function argument. Fixed with explicit `CGFloat(...)` conversion on each value before any EAS build was attempted with it.
+
+**iOS: the destination flag had the same class of offset bug the 5.0.3 changelog fixed on Android — never verified on iOS at the time.** The 5.0.3 entry's "iOS needs no change" claim was only about the *coordinate source* (confirmed correct then and re-confirmed now, traced verbatim to `Route.waypointsMapFeature` inside `NavigationMapStyleManager.swift` at v3.20.1 — response-derived, not raw request coordinates) — it never examined the flag image's own drawing geometry. That geometry had the identical flaw Android's *had*: the pole was drawn at the image's left edge (not centered) with a gap below it instead of touching the bottom edge, while `iconAnchor: .bottom` anchors the image's bottom-*center* to the waypoint — an offset in both axes. A stopgap `iconOffset: [0, 2]` had been added at some point, but only nudged the vertical gap and never addressed the horizontal off-center pole. **Fixed** by redrawing the flag with the pole centered and its base flush with the bottom edge — pixel-for-pixel the same geometry contract Android's `drawDestinationFlagBitmap()` already documents — and removing the now-unneeded (and always-incomplete) `iconOffset` entirely, matching Android's approach of relying on the anchor alone.
+
+**Destination flag made more prominent on both platforms** (real-device feedback: too small next to the route line, wanted closer to Waze's scale). Enlarged from 36×40dp/30×40pt to 48×56dp/pt on Android/iOS respectively — same design (pole + 3×2 checkered banner), same proportions, applied identically on both platforms so they continue to render pixel-equivalent.
+
+**iOS: automatic day/night map switching never activated** — confirmed by a real device test (map stayed in day style at night, every time, not intermittently). Root cause, verified verbatim in `mapbox-navigation-ios`'s `NavigationViewController.swift`/`StyleManager.swift` at v3.20.1: `NavigationViewController.viewDidLoad()` calls its internal `setupNavigation()`, which runs `setupStyleManager(navigationOptions)` — the SDK's `StyleManager` first computing sunrise/sunset for the current location — **before** `mapboxNavigation.tripSession().startActiveGuidance(...)`, the call that actually populates the route data the SDK's own `location(for:)` delegate implementation reads. At that exact moment `route` is still nil, location resolution fails, and `StyleManager` silently falls back to `styles.first` (day, given this package's `styles: [dayStyle, nightStyle]` ordering) — **permanently**: `resetTimeOfDayTimer()` fails identically at the same instant, so no timer is ever scheduled to retry later either. This is an SDK-internal ordering quirk, not something this package's own setup got wrong. **Fixed using only the SDK's own public API** — no sunrise/sunset math reimplemented: `StyleManager.styles`'s public setter has a `didSet` that internally calls both `applyStyle()` (re-evaluates and applies the correct style for the current time) and `resetTimeOfDayTimer()` (schedules the next correct transition) — confirmed verbatim in `StyleManager.swift`. Re-assigning `vc.styleManager.styles` to itself right after presenting (by which point `startActiveGuidance` has already run, since it's the very next line inside the SDK's own already-completed `setupNavigation()`) triggers that `didSet`, so `route` now resolves and the sunrise/sunset calculation succeeds.
 
 ### 5.0.10
 **Two Android fixes from the same ongoing readiness/race investigation.**

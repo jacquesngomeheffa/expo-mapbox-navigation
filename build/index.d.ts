@@ -52,6 +52,23 @@ export interface MapboxNavigationViewProps {
     /** Maximum vehicle width in metres (for width-restricted routes). */
     maxWidth?: number;
     /**
+     * Padding (in dp on Android, points on iOS) around the camera's framed
+     * viewport, applied on top of the safe area. The navigation icon's
+     * vertical position is primarily controlled by `Bottom` — a larger
+     * value pushes it further up from the screen's true bottom edge.
+     * Defaults to this package's existing values on each platform (unset by
+     * default = no change from previous versions):
+     * Android — top 180, left 40, bottom 300, right 40 (the Waze-style
+     * ~30%-from-bottom position already used since 5.0.0).
+     * iOS — top 20, left 20, bottom 40, right 20 (the Mapbox SDK's own
+     * default; this package never overrode it before 5.1.0).
+     * Applied live; does not trigger a route recalculation.
+     */
+    navigationViewportPaddingTop?: number;
+    navigationViewportPaddingLeft?: number;
+    navigationViewportPaddingBottom?: number;
+    navigationViewportPaddingRight?: number;
+    /**
      * When true, uses the Mapbox Map Matching API instead of the standard
      * Directions API — for routes that exactly follow the given coordinates
      * (implemented on both platforms as of 5.0.4; changing it re-triggers
