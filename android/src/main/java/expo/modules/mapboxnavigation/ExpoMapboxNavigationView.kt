@@ -1070,6 +1070,28 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     "currentSpeedAvailable=$currentSpeedAvailable rendered=$renderedPath",
             )
         }
+        // Follow-up diagnostic: data/render-path alone doesn't prove pixels
+        // actually appeared on screen — a confirmed real-device test showed
+        // posted=50/20, rendered=sdk-render, yet nothing visible. Posted to
+        // the view's own message queue (not read synchronously here) so it
+        // runs AFTER the layout pass this frame's visibility/text changes
+        // trigger — reading geometry synchronously here would still show
+        // stale (pre-layout) values.
+        speedInfoView?.post {
+            val siv = speedInfoView ?: return@post
+            val loc = IntArray(2)
+            siv.getLocationOnScreen(loc)
+            val dm = context.resources.displayMetrics
+            Log.d(
+                TAG,
+                "SpeedLimit geometry: visibility=${siv.visibility} isShown=${siv.isShown} " +
+                    "w=${siv.width} h=${siv.height} screenX=${loc[0]} screenY=${loc[1]} " +
+                    "screenW=${dm.widthPixels} screenH=${dm.heightPixels} dp=$dp " +
+                    "topInset=${lastSystemBarInsets.top} bottomInset=${lastSystemBarInsets.bottom} " +
+                    "position=$speedLimitPosition alpha=${siv.alpha} " +
+                    "parentIsRoot=${siv.parent != null}",
+            )
+        }
     }
 
     private val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
