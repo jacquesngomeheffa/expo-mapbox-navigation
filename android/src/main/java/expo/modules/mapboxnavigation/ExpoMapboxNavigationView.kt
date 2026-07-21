@@ -1070,27 +1070,48 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     "currentSpeedAvailable=$currentSpeedAvailable rendered=$renderedPath",
             )
         }
-        // Follow-up diagnostic: data/render-path alone doesn't prove pixels
-        // actually appeared on screen — a confirmed real-device test showed
-        // posted=50/20, rendered=sdk-render, yet nothing visible. Posted to
-        // the view's own message queue (not read synchronously here) so it
-        // runs AFTER the layout pass this frame's visibility/text changes
-        // trigger — reading geometry synchronously here would still show
-        // stale (pre-layout) values.
-        speedInfoView?.post {
-            val siv = speedInfoView ?: return@post
+        attachSpeedLimitGeometryListener()
+    }
+
+    // Follow-up diagnostic: data/render-path alone doesn't prove pixels
+    // actually appeared on screen — a confirmed real-device test showed
+    // posted=50/20, rendered=sdk-render (the SDK's own unmodified render
+    // path), yet nothing visible, and a first attempt at reading geometry
+    // via View.post{} showed a persistent w=0/h=0 for 25+ seconds across
+    // many separate ticks. View.post{} is NOT a reliable "after next
+    // layout" signal (it queues on the main Handler, whose ordering
+    // relative to a Choreographer-scheduled traversal from requestLayout()
+    // is not guaranteed) — a real 0×0 reading that never once resolves,
+    // across many independent post() calls, would still be suspicious of
+    // a measurement/timing artifact rather than proof of a genuine bug.
+    // ViewTreeObserver's OnGlobalLayoutListener only fires after an ACTUAL
+    // completed layout pass, giving a trustworthy reading — attached once,
+    // logs only on a real change (not every pass, to stay readable).
+    private var speedLimitGeometryListenerAttached = false
+    private var lastGeometryLogKey: String? = null
+    private fun attachSpeedLimitGeometryListener() {
+        if (speedLimitGeometryListenerAttached) return
+        val siv = speedInfoView ?: return
+        speedLimitGeometryListenerAttached = true
+        siv.viewTreeObserver.addOnGlobalLayoutListener {
             val loc = IntArray(2)
             siv.getLocationOnScreen(loc)
             val dm = context.resources.displayMetrics
-            Log.d(
-                TAG,
-                "SpeedLimit geometry: visibility=${siv.visibility} isShown=${siv.isShown} " +
-                    "w=${siv.width} h=${siv.height} screenX=${loc[0]} screenY=${loc[1]} " +
-                    "screenW=${dm.widthPixels} screenH=${dm.heightPixels} dp=$dp " +
-                    "topInset=${lastSystemBarInsets.top} bottomInset=${lastSystemBarInsets.bottom} " +
-                    "position=$speedLimitPosition alpha=${siv.alpha} " +
-                    "parentIsRoot=${siv.parent != null}",
-            )
+            val key = "${siv.visibility}|${siv.isShown}|${siv.width}|${siv.height}|" +
+                "${loc[0]}|${loc[1]}|$speedLimitPosition"
+            if (key != lastGeometryLogKey) {
+                lastGeometryLogKey = key
+                Log.d(
+                    TAG,
+                    "SpeedLimit layout pass: visibility=${siv.visibility} isShown=${siv.isShown} " +
+                        "w=${siv.width} h=${siv.height} measuredW=${siv.measuredWidth} " +
+                        "measuredH=${siv.measuredHeight} screenX=${loc[0]} screenY=${loc[1]} " +
+                        "screenW=${dm.widthPixels} screenH=${dm.heightPixels} dp=$dp " +
+                        "topInset=${lastSystemBarInsets.top} bottomInset=${lastSystemBarInsets.bottom} " +
+                        "position=$speedLimitPosition parentW=${(siv.parent as? View)?.width} " +
+                        "parentH=${(siv.parent as? View)?.height}",
+                )
+            }
         }
     }
 
