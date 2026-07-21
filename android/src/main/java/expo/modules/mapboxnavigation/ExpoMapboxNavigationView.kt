@@ -962,6 +962,14 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 // end condition as before this fix.
                 renderPostedSpeedOnly(result.speedLimitInfo, fmtOptions.unitType)
             }
+            logSpeedLimitState(
+                result,
+                when {
+                    speedInfo != null -> "sdk-render"
+                    result.speedLimitInfo.speed != null -> "posted-only-fallback"
+                    else -> "hidden"
+                },
+            )
 
             checkAndSwitchDayNight()
         }
@@ -1038,6 +1046,29 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 UnitType.IMPERIAL -> (speed / 1000.0 / 1.609 * 3600).roundToInt()
                 UnitType.METRIC -> (speed / 1000.0 * 3600).roundToInt()
             }
+        }
+    }
+
+    // Diagnostic (5.1.2): logs the exact speed-limit data state so
+    // `adb logcat -s ExpoMapboxNavigation` on a real device can prove
+    // whether the posted limit is absent from the DATA for the current
+    // road segment (a coverage limitation — nothing any code can render)
+    // or present but not rendered (which would be a real code bug).
+    // Logs only on state TRANSITIONS (posted value / current-speed
+    // availability / rendered path changes), not every location tick,
+    // so a whole drive produces a handful of lines, not thousands.
+    private var lastSpeedLogKey: String? = null
+    private fun logSpeedLimitState(result: LocationMatcherResult, renderedPath: String) {
+        val info = result.speedLimitInfo
+        val currentSpeedAvailable = result.enhancedLocation.speed != null
+        val key = "${info.speed}|${info.unit}|${info.sign}|$currentSpeedAvailable|$renderedPath"
+        if (key != lastSpeedLogKey) {
+            lastSpeedLogKey = key
+            Log.d(
+                TAG,
+                "SpeedLimit state: posted=${info.speed} unit=${info.unit} sign=${info.sign} " +
+                    "currentSpeedAvailable=$currentSpeedAvailable rendered=$renderedPath",
+            )
         }
     }
 
