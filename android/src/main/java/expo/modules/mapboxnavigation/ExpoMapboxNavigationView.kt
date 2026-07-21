@@ -1111,6 +1111,23 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                         "position=$speedLimitPosition parentW=${(siv.parent as? View)?.width} " +
                         "parentH=${(siv.parent as? View)?.height}",
                 )
+                // Narrows down WHICH nested view fails to measure: the
+                // MapboxSpeedInfoView container itself, its Vienna/Mutcd
+                // sub-layout, or the posted-speed views inside those.
+                Log.d(
+                    TAG,
+                    "SpeedLimit children: viennaLayout(vis=${siv.speedInfoViennaLayout.visibility}," +
+                        "w=${siv.speedInfoViennaLayout.width},h=${siv.speedInfoViennaLayout.height}) " +
+                        "mutcdLayout(vis=${siv.speedInfoMutcdLayout.visibility}," +
+                        "w=${siv.speedInfoMutcdLayout.width},h=${siv.speedInfoMutcdLayout.height}) " +
+                        "postedSpeedLayoutVienna(vis=${siv.speedInfoPostedSpeedLayoutVienna.visibility}," +
+                        "w=${siv.speedInfoPostedSpeedLayoutVienna.width}," +
+                        "h=${siv.speedInfoPostedSpeedLayoutVienna.height}) " +
+                        "postedSpeedVienna(vis=${siv.speedInfoPostedSpeedVienna.visibility}," +
+                        "w=${siv.speedInfoPostedSpeedVienna.width}," +
+                        "h=${siv.speedInfoPostedSpeedVienna.height}," +
+                        "text=${siv.speedInfoPostedSpeedVienna.text})",
+                )
             }
         }
     }
