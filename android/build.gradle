@@ -112,6 +112,16 @@ dependencies {
     // ConstraintLayout — required because MapboxManeuverView extends ConstraintLayout
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
+    // AppCompat — required because MapboxSpeedInfoView's public sub-view
+    // properties (speedInfoPostedSpeedMutcd, speedInfoUnitTextMutcd, etc.,
+    // used by renderPostedSpeedOnly() for the Android/iOS speed-limit-parity
+    // fix) are typed androidx.appcompat.widget.AppCompatTextView. Without
+    // this declared directly, Kotlin cannot resolve that type from this
+    // module's own classpath even though ui-components already depends on
+    // it transitively — same class of issue ConstraintLayout above already
+    // solves for MapboxManeuverView.
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+
     // AndroidX
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
