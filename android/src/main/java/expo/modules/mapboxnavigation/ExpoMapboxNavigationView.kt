@@ -951,8 +951,10 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             val fmtOptions = DistanceFormatterOptions.Builder(context).build()
             val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
             if (speedInfo != null) {
+                val wasGone = speedInfoView?.visibility != View.VISIBLE
                 speedInfoView?.visibility = View.VISIBLE
                 speedInfoView?.render(speedInfo)
+                if (wasGone) forceSpeedInfoRelayout()
             } else {
                 // Posted limit may still be known even though the SDK's own
                 // helper discarded it for lack of current speed — render it
@@ -997,6 +999,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             speedInfoView?.visibility = View.GONE
             return
         }
+        val wasGone = siv.visibility != View.VISIBLE
         siv.visibility = View.VISIBLE
         val postedSpeed = convertPostedSpeed(postedRaw.toDouble(), info.unit, unitType)
         when (unitType) {
@@ -1021,6 +1024,39 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 siv.speedInfoCurrentSpeedMutcd.visibility = View.GONE
             }
         }
+        if (wasGone) forceSpeedInfoRelayout()
+    }
+
+    // WORKAROUND for a confirmed, permanently-unfixed upstream bug:
+    // androidx.constraintlayout:constraintlayout 2.1.4 is this package's own
+    // pin AND the final-ever release of the classic View-based artifact —
+    // the androidx/constraintlayout repo was archived (read-only) on
+    // 2024-12-27, so no future fix will ever ship. GitHub issue #838
+    // (androidx/constraintlayout, opened 2023-08-04, still unresolved at
+    // archival) documents exactly this symptom: a ConstraintLayout child
+    // stays stuck at a stale/zero measurement after its ANCESTOR toggles
+    // GONE -> VISIBLE, because requestLayout() doesn't reliably propagate
+    // through the ConstraintLayout chain in that scenario. Confirmed via a
+    // real-device diagnostic on a Galaxy S24 Ultra: speedInfoView (created
+    // GONE in buildUI(), only ever flipped to VISIBLE here) and its nested
+    // ConstraintLayouts (speedInfoViennaLayout /
+    // speedInfoPostedSpeedLayoutVienna) all measured 0x0 — via
+    // ViewTreeObserver.OnGlobalLayoutListener, i.e. AFTER a real completed
+    // layout pass, not a timing artifact — despite correct VISIBLE
+    // visibility and correct text content ("50") at every level. The
+    // community's own confirmed workaround for this exact bug is exactly
+    // what's implemented here: force requestLayout() explicitly on every
+    // ConstraintLayout in the affected subtree right after the GONE ->
+    // VISIBLE transition, since the library itself fails to do so
+    // reliably. Only called once per GONE -> VISIBLE transition (not
+    // every tick) — cheap, and matches the bug's own trigger condition.
+    private fun forceSpeedInfoRelayout() {
+        val siv = speedInfoView ?: return
+        siv.speedInfoMutcdLayout.requestLayout()
+        siv.speedInfoViennaLayout.requestLayout()
+        siv.speedInfoPostedSpeedLayoutMutcd.requestLayout()
+        siv.speedInfoPostedSpeedLayoutVienna.requestLayout()
+        siv.requestLayout()
     }
 
     // Verbatim port of the SDK's own (private, hence unreachable from this
