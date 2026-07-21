@@ -58,11 +58,15 @@ import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.navigation.base.TimeFormat
 import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
 import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
+import com.mapbox.navigation.base.formatter.UnitType
 import com.mapbox.navigation.base.options.NavigationOptions
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.route.NavigationRouterCallback
 import com.mapbox.navigation.base.route.RouterFailure
 import com.mapbox.navigation.base.route.RouterOrigin
+import com.mapbox.navigation.base.speed.model.SpeedLimitInfo
+import com.mapbox.navigation.base.speed.model.SpeedLimitSign
+import com.mapbox.navigation.base.speed.model.SpeedUnit
 import com.mapbox.navigation.core.MapboxNavigation
 import com.mapbox.navigation.core.MapboxNavigationProvider
 import com.mapbox.navigation.core.directions.session.RoutesObserver
@@ -107,6 +111,7 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val TAG = "ExpoMapboxNavigation"
 
@@ -926,23 +931,113 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 safeCameraFollowing()
             }
 
-            // ── Speed limit (issue #4: was not displaying) ──────────────────
-            // updatePostedAndCurrentSpeed returns null when:
-            //  1. The route response has no `maxspeed` annotation for this segment
-            //  2. GPS speed is unavailable
-            // We log this so issues can be diagnosed via `adb logcat`
+            // ── Speed limit ───────────────────────────────────────────────────
+            // FIX (Android-vs-iOS parity audit): updatePostedAndCurrentSpeed()
+            // requires BOTH the posted speed limit AND the GPS-derived current
+            // speed (result.enhancedLocation.speed, nullable — confirmed via
+            // MapboxSpeedInfoApi/SpeedLimitProcessor source at v3.20.x) to be
+            // non-null — it returns null, discarding a perfectly valid posted
+            // limit, whenever current speed alone is momentarily/persistently
+            // unavailable (common right after guidance starts, weak GPS,
+            // certain location providers). iOS's own SpeedLimitView.canDraw
+            // (verified verbatim at v3.20.1) has no such dependency — it shows
+            // the sign whenever a posted limit is known, full stop, which is
+            // why iOS reliably shows speed limits and Android didn't. Both
+            // platforms read the same underlying native `speedLimit` field
+            // (confirmed: iOS's MapboxNavigator.swift and Android's
+            // LocationMatcherResult both source it from the shared native
+            // Navigator), so this is a platform code-path gap, not a data
+            // coverage difference between iOS and Android.
             val fmtOptions = DistanceFormatterOptions.Builder(context).build()
             val speedInfo = speedInfoApi.updatePostedAndCurrentSpeed(result, fmtOptions)
             if (speedInfo != null) {
                 speedInfoView?.visibility = View.VISIBLE
                 speedInfoView?.render(speedInfo)
             } else {
-                speedInfoView?.visibility = View.GONE
-                Log.d(TAG, "Speed info unavailable for this location/route segment " +
-                    "(no maxspeed annotation or GPS speed not ready yet)")
+                // Posted limit may still be known even though the SDK's own
+                // helper discarded it for lack of current speed — render it
+                // ourselves (posted-only, matching iOS) instead of hiding the
+                // whole widget. Falls back to fully hidden only when the
+                // posted limit itself is genuinely unavailable too — same
+                // end condition as before this fix.
+                renderPostedSpeedOnly(result.speedLimitInfo, fmtOptions.unitType)
             }
 
             checkAndSwitchDayNight()
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renders the posted speed limit only, bypassing MapboxSpeedInfoApi /
+    // SpeedInfoValue entirely (used when the SDK's own updatePostedAndCurrentSpeed()
+    // returned null solely because current speed is unknown — see the FIX
+    // comment above in onNewLocationMatcherResult).
+    //
+    // SpeedInfoValue and LocationMatcherResult both have an `internal
+    // constructor` (verified at v3.20.x source) — this package, being a
+    // downstream consumer module, cannot construct either, so we can't hand
+    // MapboxSpeedInfoView.render() a currentSpeed-less SpeedInfoValue built
+    // ourselves. Instead we drive MapboxSpeedInfoView's own PUBLIC child
+    // views directly (speedInfoMutcdLayout, speedInfoPostedSpeedMutcd, etc.
+    // — all public `val`s on the class, verified at v3.20.x source), which
+    // is the only way to reach this state through supported public API.
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun renderPostedSpeedOnly(info: SpeedLimitInfo, unitType: UnitType) {
+        val siv = speedInfoView
+        val postedRaw = info.speed
+        if (siv == null || postedRaw == null) {
+            speedInfoView?.visibility = View.GONE
+            return
+        }
+        siv.visibility = View.VISIBLE
+        val postedSpeed = convertPostedSpeed(postedRaw.toDouble(), info.unit, unitType)
+        when (unitType) {
+            UnitType.IMPERIAL -> siv.speedInfoUnitTextMutcd.text = "mph"
+            UnitType.METRIC -> siv.speedInfoUnitTextMutcd.text = "km/h"
+        }
+        // Current-speed sub-views are always hidden here — we have no
+        // current speed to show (that's the whole reason this path runs) —
+        // matching how MapboxSpeedInfoView.render() itself hides them
+        // whenever posted-only data is rendered.
+        when (info.sign) {
+            SpeedLimitSign.VIENNA -> {
+                siv.speedInfoViennaLayout.visibility = View.VISIBLE
+                siv.speedInfoMutcdLayout.visibility = View.GONE
+                siv.speedInfoPostedSpeedVienna.text = postedSpeed.toString()
+                siv.speedInfoCurrentSpeedVienna.visibility = View.GONE
+            }
+            else -> { // MUTCD — also MapboxSpeedInfoView's own default when sign is unrecognized
+                siv.speedInfoMutcdLayout.visibility = View.VISIBLE
+                siv.speedInfoViennaLayout.visibility = View.GONE
+                siv.speedInfoPostedSpeedMutcd.text = postedSpeed.toString()
+                siv.speedInfoCurrentSpeedMutcd.visibility = View.GONE
+            }
+        }
+    }
+
+    // Verbatim port of the SDK's own (private, hence unreachable from this
+    // module) PostedAndCurrentSpeedFormatter.getPostedSpeedLimit() —
+    // SpeedLimitInfo.speed is posted-limit-only, never meters/second (that
+    // unit only ever applies to current speed), so only the KM/H and MPH
+    // source branches are reachable in practice; METERS_PER_SECOND is kept
+    // for exhaustiveness since SpeedUnit is a `when` subject. Kept numerically
+    // identical to the SDK's own formula so the displayed number never
+    // differs from what the normal (currentSpeed-available) render path
+    // would show for the same road.
+    private fun convertPostedSpeed(speed: Double, fromUnit: SpeedUnit, toUnit: UnitType): Int {
+        return when (fromUnit) {
+            SpeedUnit.KILOMETERS_PER_HOUR -> when (toUnit) {
+                UnitType.IMPERIAL -> 5 * ((speed / 1.609) / 5).roundToInt()
+                UnitType.METRIC -> speed.roundToInt()
+            }
+            SpeedUnit.MILES_PER_HOUR -> when (toUnit) {
+                UnitType.IMPERIAL -> speed.roundToInt()
+                UnitType.METRIC -> 5 * (speed * 1.609 / 5).roundToInt()
+            }
+            SpeedUnit.METERS_PER_SECOND -> when (toUnit) {
+                UnitType.IMPERIAL -> (speed / 1000.0 / 1.609 * 3600).roundToInt()
+                UnitType.METRIC -> (speed / 1000.0 * 3600).roundToInt()
+            }
         }
     }
 
