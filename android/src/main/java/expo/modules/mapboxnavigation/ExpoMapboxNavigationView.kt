@@ -756,6 +756,55 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // FIX: React Native (Fabric) swallows requestLayout() for native
+    // subtrees — the standard Android contract "child calls requestLayout()
+    // → a measure/layout traversal eventually re-measures it" does NOT hold
+    // inside an RN-managed view. RN only sizes views it knows about through
+    // Yoga; a dirtied native subtree below an RN-managed node never gets a
+    // new measure pass on its own. Proven on a real device (Galaxy S24
+    // Ultra, adb logcat diagnostics): speedInfoView — the ONLY child of
+    // this view created GONE and flipped to VISIBLE later (every other
+    // element uses INVISIBLE, which IS measured during the initial mount
+    // pass and therefore never needs a re-measure to appear) — stayed at
+    // w=0/h=0 through real completed layout passes, with correct VISIBLE
+    // visibility and correct text at every level of its hierarchy, and
+    // even its fixed-size 70dp×70dp inner ConstraintLayout measured 0×0.
+    // A fixed 70dp view measuring 0 after a "layout pass" is only possible
+    // if measure() never actually ran on it — which is precisely RN's
+    // suppression at work. (An earlier ConstraintLayout-2.1.4-bug
+    // hypothesis was tested and disproven on-device: forcing
+    // requestLayout() on every ConstraintLayout in the subtree changed
+    // nothing, because the traversal those dirty-flags wait for never
+    // comes.)
+    //
+    // The fix is the standard, widely-deployed React Native pattern for
+    // exactly this (used by react-native-maps and countless native-UI
+    // wrappers): re-run measure()+layout() on this view manually, with its
+    // OWN RN-assigned dimensions (EXACTLY specs — so this can never change
+    // this view's own size, only propagate real measurement down to
+    // children), posted so it runs after the current pass completes.
+    // Idempotent, once per frame at most (the flag), and covers every
+    // current and future dynamically-shown native child, not just
+    // speedInfoView.
+    private var measureAndLayoutPosted = false
+    private val measureAndLayoutRunnable = Runnable {
+        measureAndLayoutPosted = false
+        measure(
+            MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY),
+        )
+        layout(left, top, right, bottom)
+    }
+
+    override fun requestLayout() {
+        super.requestLayout()
+        if (!measureAndLayoutPosted && width > 0 && height > 0) {
+            measureAndLayoutPosted = true
+            post(measureAndLayoutRunnable)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Init APIs
     // ─────────────────────────────────────────────────────────────────────────
     private fun initAPIs() {
@@ -1027,29 +1076,18 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         if (wasGone) forceSpeedInfoRelayout()
     }
 
-    // WORKAROUND for a confirmed, permanently-unfixed upstream bug:
-    // androidx.constraintlayout:constraintlayout 2.1.4 is this package's own
-    // pin AND the final-ever release of the classic View-based artifact —
-    // the androidx/constraintlayout repo was archived (read-only) on
-    // 2024-12-27, so no future fix will ever ship. GitHub issue #838
-    // (androidx/constraintlayout, opened 2023-08-04, still unresolved at
-    // archival) documents exactly this symptom: a ConstraintLayout child
-    // stays stuck at a stale/zero measurement after its ANCESTOR toggles
-    // GONE -> VISIBLE, because requestLayout() doesn't reliably propagate
-    // through the ConstraintLayout chain in that scenario. Confirmed via a
-    // real-device diagnostic on a Galaxy S24 Ultra: speedInfoView (created
-    // GONE in buildUI(), only ever flipped to VISIBLE here) and its nested
-    // ConstraintLayouts (speedInfoViennaLayout /
-    // speedInfoPostedSpeedLayoutVienna) all measured 0x0 — via
-    // ViewTreeObserver.OnGlobalLayoutListener, i.e. AFTER a real completed
-    // layout pass, not a timing artifact — despite correct VISIBLE
-    // visibility and correct text content ("50") at every level. The
-    // community's own confirmed workaround for this exact bug is exactly
-    // what's implemented here: force requestLayout() explicitly on every
-    // ConstraintLayout in the affected subtree right after the GONE ->
-    // VISIBLE transition, since the library itself fails to do so
-    // reliably. Only called once per GONE -> VISIBLE transition (not
-    // every tick) — cheap, and matches the bug's own trigger condition.
+    // Marks every ConstraintLayout in the speed-limit widget's subtree
+    // dirty right after its GONE -> VISIBLE transition, so the manual
+    // measure+layout traversal this view's requestLayout() override posts
+    // (see measureAndLayoutRunnable above — the ACTUAL fix for the panel
+    // never appearing; RN suppresses the traversal these dirty flags wait
+    // for) genuinely re-measures them instead of short-circuiting through
+    // ConstraintLayout's internal measurement caches. NOTE: an earlier
+    // version of this comment attributed the invisible-panel bug to
+    // androidx/constraintlayout#838 — that hypothesis was tested on a real
+    // device and DISPROVEN (these requestLayout() calls alone changed
+    // nothing); kept because cache-invalidation before the forced
+    // traversal is still correct, not because it fixes anything alone.
     private fun forceSpeedInfoRelayout() {
         val siv = speedInfoView ?: return
         siv.speedInfoMutcdLayout.requestLayout()
