@@ -2037,7 +2037,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 val mmBuilder = MapMatchingOptions.Builder()
                     .coordinates(points)
                     .bannerInstructions(true)
-                navigationProfile?.let { mmBuilder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }
+                // Same double-"mapbox/" prefix fix as the Directions API
+                // path below — see the comment there for the real-device
+                // evidence (this map-matching path shares the same bug,
+                // fixed for consistency even though Navio doesn't use it).
+                navigationProfile?.let { mmBuilder.profile(it.removePrefix("mapbox/")) }
                 language?.let { mmBuilder.language(it) }
                 waypointIndices?.let { mmBuilder.waypoints(it) }
                 nav.requestMapMatching(mmBuilder.build(), object : MapMatchingAPICallback {
@@ -2110,7 +2114,22 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             // roundabout maneuvers specifically (separate flag from bannerInstructions).
             .roundaboutExits(true)
         waypointIndices?.let { builder.waypointIndicesList(it) }
-        navigationProfile?.let { builder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }
+        // FIX (real-device report): ALL routes failing with a 404
+        // ("Not Found") traced via the new RouterFailure.url logging to a
+        // malformed request URL — .../directions/v5/mapbox/mapbox/
+        // driving-traffic/... with "mapbox" duplicated. The Directions API
+        // SDK's own URL builder already prepends the "mapbox/" vendor
+        // segment ahead of whatever `.profile()` is given (confirmed
+        // empirically: passing our old manually-prefixed "mapbox/$it"
+        // produced the doubled segment) — RouteOptions.profile is meant to
+        // receive ONLY the bare profile name (e.g. "driving-traffic"),
+        // matching this prop's own JSDoc ("Android: omit the mapbox/
+        // prefix (handled internally)"). Previously this file added its
+        // own "mapbox/" prefix on top, which the SDK then prefixed AGAIN.
+        // removePrefix (not a plain pass-through) defensively strips a
+        // stray "mapbox/" if a caller still includes one, without
+        // reintroducing the double-prefix bug.
+        navigationProfile?.let { builder.profile(it.removePrefix("mapbox/")) }
         excludeTypes?.takeIf { it.isNotEmpty() }?.let { builder.exclude(it.joinToString(",")) }
         maxHeight?.let { builder.maxHeight(it) }
         maxWidth?.let { builder.maxWidth(it) }
