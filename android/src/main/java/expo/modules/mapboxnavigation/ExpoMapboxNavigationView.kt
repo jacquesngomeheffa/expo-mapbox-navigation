@@ -2163,6 +2163,19 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     fetchHandler.postDelayed({ scheduleFetchRoutes() }, 250L)
                     return
                 }
+                // Diagnostic (real-device "Not Found"/404 report): the JS-side
+                // event only carries `message`, which for HTTP-level failures
+                // is just the status text ("Not Found") - useless alone.
+                // RouterFailure.url (verified verbatim at v3.20.0) is the
+                // ORIGINAL REQUEST URL - the one thing that shows exactly
+                // what was malformed (profile segment, coordinates list,
+                // parameters). Query string stripped before logging: it
+                // carries the access token, which must never reach logcat.
+                reasons.forEach { r ->
+                    Log.e(TAG, "Route request failed: type=${r.type} message=${r.message} " +
+                        "retryable=${r.isRetryable} origin=${r.routerOrigin} " +
+                        "throwable=${r.throwable} url=${r.url.toString().substringBefore("?")}")
+                }
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
             }
             override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {
