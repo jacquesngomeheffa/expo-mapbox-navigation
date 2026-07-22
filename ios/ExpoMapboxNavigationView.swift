@@ -315,11 +315,95 @@ public class ExpoMapboxNavigationView: ExpoView {
     private static let sharedNavigationProvider = MapboxNavigationProvider(coreConfig: .init())
 
     // MARK: - Init
+    // Route loading overlay (5.1.4): opt-in full-view cover (opaque
+    // background + spinner) shown until the first route is presented,
+    // hiding the "map appears first, route pops in later" sequence.
+    // Opt-in (default false) — zero behavior change for existing
+    // consumers. One-shot per view instance: dismissed on first success
+    // OR first failure, never re-shown (later refetches happen over an
+    // already-presented map). Same contract as Android's implementation.
+    private var showRouteLoadingOverlay: Bool = false
+    private var loadingOverlayColor:    String?
+    private var routeLoadingOverlayView: UIView?
+    private var routeLoadingOverlayDone = false
+
     public required init(appContext: AppContext? = nil) {
         super.init(appContext: appContext)
         let provider = Self.sharedNavigationProvider
         self.mapboxNavigationProvider = provider
         self.mapboxNavigation = provider.mapboxNavigation
+
+        // Built hidden at init — props always arrive AFTER the native view
+        // exists (setters below reveal it), and building it up front means
+        // it is already in place, above any later-added subview via the
+        // bringSubviewToFront call in its setter, before the first route
+        // request can possibly resolve. Spinner centered via flexible
+        // margins so it tracks the overlay through every resize.
+        let overlay = UIView()
+        overlay.backgroundColor = mapboxColor(fromHex: "#1E2433")
+        overlay.isHidden = true
+        overlay.frame = bounds
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.color = .white
+        spinner.startAnimating()
+        spinner.center = CGPoint(x: overlay.bounds.midX, y: overlay.bounds.midY)
+        spinner.autoresizingMask = [
+            .flexibleLeftMargin, .flexibleRightMargin,
+            .flexibleTopMargin, .flexibleBottomMargin
+        ]
+        overlay.addSubview(spinner)
+        addSubview(overlay)
+        routeLoadingOverlayView = overlay
+    }
+
+    // Dismisses the route loading overlay permanently (one-shot — see the
+    // field declarations above). Fade-out only when it was actually
+    // showing; instant no-op when it never was (prop disabled).
+    private func finishRouteLoadingOverlay() {
+        if routeLoadingOverlayDone { return }
+        routeLoadingOverlayDone = true
+        guard let ov = routeLoadingOverlayView, !ov.isHidden else { return }
+        // The navigation view (or free-drive map) was just added ABOVE this
+        // overlay in the subview order — re-front it so the fade-out is
+        // actually visible over the freshly presented map instead of the
+        // map appearing with a hard cut.
+        bringSubviewToFront(ov)
+        UIView.animate(withDuration: 0.25, animations: { ov.alpha = 0 }) { _ in
+            ov.isHidden = true
+            ov.alpha = 1
+        }
+    }
+
+    func setShowRouteLoadingOverlay(_ v: Bool?) {
+        let resolved = v ?? false
+        guard resolved != showRouteLoadingOverlay else { return }
+        showRouteLoadingOverlay = resolved
+        guard let ov = routeLoadingOverlayView else { return }
+        if resolved && !routeLoadingOverlayDone {
+            ov.isHidden = false
+            bringSubviewToFront(ov)
+        } else if !resolved {
+            ov.isHidden = true
+        }
+    }
+
+    func setLoadingOverlayColor(_ c: String?) {
+        guard c != loadingOverlayColor else { return }
+        loadingOverlayColor = c
+        routeLoadingOverlayView?.backgroundColor =
+            c.flatMap { mapboxColor(fromHex: $0) } ?? mapboxColor(fromHex: "#1E2433")
+    }
+
+    // UIKit stacks subviews purely by add-order (no Android-style elevation
+    // concept) — the overlay is added first (at init), so both the
+    // free-drive fallback map (startFreeDriveFallback) and the real
+    // NavigationViewController's view (presentNavigationViewController) get
+    // added ABOVE it later and would otherwise cover it while still
+    // visible. Called right after each of those addSubview calls.
+    private func keepLoadingOverlayOnTop() {
+        guard let ov = routeLoadingOverlayView, !ov.isHidden else { return }
+        bringSubviewToFront(ov)
     }
 
     // MARK: - Voice units (Issue #31 parity — exact same logic as Android)
@@ -373,6 +457,7 @@ public class ExpoMapboxNavigationView: ExpoView {
             // in this branch, and iOS's route-only architecture would leave
             // the surface permanently empty.
             startFreeDriveFallback()
+            finishRouteLoadingOverlay()
             // `code` is a stable, machine-readable identifier: the consuming
             // app should switch on it to show its own LOCALIZED message
             // (the `message` string is English-only debugging text - this
@@ -481,6 +566,9 @@ public class ExpoMapboxNavigationView: ExpoView {
             guard !Task.isCancelled else { return }
             switch result {
             case .failure(let error):
+                // UIView work — must run on the main actor (the success
+                // branch's presentation already does the same).
+                await MainActor.run { self.finishRouteLoadingOverlay() }
                 self.onRoutesFailed(["message": error.localizedDescription])
             case .success(let navigationRoutes):
                 self.currentNavigationRoutes = navigationRoutes
@@ -669,6 +757,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         mapboxNavigation.tripSession().startFreeDrive()
         mapView.navigationCamera.update(cameraState: .following)
         freeDriveMapView = mapView
+        keepLoadingOverlayOnTop()
     }
 
     private func tearDownFreeDriveMapView() {
@@ -775,6 +864,7 @@ public class ExpoMapboxNavigationView: ExpoView {
         if parentVC != nil {
             vc.didMove(toParent: parentVC)
         }
+        keepLoadingOverlayOnTop()
 
         // AUTOMATIC DAY/NIGHT FIX (5.1.0): NavigationViewController.viewDidLoad()
         // (triggered above by `addSubview(vc.view)`, which forces the view to
@@ -876,6 +966,10 @@ public class ExpoMapboxNavigationView: ExpoView {
         // button, so it is also harmless in the normal (non-degenerate)
         // flow where the SDK would have entered following anyway.
         vc.navigationView.navigationMapView.navigationCamera.update(cameraState: .following)
+
+        // Route presented and camera positioned — dismiss the loading
+        // overlay (one-shot; no-op if it was never shown/enabled).
+        finishRouteLoadingOverlay()
     }
 
     // MARK: - Banner tap handler (parity with Android mv.setOnClickListener)

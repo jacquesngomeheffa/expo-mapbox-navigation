@@ -110,6 +110,12 @@ class ExpoMapboxNavigationModule : Module() {
             Prop("iconButtonMutedColor") { view: ExpoMapboxNavigationView, color: String? ->
                 view.setIconButtonMutedColor(color)
             }
+            Prop("showRouteLoadingOverlay") { view: ExpoMapboxNavigationView, show: Boolean? ->
+                view.setShowRouteLoadingOverlay(show)
+            }
+            Prop("loadingOverlayColor") { view: ExpoMapboxNavigationView, color: String? ->
+                view.setLoadingOverlayColor(color)
+            }
         }
     }
 }

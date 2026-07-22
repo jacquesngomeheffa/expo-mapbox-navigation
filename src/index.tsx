@@ -4,7 +4,7 @@ import {
   EventEmitter,
 } from 'expo-modules-core';
 import React from 'react';
-import { ViewStyle, StyleSheet } from 'react-native';
+import { View, ViewStyle, StyleSheet } from 'react-native';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -240,6 +240,39 @@ export interface MapboxNavigationViewProps {
    */
   speedLimitPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight';
 
+  // ── Route loading screen (5.1.4) ─────────────────────────────────────────
+
+  /**
+   * When true, covers the view with a native loading screen (opaque
+   * background + spinner) from mount until the first route is actually
+   * drawn — instead of showing the bare map first and the route popping
+   * in a moment later. Dismissed with a short fade on the first
+   * successful route, or on the first failure (so your own error UI is
+   * never hidden behind it). One-shot per mounted view: later route
+   * refetches (prop changes, reroutes) happen over the live map without
+   * re-showing it. Defaults to false (existing behavior unchanged).
+   * Ignored when `loadingScreen` is provided.
+   */
+  showRouteLoadingOverlay?: boolean;
+
+  /**
+   * Background color of the native route loading screen, as a hex string
+   * (e.g. "#1E2433", the default). Only used with
+   * `showRouteLoadingOverlay`; the spinner itself is always white.
+   */
+  loadingOverlayColor?: string;
+
+  /**
+   * Your own React Native component to show as the route loading screen,
+   * instead of the built-in native one — e.g. your app's branded splash.
+   * Rendered above the map, filling the view, until the first
+   * onRoutesReady or onRoutesFailed event (your own handlers still fire
+   * normally). Takes precedence over `showRouteLoadingOverlay`. Keep the
+   * prop consistently present or absent for a given mount — toggling
+   * between the two modes mid-session remounts the native view.
+   */
+  loadingScreen?: React.ReactNode;
+
   // ── Event callbacks ──────────────────────────────────────────────────────
 
   onRouteProgressChanged?: (event: { nativeEvent: RouteProgressEvent }) => void;
@@ -339,16 +372,64 @@ const NativeView = requireNativeViewManager('ExpoMapboxNavigation');
  * ```
  */
 export function MapboxNavigationView(props: MapboxNavigationViewProps) {
+  const { loadingScreen, ...nativeProps } = props;
+  // One-shot, mirroring the native overlay's contract exactly: visible
+  // until the FIRST route success or failure, never re-shown afterwards
+  // for this mounted instance (later refetches happen over the live map).
+  const [routeLoading, setRouteLoading] = React.useState(true);
+
+  // No custom loading screen — render the native view directly, exactly
+  // as every version before 5.1.4 did (zero tree-shape change for
+  // existing consumers; the native showRouteLoadingOverlay prop covers
+  // the built-in variant without any JS involvement).
+  if (loadingScreen == null) {
+    return (
+      <NativeView
+        {...nativeProps}
+        style={[styles.fullSize, props.style]}
+      />
+    );
+  }
+
+  const handleRoutesReady = (event: { nativeEvent: RoutesReadyEvent }) => {
+    setRouteLoading(false);
+    props.onRoutesReady?.(event);
+  };
+  const handleRoutesFailed = (event: {
+    nativeEvent: { message: string; code?: string };
+  }) => {
+    setRouteLoading(false);
+    props.onRoutesFailed?.(event);
+  };
+
   return (
-    <NativeView
-      {...props}
-      style={[styles.fullSize, props.style]}
-    />
+    <View style={[styles.fullSize, props.style]}>
+      <NativeView
+        {...nativeProps}
+        // The custom screen replaces the built-in native overlay entirely.
+        showRouteLoadingOverlay={false}
+        onRoutesReady={handleRoutesReady}
+        onRoutesFailed={handleRoutesFailed}
+        style={StyleSheet.absoluteFill}
+      />
+      {routeLoading ? (
+        // Default pointerEvents (auto): blocks touches from reaching the
+        // map underneath while loading, same as the native overlay.
+        <View style={styles.loadingScreenContainer}>{loadingScreen}</View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fullSize: { flex: 1 },
+  loadingScreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
 });
 
 export default MapboxNavigationView;

@@ -10,7 +10,7 @@ Full-featured Expo module for Mapbox Navigation SDK v3 — Android and iOS.
 
 - **Android** — Waze-style navigation UI built from scratch: maneuver banner, lane guidance, speed limit, ETA bar, voice instructions, mute/overview/recenter buttons, day/night auto-switch
 - **iOS** — Drop-in `NavigationViewController` from Mapbox Navigation SDK v3 (lane guidance, speed limit, voice, day/night all built-in)
-- **Both platforms** — 7 events, 30 props, full feature and API parity
+- **Both platforms** — 7 events, 33 props, full feature and API parity
 - NDK 27 + 16 KB page size compliant (Android 15+)
 
 **✅ Tested on iOS**: real EAS production build, real device
@@ -227,6 +227,31 @@ All color props are optional — defaults are applied when omitted.
 > - `navigationPuckColor`/`navigationPuckImagePath`/`navigationPuck3DModelPath` — implemented via `NavigationMapView.puckType` (`Puck2DConfiguration`/`Puck3DConfiguration`), the confirmed official v3 API — same precedence as Android (3D model > custom image, never tinted > color tint > default). Unlike the maneuver/ETA/button colors above, this **can** be updated live while navigation is active. `navigationPuckColor` tints a standard system symbol rather than Mapbox's own default icon — there's no confirmed public API for the exact built-in asset name to tint directly on iOS, unlike Android.
 > - `speedLimitPosition` is the only color/UI prop still **not implemented on iOS** (no-op, stored only) — `SpeedLimitView`'s position is fixed as part of `NavigationViewController`'s drop-in layout, with no confirmed public repositioning API. Would require building a custom top/bottom banner (see Mapbox's "Build a custom UI" guide) rather than the drop-in `NavigationViewController` — a substantially larger undertaking than styling, outside this package's current architecture.
 
+### Route loading screen
+
+By default, the map appears first and the route line pops in a moment later once the Directions API responds. To cover that gap:
+
+| Prop | Default | Description |
+|---|---|---|
+| `showRouteLoadingOverlay` | `false` | Covers the view with a native loading screen (opaque background + spinner) from mount until the first route is drawn. Fades out on the first success or failure — one-shot, never re-shown for later refetches on the same mounted view. Ignored when `loadingScreen` is set. |
+| `loadingOverlayColor` | `"#1E2433"` | Background color of the native loading screen. Only relevant with `showRouteLoadingOverlay`. |
+| `loadingScreen` | — | Your own React Native component/element to show instead of the built-in native screen — e.g. your app's branded splash. Same one-shot timing (mount → first `onRoutesReady`/`onRoutesFailed`). Takes precedence over `showRouteLoadingOverlay`. Implemented entirely in JS (renders above the native view) — works identically on both platforms with no native code involved. |
+
+```tsx
+// Built-in native screen
+<MapboxNavigationView
+  showRouteLoadingOverlay
+  loadingOverlayColor="#1E2433"
+  {/* ...other props */}
+/>
+
+// Your own component instead
+<MapboxNavigationView
+  loadingScreen={<MyBrandedSplash />}
+  {/* ...other props */}
+/>
+```
+
 ### Mapbox Native Colors (Android, via plugin)
 
 Override Mapbox's built-in resource colors (route line, etc.) via `androidColorOverrides` in `app.json`:
@@ -393,6 +418,8 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ### 5.1.4
 **Android: ALL routes failing with `onRoutesFailed({"message": "Not Found"})`, navigation never starting** — confirmed via a real-device `adb logcat` capture using 5.1.3's new `RouterFailure.url` diagnostic logging: the actual failing request was `https://api.mapbox.com/directions/v5/mapbox/mapbox/driving-traffic/<coords>` — the `mapbox` vendor segment duplicated in the path, a structurally malformed URL the Directions API correctly rejects with a 404. Root cause: the Directions API SDK's own URL builder already prepends the `mapbox/` vendor segment ahead of whatever `RouteOptions.profile` is set to — this file's `navigationProfile?.let { builder.profile(if (it.startsWith("mapbox/")) it else "mapbox/$it") }` manually added its own `mapbox/` prefix on top, producing the duplicate whenever `navigationProfile` was set (Navio always sets it to `"driving-traffic"`, so this fired on every single route request — matching the "fails for every ride" report exactly). The prop's own JSDoc already correctly documented the intended contract ("Android: omit the `mapbox/` prefix (handled internally)") — the bug was purely in this file not honoring it. iOS was never affected: it maps `navigationProfile` through a `switch` to the SDK's typed `ProfileIdentifier` enum, no string concatenation involved. **Fixed** by passing the profile through as-is (`it.removePrefix("mapbox/")` — defensively strips a stray prefix if a caller still includes one, without reintroducing the duplicate). Same fix applied to the (currently unused by Navio) map-matching request path for consistency. **Confirmed resolved on a real device**: post-fix `adb logcat` showed a route request succeeding with zero `onRoutesFailed` events and navigation starting normally.
+
+**New: route loading screen** (`showRouteLoadingOverlay`, `loadingOverlayColor`, `loadingScreen`) — covers the "bare map appears first, route line pops in a moment later" gap with either a built-in native screen (opaque background + spinner, both platforms) or your own React Native component. One-shot per mount: shown from mount until the first `onRoutesReady`/`onRoutesFailed`, never re-shown for later refetches on the same view. Opt-in (all three default to off/unset) — zero behavior change for existing consumers. Android: the overlay view is created `INVISIBLE` (not `GONE`) at mount and given the highest elevation in the view tree, so it's correctly measured on the initial pass (see the 5.1.3 entry on why `GONE`-at-mount matters under RN Fabric) and always draws on top. iOS: added first (at `init`), with an explicit `bringSubviewToFront` both when revealed and right after the free-drive fallback map / drop-in `NavigationViewController`'s view are added later — UIKit has no elevation concept, subviews added afterward would otherwise cover it since it's created before either.
 
 ### 5.1.3
 **Android: the speed-limit panel STILL never appeared on screen even with valid data and the SDK's own `render()` being called** — root-caused and fixed after one disproven hypothesis, with every step verified by live `adb logcat` diagnostics on a real device. (Note: the npm-published 5.1.2 was cut from an intermediate state that predates this fix and the diagnostics below — it contains only the build fix and 5.1.1's data-side fallback. This release, 5.1.3, is the one that actually makes the panel visible.)

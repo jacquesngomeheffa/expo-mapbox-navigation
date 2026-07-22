@@ -428,6 +428,18 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // back to the 2D puck (image or color, per the rules above) rather than
     // leaving the map without any puck at all, or crashing.
     private var navigationPuck3DModelPath: String? = null
+    // Route loading overlay (5.1.4): opt-in full-view cover (opaque
+    // background + spinner) shown until the FIRST route is actually drawn,
+    // hiding the "map appears first, route pops in later" sequence. Opt-in
+    // (default false) so existing consumers see zero behavior change.
+    // One-shot per view instance: once dismissed (first success OR first
+    // failure), it never re-appears — later refetches (prop changes,
+    // reroutes) happen over an already-presented map where a full-screen
+    // cover would be jarring rather than helpful.
+    private var showRouteLoadingOverlay: Boolean = false
+    private var loadingOverlayColor: String? = null
+    private var routeLoadingOverlayView: FrameLayout? = null
+    private var routeLoadingOverlayDone = false
 
     init {
         buildUI()
@@ -752,7 +764,76 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // would simply be called twice with the same value).
         applySystemBarInsets(fetchSystemBarInsetsDirectly())
 
+        // ── Route loading overlay (5.1.4) ─────────────────────────────────────
+        // Added LAST so it sits above every other child in this FrameLayout,
+        // plus an elevation above everything else here (ETA bar 8dp, speed
+        // panel 12dp, steps panel below 20dp) for the same guarantee.
+        // Created INVISIBLE — NOT GONE — deliberately: INVISIBLE views ARE
+        // measured during the initial mount pass, so flipping to VISIBLE
+        // later needs no re-measure (the exact RN-Fabric-swallows-
+        // requestLayout trap that made the GONE-at-mount speed panel
+        // invisible — see the requestLayout() override's comment). Starts
+        // hidden because props always arrive AFTER init{} (documented at
+        // createManeuverView's call site) — setShowRouteLoadingOverlay
+        // reveals it when the prop lands. Clickable/focusable so touches
+        // can't reach the map underneath while it's covering.
+        val loadingOverlay = FrameLayout(context).apply {
+            setBackgroundColor(
+                loadingOverlayColor?.let { parseColorSafe(it) } ?: Color.parseColor("#1E2433")
+            )
+            elevation = 24 * dp
+            visibility = View.INVISIBLE
+            isClickable = true
+            isFocusable = true
+        }
+        val loadingSpinner = android.widget.ProgressBar(context).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        }
+        loadingOverlay.addView(loadingSpinner, FrameLayout.LayoutParams(
+            (48 * dp).toInt(), (48 * dp).toInt()
+        ).also { it.gravity = Gravity.CENTER })
+        root.addView(loadingOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        routeLoadingOverlayView = loadingOverlay
+
         addView(root)
+    }
+
+    // Dismisses the route loading overlay permanently (one-shot — see the
+    // field declaration's comment). Fade-out only when it was actually
+    // showing; instant when it never was (prop disabled).
+    private fun finishRouteLoadingOverlay() {
+        if (routeLoadingOverlayDone) return
+        routeLoadingOverlayDone = true
+        val ov = routeLoadingOverlayView ?: return
+        if (ov.visibility != View.VISIBLE) { return }
+        ov.animate().alpha(0f).setDuration(250L).withEndAction {
+            ov.visibility = View.INVISIBLE
+            ov.alpha = 1f
+        }.start()
+    }
+
+    fun setShowRouteLoadingOverlay(v: Boolean?) {
+        val resolved = v ?: false
+        if (resolved == showRouteLoadingOverlay) return
+        showRouteLoadingOverlay = resolved
+        val ov = routeLoadingOverlayView ?: return
+        if (resolved && !routeLoadingOverlayDone) {
+            ov.visibility = View.VISIBLE
+        } else if (!resolved) {
+            ov.visibility = View.INVISIBLE
+        }
+    }
+
+    fun setLoadingOverlayColor(c: String?) {
+        if (c == loadingOverlayColor) return
+        loadingOverlayColor = c
+        routeLoadingOverlayView?.setBackgroundColor(
+            c?.let { parseColorSafe(it) } ?: Color.parseColor("#1E2433")
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -903,6 +984,10 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 isOverviewMode = false
                 safeCameraFollowing()
                 showUI()
+                // Single success point for BOTH request paths (Directions and
+                // map matching both funnel through setNavigationRoutes, which
+                // fires this observer) — the route is drawn this frame.
+                finishRouteLoadingOverlay()
                 onRoutesReady(mapOf(
                     "routeCount" to result.navigationRoutes.size,
                     "distanceMeters" to (result.navigationRoutes.first().directionsRoute.distance() ?: 0.0),
@@ -1251,6 +1336,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 fetchHandler.postDelayed({ attemptLoadStyle() }, STYLE_LOAD_RETRY_DELAY_MS)
             } else {
                 Log.e(TAG, "Map style load failed after $MAX_STYLE_LOAD_RETRIES retries - giving up")
+                finishRouteLoadingOverlay()
                 onRoutesFailed(mapOf("message" to "Map failed to load: ${eventData.message}"))
             }
         }
@@ -2007,6 +2093,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
             // package deliberately does not attempt to translate it; the
             // `language` prop only localizes what the Mapbox API generates,
             // never this package's own strings).
+            finishRouteLoadingOverlay()
             onRoutesFailed(mapOf(
                 "message" to DEGENERATE_ROUTE_MESSAGE,
                 "code" to "same_location"
@@ -2061,7 +2148,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                         // each tag), so mapping over matches is the form
                         // portable across the supported version range.
                         val routes = result.matches.map { it.navigationRoute }
-                        if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
+                        if (routes.isEmpty()) { finishRouteLoadingOverlay(); onRoutesFailed(mapOf("message" to "No routes returned")); return }
                         nav.setNavigationRoutes(routes)
                         nav.startTripSession()
                         updateWaypointMarkers(routes.first())
@@ -2069,6 +2156,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     }
                     override fun failure(failure: MapMatchingFailure) {
                         Log.e(TAG, "Map matching request failed: $failure")
+                        finishRouteLoadingOverlay()
                         onRoutesFailed(mapOf("message" to "Map matching request failed"))
                     }
                     override fun onCancel() {
@@ -2082,6 +2170,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                 })
             } catch (e: Exception) {
                 Log.e(TAG, "Map matching request could not be issued: ${e.message}")
+                finishRouteLoadingOverlay()
                 onRoutesFailed(mapOf("message" to (e.message ?: "Map matching request failed")))
             }
             return
@@ -2147,7 +2236,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                     Log.w(TAG, "Route response arrived after MapboxNavigation was destroyed - ignoring")
                     return
                 }
-                if (routes.isEmpty()) { onRoutesFailed(mapOf("message" to "No routes returned")); return }
+                if (routes.isEmpty()) { finishRouteLoadingOverlay(); onRoutesFailed(mapOf("message" to "No routes returned")); return }
                 nav.setNavigationRoutes(routes)
                 nav.startTripSession()
                 updateWaypointMarkers(routes.first())
@@ -2195,6 +2284,7 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
                         "retryable=${r.isRetryable} origin=${r.routerOrigin} " +
                         "throwable=${r.throwable} url=${r.url.toString().substringBefore("?")}")
                 }
+                finishRouteLoadingOverlay()
                 onRoutesFailed(mapOf("message" to (reasons.firstOrNull()?.message ?: "Unknown error")))
             }
             override fun onCanceled(routeOptions: RouteOptions, @RouterOrigin routerOrigin: String) {
