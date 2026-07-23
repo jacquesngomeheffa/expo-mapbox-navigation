@@ -194,6 +194,34 @@ export interface MapboxNavigationViewProps {
      * it.
      */
     speedLimitPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight';
+    /**
+     * When true, covers the view with a native loading screen (opaque
+     * background + spinner) from mount until the first route is actually
+     * drawn — instead of showing the bare map first and the route popping
+     * in a moment later. Dismissed with a short fade on the first
+     * successful route, or on the first failure (so your own error UI is
+     * never hidden behind it). One-shot per mounted view: later route
+     * refetches (prop changes, reroutes) happen over the live map without
+     * re-showing it. Defaults to false (existing behavior unchanged).
+     * Ignored when `loadingScreen` is provided.
+     */
+    showRouteLoadingOverlay?: boolean;
+    /**
+     * Background color of the native route loading screen, as a hex string
+     * (e.g. "#1E2433", the default). Only used with
+     * `showRouteLoadingOverlay`; the spinner itself is always white.
+     */
+    loadingOverlayColor?: string;
+    /**
+     * Your own React Native component to show as the route loading screen,
+     * instead of the built-in native one — e.g. your app's branded splash.
+     * Rendered above the map, filling the view, until the first
+     * onRoutesReady or onRoutesFailed event (your own handlers still fire
+     * normally). Takes precedence over `showRouteLoadingOverlay`. Keep the
+     * prop consistently present or absent for a given mount — toggling
+     * between the two modes mid-session remounts the native view.
+     */
+    loadingScreen?: React.ReactNode;
     onRouteProgressChanged?: (event: {
         nativeEvent: RouteProgressEvent;
     }) => void;
