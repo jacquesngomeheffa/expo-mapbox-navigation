@@ -442,9 +442,11 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     private var routeLoadingOverlayDone = false
 
     init {
+        Log.w(TAG, "LifecycleDebug: init{} START view=${System.identityHashCode(this)}")
         buildUI()
         initAPIs()
         setupNavigation()
+        Log.w(TAG, "LifecycleDebug: init{} END view=${System.identityHashCode(this)}")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1299,8 +1301,29 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
     // Setup Navigation
     // ─────────────────────────────────────────────────────────────────────────
     private fun setupNavigation() {
+        // DIAGNOSTIC (fast-refresh crash investigation): MapboxNavigationProvider
+        // is a GLOBAL process-wide singleton (verified verbatim in its own
+        // source) - .create() unconditionally calls onDestroy() on whatever
+        // instance existed before, with no regard for whether some OTHER
+        // still-attached view is still using it. Logging identity hashes of
+        // this view and both the outgoing/incoming MapboxNavigation instances
+        // to confirm (or rule out) two views briefly coexisting during a
+        // remount as the trigger for "This instance of MapboxNavigation is
+        // destroyed" + the accompanying Fabric child-count mismatch.
+        val previousInstance = if (MapboxNavigationProvider.isCreated()) MapboxNavigationProvider.retrieve() else null
+        Log.w(
+            TAG,
+            "LifecycleDebug: setupNavigation() view=${System.identityHashCode(this)} " +
+                "replacing mapboxNavigation=${previousInstance?.let { System.identityHashCode(it) }} " +
+                "(isDestroyed=${previousInstance?.isDestroyed})",
+        )
         mapboxNavigation = MapboxNavigationProvider.create(
             NavigationOptions.Builder(context).build()
+        )
+        Log.w(
+            TAG,
+            "LifecycleDebug: setupNavigation() view=${System.identityHashCode(this)} " +
+                "created mapboxNavigation=${System.identityHashCode(mapboxNavigation)}",
         )
 
         // STYLE-LOAD FAILURE RECOVERY (5.0.9): loadStyle(...)'s trailing
@@ -2910,6 +2933,13 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        Log.w(
+            TAG,
+            "LifecycleDebug: onDetachedFromWindow() view=${System.identityHashCode(this)} " +
+                "mapboxNavigation=${mapboxNavigation?.let { System.identityHashCode(it) }} " +
+                "isDestroyed=${mapboxNavigation?.isDestroyed} " +
+                "isCurrentGlobalInstance=${MapboxNavigationProvider.isCreated() && mapboxNavigation === MapboxNavigationProvider.retrieve()}",
+        )
         // FIX: every one of these is a `lateinit var`, only actually
         // assigned inside initAPIs()/setupNavigation() (called from init{}).
         // If this view gets detached before that setup has fully completed
@@ -2934,12 +2964,43 @@ class ExpoMapboxNavigationView(context: Context, appContext: AppContext) :
         // fixes. All four unregistered symmetrically, BEFORE destroy() (same
         // ordering already established for voiceInstructionsObserver), so no
         // stale callback can fire into a torn-down instance from here on.
-        mapboxNavigation?.unregisterRoutesObserver(routesObserver)
-        mapboxNavigation?.unregisterRouteProgressObserver(routeProgressObserver)
-        mapboxNavigation?.unregisterLocationObserver(locationObserver)
-        mapboxNavigation?.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
-        mapboxNavigation?.stopTripSession()
-        MapboxNavigationProvider.destroy()
+        //
+        // GUARD (real-device crash, root-caused via adb logcat identity
+        // tracing): MapboxNavigationProvider is the SDK's OWN global,
+        // process-wide singleton (verified verbatim in its source) -
+        // .create() unconditionally calls onDestroy() on whatever instance
+        // existed before, with NO regard for whether some other
+        // still-attached ExpoMapboxNavigationView is still using it. A
+        // real-device capture showed exactly this: a second view's
+        // setupNavigation() replaced (and destroyed) a first, still-attached
+        // view's mapboxNavigation ~290ms before that first view's own
+        // onDetachedFromWindow() ever ran. Calling
+        // unregisterXxxObserver()/stopTripSession() on an
+        // already-destroyed instance is exactly what threw "This instance
+        // of MapboxNavigation is destroyed" (the JS-side root cause - a
+        // prop-driven root element type change remounting the native view
+        // - is fixed in src/index.tsx; this is defense in depth for
+        // anything else that can cause two instances to briefly coexist,
+        // e.g. a Fast Refresh remount, which happens outside JS
+        // reconciliation's control entirely). Skipping all teardown below
+        // once the instance is already destroyed is correct, not merely
+        // crash-safe: there is nothing left to unregister/stop on a
+        // instance the SDK itself already tore down. And
+        // MapboxNavigationProvider.destroy() must ONLY run when this
+        // view's instance is STILL the current global one - otherwise it
+        // would destroy whatever NEWER view's instance actually replaced
+        // it, breaking that view instead.
+        val nav = mapboxNavigation
+        if (nav != null && !nav.isDestroyed) {
+            nav.unregisterRoutesObserver(routesObserver)
+            nav.unregisterRouteProgressObserver(routeProgressObserver)
+            nav.unregisterLocationObserver(locationObserver)
+            nav.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
+            nav.stopTripSession()
+            if (MapboxNavigationProvider.isCreated() && MapboxNavigationProvider.retrieve() === nav) {
+                MapboxNavigationProvider.destroy()
+            }
+        }
         mapView.onStop()
         mapView.onDestroy()
     }

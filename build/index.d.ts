@@ -217,9 +217,10 @@ export interface MapboxNavigationViewProps {
      * instead of the built-in native one — e.g. your app's branded splash.
      * Rendered above the map, filling the view, until the first
      * onRoutesReady or onRoutesFailed event (your own handlers still fire
-     * normally). Takes precedence over `showRouteLoadingOverlay`. Keep the
-     * prop consistently present or absent for a given mount — toggling
-     * between the two modes mid-session remounts the native view.
+     * normally). Takes precedence over `showRouteLoadingOverlay`. Safe to
+     * pass conditionally / compute from state that isn't ready on the very
+     * first render — the underlying native map is never remounted because
+     * of this prop, regardless of when or how often its presence changes.
      */
     loadingScreen?: React.ReactNode;
     onRouteProgressChanged?: (event: {
