@@ -230,6 +230,31 @@ while IFS= read -r -d '' interface_file; do
 done < <(find "$FRAMEWORKS_DIR" -name "*.swiftinterface" -print0)
 echo "Patched $PATCHED_COUNT .swiftinterface file(s)"
 
+# --- Toolchain diagnostic ----------------------------------------------------
+# Prints the Swift compiler each fetched binary was built with. A real EAS
+# failure ("failed to build module 'MapboxNavigationCore'; this SDK is not
+# supported by the compiler - built with Swift 6.1.2, compiler is 6.2.3")
+# showed why this matters: in this package's setup the binary .swiftmodule
+# must match the consuming Xcode's compiler EXACTLY, because the fallback
+# (rebuilding from the textual .swiftinterface) fails on `import MapboxMaps`
+# - MapboxMaps arrives from CocoaPods as a source-built static framework
+# whose Clang module is not reachable from that nested interface rebuild.
+# Mapbox does not document which Xcode built each release, so this line is
+# the only reliable way to know which EAS image (Xcode version) a given
+# iosMapboxNavigationVersion actually requires. Visible in EAS logs via a
+# consumer's eas-build-post-install `cat .fetch-xcframeworks.log` hook.
+echo ""
+echo "Swift compiler that built each fetched binary (must match the building Xcode's Swift exactly):"
+for fw in "${NEEDED_NAV_FRAMEWORKS[@]}"; do
+  iface=$(find "$FRAMEWORKS_DIR/$fw.xcframework" -path "*ios-arm64*" -name "*.swiftinterface" ! -name "*.private.swiftinterface" 2>/dev/null | head -1)
+  if [ -n "$iface" ]; then
+    ver=$(grep -m1 "swift-compiler-version" "$iface" | sed 's/^\/\/ *//')
+    echo "  $fw: ${ver:-(no swift-compiler-version line found)}"
+  else
+    echo "  $fw: (no Swift interface - Objective-C/C++ binary, no toolchain constraint)"
+  fi
+done
+
 # --- Cleanup -----------------------------------------------------------------
 cd /
 rm -rf "$TMPDIR"

@@ -186,6 +186,55 @@ Pod::Spec.new do |s|
     # otherwise. Both declarations are needed; when bumping the vendored
     # SDK version, update BOTH this value and s.platforms above.
     'IPHONEOS_DEPLOYMENT_TARGET' => '15.1',
+
+    # -- Swift-toolchain-mismatch fix (Xcode 26.2 / Expo SDK 55) -------------
+    # Root-caused from a real EAS build log, then confirmed verbatim in the
+    # Swift compiler's own source on the exact failing toolchain's branch
+    # (swiftlang/swift, release/6.2, lib/Frontend/ModuleInterfaceLoader.cpp).
+    #
+    # SYMPTOM: compiling this pod's ExpoMapboxNavigationView.swift failed with
+    #   error: failed to build module 'MapboxNavigationCore'; this SDK is not
+    #   supported by the compiler (the SDK is built with 'Apple Swift version
+    #   6.1.2', while this compiler is 'Apple Swift version 6.2.3')
+    # preceded by, from inside MapboxNavigationCore's own .swiftinterface:
+    #   error: cannot load underlying module for 'MapboxMaps'
+    #
+    # WHY IT HAPPENS: our vendored MapboxNavigationCore/UIKit xcframeworks are
+    # precompiled by Mapbox with a specific Swift (6.1.2 for nav 3.20.1, i.e.
+    # Xcode 16.4). A binary .swiftmodule is only loadable by the exact same
+    # compiler version, so a newer Xcode legitimately rejects it. That alone
+    # is NOT fatal: these frameworks ship with BUILD_LIBRARY_FOR_DISTRIBUTION,
+    # so Swift's designed fallback is to REBUILD the module from its textual
+    # .swiftinterface with the current compiler. That fallback is what
+    # actually failed here - and only because of a context-propagation
+    # detail, not because of anything version-specific.
+    #
+    # THE MECHANISM (ModuleInterfaceLoader.cpp, release/6.2 lines ~1950-1973):
+    # the interface rebuild runs in a sub-invocation, and that sub-invocation
+    # inherits the parent compile's `-Xcc` flags ONLY when one of
+    # `strictImplicitModuleContext` / `disableImplicitSwiftModule` /
+    # `DirectClangCC1ModuleBuild` is set; otherwise the inherited clang-arg
+    # list is deliberately reduced (search-path flags dropped, to keep module
+    # sharing viable across targets). MapboxMaps is built FROM SOURCE by
+    # CocoaPods, so the only way to reach its Clang module is the explicit
+    # `-Xcc -fmodule-map-file=<build-products>/MapboxMaps/MapboxMaps.modulemap`
+    # that Xcode passes to THIS target (confirmed present in the failing
+    # build log). Dropped in the sub-invocation, `import MapboxMaps` inside
+    # MapboxNavigationCore's interface becomes unresolvable -> "cannot load
+    # underlying module" -> the whole rebuild fails -> the compiler reports
+    # the original version mismatch as the top-level error. (Explicit modules
+    # are OFF in this build - verified in the log - so none of the other
+    # three conditions applied.)
+    #
+    # THE FIX: ask for that strict forwarding explicitly. The interface
+    # rebuild then sees the same modulemap flags as this target, resolves
+    # MapboxMaps, and MapboxNavigationCore/UIKit rebuild cleanly against the
+    # current compiler. This fixes the CLASS of problem rather than one
+    # instance of it: no vendored-SDK/Xcode version pairing is required
+    # anymore, which is exactly what library evolution is supposed to buy.
+    # Scoped to this pod target only (it is the one importing the vendored
+    # frameworks); nothing else in the app's build is affected.
+    'OTHER_SWIFT_FLAGS' => '$(inherited) -Xfrontend -strict-implicit-module-context',
   }
 
   # -- Avoid the .private.swiftinterface toolchain-version check -------------
