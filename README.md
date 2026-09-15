@@ -416,6 +416,13 @@ See [Android's 16 KB page size guide](https://developer.android.com/guide/practi
 
 ## Changelog
 
+### 5.1.7
+**iOS (Xcode 26.2): the 5.1.6 fix now also applies to the app target.** A real EAS build with 5.1.6 (nav 3.27.3 → vendored frameworks built with **Swift 6.3.2**, EAS compiler **Swift 6.2.3**) proved the 5.1.6 mechanism correct: every pod — `ExpoMapboxNavigation` included — now compiles. The build then failed one step later, in the **app target** (`SwiftCompile … (in target 'Navio')`), with the identical `cannot load underlying module for 'MapboxMaps'` inside `MapboxNavigationCore`/`MapboxNavigationUIKit`'s `.private.swiftinterface`.
+
+Cause: the app's generated `ExpoModulesProvider.swift` does `import ExpoMapboxNavigation`, which transitively loads MapboxNavigationCore/UIKit, so the app target runs the same interface rebuild — and CocoaPods passes it the same `-Xcc -fmodule-map-file=…/MapboxMaps.modulemap` (via `Pods-<App>.xcconfig`), which the sub-invocation drops for the same reason. 5.1.6 had put the flag in `pod_target_xcconfig` only, which never reaches the app target.
+
+**Fixed** by also adding `OTHER_SWIFT_FLAGS = $(inherited) -Xfrontend -strict-implicit-module-context` to `user_target_xcconfig`. `OTHER_SWIFT_FLAGS` is a CocoaPods *plural* setting, so it is merged with other pods' flags rather than overriding them, and the Expo app template does not set `OTHER_SWIFT_FLAGS` itself, so the app target inherits it. Requires `pod install` / a fresh `expo prebuild` (EAS does this automatically). Source-verified (CocoaPods `build_settings.rb`, build log); not compile-verified locally (no Mac).
+
 ### 5.1.6
 **iOS build failure on Xcode 26.2 / Expo SDK 55: `failed to build module 'MapboxNavigationCore'; this SDK is not supported by the compiler`** — root-caused from a real EAS build log, then confirmed verbatim in the failing toolchain's own compiler source (`swiftlang/swift`, branch `release/6.2`, `lib/Frontend/ModuleInterfaceLoader.cpp`).
 

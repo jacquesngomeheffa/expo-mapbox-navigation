@@ -232,8 +232,9 @@ Pod::Spec.new do |s|
     # current compiler. This fixes the CLASS of problem rather than one
     # instance of it: no vendored-SDK/Xcode version pairing is required
     # anymore, which is exactly what library evolution is supposed to buy.
-    # Scoped to this pod target only (it is the one importing the vendored
-    # frameworks); nothing else in the app's build is affected.
+    # NOTE (5.1.7): this pod target is NOT the only one that has to rebuild
+    # these interfaces - the app target does too (see user_target_xcconfig
+    # below), so the same flag is repeated there.
     'OTHER_SWIFT_FLAGS' => '$(inherited) -Xfrontend -strict-implicit-module-context',
   }
 
@@ -253,8 +254,23 @@ Pod::Spec.new do |s|
   # import of your OWN code elsewhere, this setting does not affect that
   # - it only affects whether Xcode treats imports of vendored/third-party
   # frameworks like this one as needing their private interface.
+  #
+  # -- App target: same interface-rebuild context fix as the pod target -----
+  # (5.1.7) With 5.1.6 the ExpoMapboxNavigation pod compiled fine on Xcode
+  # 26.2, but the build then failed in the APP target ('Navio'): its
+  # ExpoModulesProvider.swift does `import ExpoMapboxNavigation`, and loading
+  # that module transitively loads MapboxNavigationCore/UIKit - whose binary
+  # .swiftmodule (Swift 6.3.2) is again rejected, so the app target runs the
+  # SAME .swiftinterface rebuild, with the SAME dropped `-Xcc
+  # -fmodule-map-file=...MapboxMaps.modulemap` (CocoaPods passes those to the
+  # aggregate Pods-<App> xcconfig too), and fails with the same "cannot load
+  # underlying module for 'MapboxMaps'". OTHER_SWIFT_FLAGS is a CocoaPods
+  # PLURAL setting, so this value is merged with other pods' flags (not
+  # overwritten), and the Expo app template does not set OTHER_SWIFT_FLAGS
+  # itself, so the app target inherits it from Pods-<App>.xcconfig.
   s.user_target_xcconfig = {
     'ENABLE_TESTABILITY' => 'NO',
+    'OTHER_SWIFT_FLAGS' => '$(inherited) -Xfrontend -strict-implicit-module-context',
   }
 
   # WARNING: CHANGED: this now actually FETCHES the required xcframeworks (via
